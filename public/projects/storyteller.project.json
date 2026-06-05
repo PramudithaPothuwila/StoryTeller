@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
-  "title": "The Hidden Crown",
-  "updatedAt": "2026-06-05T11:57:04.893Z",
+  "title": "The Crown Beneath Glass",
+  "updatedAt": "2026-06-05T12:30:00.000Z",
   "itemTypes": [
     {
       "id": "character",
@@ -44,6 +44,13 @@
       "color": "#15803d",
       "icon": "flag",
       "builtIn": true
+    },
+    {
+      "id": "clue",
+      "label": "Clue",
+      "color": "#0891b2",
+      "icon": "sparkles",
+      "builtIn": false
     }
   ],
   "linkTypes": [
@@ -118,28 +125,136 @@
       "icon": "flag",
       "direction": "directed",
       "builtIn": true
+    },
+    {
+      "id": "protects",
+      "label": "Protects",
+      "color": "#0284c7",
+      "icon": "heart",
+      "direction": "directed",
+      "builtIn": false
+    },
+    {
+      "id": "owes",
+      "label": "Owes",
+      "color": "#d97706",
+      "icon": "key",
+      "direction": "directed",
+      "builtIn": false
+    },
+    {
+      "id": "betrays",
+      "label": "Betrays",
+      "color": "#991b1b",
+      "icon": "swords",
+      "direction": "directed",
+      "builtIn": false
+    },
+    {
+      "id": "decodes",
+      "label": "Decodes",
+      "color": "#0891b2",
+      "icon": "scroll-text",
+      "direction": "directed",
+      "builtIn": false
     }
   ],
   "graphLayout": {
     "character-mara-vale": {
-      "x": 120,
-      "y": 90
+      "x": -520,
+      "y": -180
     },
     "character-orin-ash": {
-      "x": -531.6319444444446,
-      "y": -131.25
+      "x": -180,
+      "y": -340
+    },
+    "character-sable-reed": {
+      "x": -850,
+      "y": 60
+    },
+    "character-lysandra-veil": {
+      "x": 260,
+      "y": -340
+    },
+    "character-tovan-bright": {
+      "x": 560,
+      "y": -60
     },
     "location-glass-quarter": {
-      "x": 578.6111111111111,
-      "y": -114.16666666666663
+      "x": -120,
+      "y": 100
     },
-    "event-market-fire": {
-      "x": -281.1111111111111,
-      "y": 304.16666666666663
+    "location-bellwater-archive": {
+      "x": -260,
+      "y": -20
+    },
+    "location-underclock-vault": {
+      "x": 160,
+      "y": 260
+    },
+    "location-blackwater-docks": {
+      "x": -720,
+      "y": 300
+    },
+    "faction-civic-accord": {
+      "x": 560,
+      "y": -300
+    },
+    "faction-ember-choir": {
+      "x": -980,
+      "y": -180
+    },
+    "faction-mirror-guild": {
+      "x": 120,
+      "y": -100
     },
     "item-hidden-crown": {
-      "x": -850.125,
-      "y": 284.6388888888889
+      "x": 260,
+      "y": 500
+    },
+    "item-moonlit-ledger": {
+      "x": -80,
+      "y": -220
+    },
+    "item-signet-key": {
+      "x": -440,
+      "y": -410
+    },
+    "item-blue-glass-lantern": {
+      "x": -520,
+      "y": 280
+    },
+    "clue-mirror-shard": {
+      "x": -280,
+      "y": 330
+    },
+    "note-act-ii-pressure-map": {
+      "x": -1030,
+      "y": 500
+    },
+    "note-theme-cost-of-memory": {
+      "x": 660,
+      "y": 380
+    },
+    "event-market-fire": {
+      "x": -520,
+      "y": 650
+    },
+    "event-archive-bargain": {
+      "x": -220,
+      "y": 730
+    },
+    "event-dockside-eclipse": {
+      "x": -830,
+      "y": 650
+    },
+    "event-vault-awakening": {
+      "x": 90,
+      "y": 730
+    },
+    "event-coronation-at-dawn": {
+      "x": 440,
+      "y": 650
     }
   },
   "entityIndex": [
@@ -147,36 +262,169 @@
       "id": "character-mara-vale",
       "type": "character",
       "title": "Mara Vale",
-      "updatedAt": "2026-06-05T10:00:00.000Z",
+      "updatedAt": "2026-06-05T12:30:00.000Z",
       "path": "entities/character/character-mara-vale.md"
     },
     {
       "id": "character-orin-ash",
       "type": "character",
       "title": "Orin Ash",
-      "updatedAt": "2026-06-05T10:00:00.000Z",
+      "updatedAt": "2026-06-05T12:30:00.000Z",
       "path": "entities/character/character-orin-ash.md"
+    },
+    {
+      "id": "character-sable-reed",
+      "type": "character",
+      "title": "Sable Reed",
+      "updatedAt": "2026-06-05T12:30:00.000Z",
+      "path": "entities/character/character-sable-reed.md"
+    },
+    {
+      "id": "character-lysandra-veil",
+      "type": "character",
+      "title": "Minister Lysandra Veil",
+      "updatedAt": "2026-06-05T12:30:00.000Z",
+      "path": "entities/character/character-lysandra-veil.md"
+    },
+    {
+      "id": "character-tovan-bright",
+      "type": "character",
+      "title": "Tovan Bright",
+      "updatedAt": "2026-06-05T12:30:00.000Z",
+      "path": "entities/character/character-tovan-bright.md"
     },
     {
       "id": "location-glass-quarter",
       "type": "location",
       "title": "The Glass Quarter",
-      "updatedAt": "2026-06-05T10:00:00.000Z",
+      "updatedAt": "2026-06-05T12:30:00.000Z",
       "path": "entities/location/location-glass-quarter.md"
     },
     {
-      "id": "event-market-fire",
-      "type": "event",
-      "title": "Market Fire",
-      "updatedAt": "2026-06-05T10:00:00.000Z",
-      "path": "entities/event/event-market-fire.md"
+      "id": "location-bellwater-archive",
+      "type": "location",
+      "title": "Bellwater Archive",
+      "updatedAt": "2026-06-05T12:30:00.000Z",
+      "path": "entities/location/location-bellwater-archive.md"
+    },
+    {
+      "id": "location-underclock-vault",
+      "type": "location",
+      "title": "Underclock Vault",
+      "updatedAt": "2026-06-05T12:30:00.000Z",
+      "path": "entities/location/location-underclock-vault.md"
+    },
+    {
+      "id": "location-blackwater-docks",
+      "type": "location",
+      "title": "Blackwater Docks",
+      "updatedAt": "2026-06-05T12:30:00.000Z",
+      "path": "entities/location/location-blackwater-docks.md"
+    },
+    {
+      "id": "faction-civic-accord",
+      "type": "faction",
+      "title": "The Civic Accord",
+      "updatedAt": "2026-06-05T12:30:00.000Z",
+      "path": "entities/faction/faction-civic-accord.md"
+    },
+    {
+      "id": "faction-ember-choir",
+      "type": "faction",
+      "title": "The Ember Choir",
+      "updatedAt": "2026-06-05T12:30:00.000Z",
+      "path": "entities/faction/faction-ember-choir.md"
+    },
+    {
+      "id": "faction-mirror-guild",
+      "type": "faction",
+      "title": "Mirror Guild",
+      "updatedAt": "2026-06-05T12:30:00.000Z",
+      "path": "entities/faction/faction-mirror-guild.md"
     },
     {
       "id": "item-hidden-crown",
       "type": "item",
       "title": "Hidden Crown",
-      "updatedAt": "2026-06-05T10:00:00.000Z",
+      "updatedAt": "2026-06-05T12:30:00.000Z",
       "path": "entities/item/item-hidden-crown.md"
+    },
+    {
+      "id": "item-moonlit-ledger",
+      "type": "item",
+      "title": "Moonlit Ledger",
+      "updatedAt": "2026-06-05T12:30:00.000Z",
+      "path": "entities/item/item-moonlit-ledger.md"
+    },
+    {
+      "id": "item-signet-key",
+      "type": "item",
+      "title": "Signet Key",
+      "updatedAt": "2026-06-05T12:30:00.000Z",
+      "path": "entities/item/item-signet-key.md"
+    },
+    {
+      "id": "item-blue-glass-lantern",
+      "type": "item",
+      "title": "Blue Glass Lantern",
+      "updatedAt": "2026-06-05T12:30:00.000Z",
+      "path": "entities/item/item-blue-glass-lantern.md"
+    },
+    {
+      "id": "clue-mirror-shard",
+      "type": "clue",
+      "title": "Mirror Shard with a Fifth Reflection",
+      "updatedAt": "2026-06-05T12:30:00.000Z",
+      "path": "entities/clue/clue-mirror-shard.md"
+    },
+    {
+      "id": "note-act-ii-pressure-map",
+      "type": "note",
+      "title": "Act II Pressure Map",
+      "updatedAt": "2026-06-05T12:30:00.000Z",
+      "path": "entities/note/note-act-ii-pressure-map.md"
+    },
+    {
+      "id": "note-theme-cost-of-memory",
+      "type": "note",
+      "title": "Theme: The Cost of Memory",
+      "updatedAt": "2026-06-05T12:30:00.000Z",
+      "path": "entities/note/note-theme-cost-of-memory.md"
+    },
+    {
+      "id": "event-market-fire",
+      "type": "event",
+      "title": "Market Fire",
+      "updatedAt": "2026-06-05T12:30:00.000Z",
+      "path": "entities/event/event-market-fire.md"
+    },
+    {
+      "id": "event-archive-bargain",
+      "type": "event",
+      "title": "Archive Bargain",
+      "updatedAt": "2026-06-05T12:30:00.000Z",
+      "path": "entities/event/event-archive-bargain.md"
+    },
+    {
+      "id": "event-dockside-eclipse",
+      "type": "event",
+      "title": "Dockside Eclipse",
+      "updatedAt": "2026-06-05T12:30:00.000Z",
+      "path": "entities/event/event-dockside-eclipse.md"
+    },
+    {
+      "id": "event-vault-awakening",
+      "type": "event",
+      "title": "Vault Awakening",
+      "updatedAt": "2026-06-05T12:30:00.000Z",
+      "path": "entities/event/event-vault-awakening.md"
+    },
+    {
+      "id": "event-coronation-at-dawn",
+      "type": "event",
+      "title": "Coronation at Dawn",
+      "updatedAt": "2026-06-05T12:30:00.000Z",
+      "path": "entities/event/event-coronation-at-dawn.md"
     }
   ]
 }

@@ -2,40 +2,306 @@
   "schemaVersion": 2,
   "relationships": [
     {
-      "id": "link-orin-hides-mara",
+      "id": "link-orin-mara",
       "sourceId": "character-orin-ash",
       "targetId": "character-mara-vale",
       "type": "hides",
-      "label": "Hides",
-      "notes": "",
+      "label": "Hides Mara's bloodline",
+      "notes": "Orin begins as a keeper of dangerous truth, then has to become a protector of Mara's right to choose what truth does next.",
+      "startsAtEventId": "event-market-fire",
+      "timelineVersions": [
+        {
+          "id": "version-orin-protects-archive",
+          "eventId": "event-archive-bargain",
+          "type": "protects",
+          "label": "Confesses and protects",
+          "notes": "Orin admits he erased Mara's record and shifts from gatekeeper to guard."
+        },
+        {
+          "id": "version-orin-protects-vault",
+          "eventId": "event-vault-awakening",
+          "type": "protects",
+          "label": "Keeps the secret until Mara chooses",
+          "notes": "Orin stops managing the truth and guards Mara while she decides how much to reveal."
+        }
+      ]
+    },
+    {
+      "id": "link-lysandra-crown",
+      "sourceId": "character-lysandra-veil",
+      "targetId": "item-hidden-crown",
+      "type": "hides",
+      "label": "Frames the Crown as lost",
+      "notes": "Lysandra keeps the Crown moving through civic storage sites while blaming rebels for the blue fire.",
+      "startsAtEventId": "event-market-fire",
+      "endsAtEventId": "event-vault-awakening",
+      "timelineVersions": []
+    },
+    {
+      "id": "link-market-fire-mara",
+      "sourceId": "event-market-fire",
+      "targetId": "character-mara-vale",
+      "type": "causes",
+      "label": "Forces Mara into the conspiracy",
+      "notes": "The fire destroys Mara's neutral life and makes every ordinary delivery route dangerous.",
       "startsAtEventId": "event-market-fire",
       "timelineVersions": []
     },
     {
-      "id": "link-mara-located-in-glass-quarter",
-      "sourceId": "character-mara-vale",
-      "targetId": "location-glass-quarter",
-      "type": "located_in",
-      "label": "Located in",
-      "notes": "",
-      "timelineVersions": []
-    },
-    {
-      "id": "link-market-fire-causes-mara",
-      "sourceId": "event-market-fire",
-      "targetId": "character-mara-vale",
-      "type": "causes",
-      "label": "Causes",
-      "notes": "",
-      "timelineVersions": []
-    },
-    {
-      "id": "link-crown-causes-market-fire",
+      "id": "link-crown-market-fire",
       "sourceId": "item-hidden-crown",
       "targetId": "event-market-fire",
       "type": "causes",
-      "label": "Causes",
-      "notes": "",
+      "label": "Ignites the false riot",
+      "notes": "The Crown rejects a command and throws blue fire through the west market mirrors.",
+      "startsAtEventId": "event-market-fire",
+      "timelineVersions": []
+    },
+    {
+      "id": "link-mara-glass-quarter",
+      "sourceId": "character-mara-vale",
+      "targetId": "location-glass-quarter",
+      "type": "located_in",
+      "label": "Home route",
+      "notes": "Mara knows the Glass Quarter by reflections, smells, shortcuts, and which bridges sing in rain.",
+      "timelineVersions": []
+    },
+    {
+      "id": "link-orin-bellwater",
+      "sourceId": "character-orin-ash",
+      "targetId": "location-bellwater-archive",
+      "type": "located_in",
+      "label": "Exiled from his own archive",
+      "notes": "Orin knows the archive well enough to break in, but not well enough to leave unchanged.",
+      "timelineVersions": []
+    },
+    {
+      "id": "link-sable-blackwater",
+      "sourceId": "character-sable-reed",
+      "targetId": "location-blackwater-docks",
+      "type": "located_in",
+      "label": "Runs the salvage routes",
+      "notes": "Sable's crews can move people, contraband, and rumor through the docks before the next bell.",
+      "timelineVersions": []
+    },
+    {
+      "id": "link-tovan-mirror-guild",
+      "sourceId": "character-tovan-bright",
+      "targetId": "faction-mirror-guild",
+      "type": "relates_to",
+      "label": "Stole guild plans",
+      "notes": "Tovan thinks he copied a lamp schematic. He actually copied part of a witness engine.",
+      "timelineVersions": []
+    },
+    {
+      "id": "link-mara-sable",
+      "sourceId": "character-sable-reed",
+      "targetId": "character-mara-vale",
+      "type": "owes",
+      "label": "Sable owes Mara a clean escape",
+      "notes": "Their bond begins as a practical debt and becomes the place both characters stop pretending risk is only tactical.",
+      "startsAtEventId": "event-archive-bargain",
+      "timelineVersions": [
+        {
+          "id": "version-sable-knows-mara",
+          "eventId": "event-dockside-eclipse",
+          "type": "knows",
+          "label": "Trusts with a knife drawn",
+          "notes": "Sable spends her escape money on a diversion and tells Mara the debt is not paid yet."
+        },
+        {
+          "id": "version-sable-loves-mara",
+          "eventId": "event-coronation-at-dawn",
+          "type": "loves",
+          "label": "Chooses each other openly",
+          "notes": "Sable gives Mara her true name in front of the bridges."
+        }
+      ]
+    },
+    {
+      "id": "link-lysandra-accord",
+      "sourceId": "character-lysandra-veil",
+      "targetId": "faction-civic-accord",
+      "type": "member_of",
+      "label": "Minister of civic quiet",
+      "notes": "Lysandra's authority is procedural until the Vault exposes how much procedure she has hollowed out.",
+      "timelineVersions": [
+        {
+          "id": "version-lysandra-betrays-accord",
+          "eventId": "event-vault-awakening",
+          "type": "betrays",
+          "label": "Betrays the Accord",
+          "notes": "Lysandra locks out the reform ministers and orders the militia to fire on witnesses."
+        }
+      ]
+    },
+    {
+      "id": "link-ember-accord",
+      "sourceId": "faction-ember-choir",
+      "targetId": "faction-civic-accord",
+      "type": "opposes",
+      "label": "Organizes against emergency rule",
+      "notes": "The Choir's opposition is real, but the finale should make them choose charter work over permanent revolt.",
+      "endsAtEventId": "event-coronation-at-dawn",
+      "timelineVersions": []
+    },
+    {
+      "id": "link-mirror-ledger",
+      "sourceId": "faction-mirror-guild",
+      "targetId": "item-moonlit-ledger",
+      "type": "hides",
+      "label": "Hides duplicate ledgers",
+      "notes": "The Mirror Guild keeps backups of histories nobody is supposed to prove.",
+      "timelineVersions": []
+    },
+    {
+      "id": "link-mirror-shard-ledger",
+      "sourceId": "clue-mirror-shard",
+      "targetId": "item-moonlit-ledger",
+      "type": "decodes",
+      "label": "Decodes the ledger margin",
+      "notes": "The shard reveals a fifth reflection beside every crossed-out heir.",
+      "startsAtEventId": "event-archive-bargain",
+      "timelineVersions": []
+    },
+    {
+      "id": "link-ledger-vault",
+      "sourceId": "item-moonlit-ledger",
+      "targetId": "location-underclock-vault",
+      "type": "relates_to",
+      "label": "Maps vows to gears",
+      "notes": "The Ledger does not tell them where the Vault is. It tells them which promises make the route visible.",
+      "timelineVersions": []
+    },
+    {
+      "id": "link-signet-key-vault",
+      "sourceId": "item-signet-key",
+      "targetId": "location-underclock-vault",
+      "type": "owns",
+      "label": "Unlocks the confession gear",
+      "notes": "The key opens one air bell and one moral lock, then breaks.",
+      "timelineVersions": []
+    },
+    {
+      "id": "link-crown-vault",
+      "sourceId": "item-hidden-crown",
+      "targetId": "location-underclock-vault",
+      "type": "located_in",
+      "label": "Built for the Underclock",
+      "notes": "The Crown is less an object than an interface for a city-scale witness engine.",
+      "timelineVersions": []
+    },
+    {
+      "id": "link-archive-dockside",
+      "sourceId": "event-archive-bargain",
+      "targetId": "event-dockside-eclipse",
+      "type": "causes",
+      "label": "Points to the eclipse shipment",
+      "notes": "The Ledger names a bell shipment arriving while the moon covers the signal mirrors.",
+      "startsAtEventId": "event-archive-bargain",
+      "timelineVersions": []
+    },
+    {
+      "id": "link-dockside-vault",
+      "sourceId": "event-dockside-eclipse",
+      "targetId": "location-underclock-vault",
+      "type": "causes",
+      "label": "Reveals the Underclock route",
+      "notes": "The bell shipment and the Lantern line up to show a blue path beneath the canals.",
+      "startsAtEventId": "event-dockside-eclipse",
+      "timelineVersions": []
+    },
+    {
+      "id": "link-vault-coronation",
+      "sourceId": "event-vault-awakening",
+      "targetId": "event-coronation-at-dawn",
+      "type": "causes",
+      "label": "Makes dawn unavoidable",
+      "notes": "Once the Vault projects the hidden record, the city has to answer in public.",
+      "startsAtEventId": "event-vault-awakening",
+      "timelineVersions": []
+    },
+    {
+      "id": "link-mara-ember",
+      "sourceId": "character-mara-vale",
+      "targetId": "faction-ember-choir",
+      "type": "member_of",
+      "label": "Tentative field ally",
+      "notes": "Mara accepts protection and pressure from the Choir without promising them a monarchy.",
+      "startsAtEventId": "event-dockside-eclipse",
+      "timelineVersions": []
+    },
+    {
+      "id": "link-mara-crown",
+      "sourceId": "character-mara-vale",
+      "targetId": "item-hidden-crown",
+      "type": "owns",
+      "label": "Wakes the Crown",
+      "notes": "Mara's ownership is conditional: the Crown responds because she asks instead of commands.",
+      "startsAtEventId": "event-vault-awakening",
+      "timelineVersions": []
+    },
+    {
+      "id": "link-tovan-lantern",
+      "sourceId": "character-tovan-bright",
+      "targetId": "item-blue-glass-lantern",
+      "type": "owns",
+      "label": "Built from stolen plans",
+      "notes": "Tovan's bright little crime becomes the key to the entire city engine.",
+      "timelineVersions": []
+    },
+    {
+      "id": "link-lantern-shard",
+      "sourceId": "item-blue-glass-lantern",
+      "targetId": "clue-mirror-shard",
+      "type": "decodes",
+      "label": "Projects the fifth reflection",
+      "notes": "Once the shard is set into the Lantern, the forgotten witness can finally be seen by more than Mara.",
+      "timelineVersions": []
+    },
+    {
+      "id": "link-lysandra-mara",
+      "sourceId": "character-lysandra-veil",
+      "targetId": "character-mara-vale",
+      "type": "opposes",
+      "label": "Names Mara as arsonist",
+      "notes": "Lysandra makes Mara public enemy and accidental symbol at the same time.",
+      "startsAtEventId": "event-dockside-eclipse",
+      "timelineVersions": [
+        {
+          "id": "version-lysandra-public-challenge",
+          "eventId": "event-coronation-at-dawn",
+          "type": "opposes",
+          "label": "Publicly challenged",
+          "notes": "Lysandra loses control of the crowd but still chooses prosecution over surrender."
+        }
+      ]
+    },
+    {
+      "id": "link-accord-glass-quarter",
+      "sourceId": "faction-civic-accord",
+      "targetId": "location-glass-quarter",
+      "type": "located_in",
+      "label": "Polices the mirror bridges",
+      "notes": "Emergency patrols turn the Glass Quarter from home into a watched stage.",
+      "timelineVersions": []
+    },
+    {
+      "id": "link-pressure-map-dockside",
+      "sourceId": "note-act-ii-pressure-map",
+      "targetId": "event-dockside-eclipse",
+      "type": "relates_to",
+      "label": "Tracks midpoint leverage",
+      "notes": "This planning note marks which alliances should become active or unstable by the midpoint.",
+      "timelineVersions": []
+    },
+    {
+      "id": "link-theme-mara",
+      "sourceId": "note-theme-cost-of-memory",
+      "targetId": "character-mara-vale",
+      "type": "relates_to",
+      "label": "Tests Mara's ending choice",
+      "notes": "The theme note is linked to Mara so revisions keep the protagonist's choice connected to the memory motif.",
       "timelineVersions": []
     }
   ]
