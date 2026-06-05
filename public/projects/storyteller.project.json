@@ -1,0 +1,182 @@
+{
+  "schemaVersion": 2,
+  "title": "The Hidden Crown",
+  "updatedAt": "2026-06-05T11:57:04.893Z",
+  "itemTypes": [
+    {
+      "id": "character",
+      "label": "Character",
+      "color": "#0f766e",
+      "icon": "users",
+      "builtIn": true
+    },
+    {
+      "id": "note",
+      "label": "Note",
+      "color": "#b45309",
+      "icon": "sticky-note",
+      "builtIn": true
+    },
+    {
+      "id": "location",
+      "label": "Location",
+      "color": "#2563eb",
+      "icon": "map-pin",
+      "builtIn": true
+    },
+    {
+      "id": "event",
+      "label": "Event",
+      "color": "#be123c",
+      "icon": "calendar-days",
+      "builtIn": true
+    },
+    {
+      "id": "item",
+      "label": "Item",
+      "color": "#7c3aed",
+      "icon": "box",
+      "builtIn": true
+    },
+    {
+      "id": "faction",
+      "label": "Faction",
+      "color": "#15803d",
+      "icon": "flag",
+      "builtIn": true
+    }
+  ],
+  "linkTypes": [
+    {
+      "id": "relates_to",
+      "label": "Relates to",
+      "color": "#46605a",
+      "icon": "link",
+      "direction": "directed",
+      "builtIn": true
+    },
+    {
+      "id": "knows",
+      "label": "Knows",
+      "color": "#0f766e",
+      "icon": "users",
+      "direction": "mutual",
+      "builtIn": true
+    },
+    {
+      "id": "hides",
+      "label": "Hides",
+      "color": "#be123c",
+      "icon": "eye-off",
+      "direction": "directed",
+      "builtIn": true
+    },
+    {
+      "id": "loves",
+      "label": "Loves",
+      "color": "#db2777",
+      "icon": "heart",
+      "direction": "mutual",
+      "builtIn": true
+    },
+    {
+      "id": "opposes",
+      "label": "Opposes",
+      "color": "#b91c1c",
+      "icon": "swords",
+      "direction": "directed",
+      "builtIn": true
+    },
+    {
+      "id": "owns",
+      "label": "Owns",
+      "color": "#7c3aed",
+      "icon": "key",
+      "direction": "directed",
+      "builtIn": true
+    },
+    {
+      "id": "located_in",
+      "label": "Located in",
+      "color": "#2563eb",
+      "icon": "map-pin",
+      "direction": "directed",
+      "builtIn": true
+    },
+    {
+      "id": "causes",
+      "label": "Causes",
+      "color": "#b45309",
+      "icon": "git-branch",
+      "direction": "directed",
+      "builtIn": true
+    },
+    {
+      "id": "member_of",
+      "label": "Member of",
+      "color": "#15803d",
+      "icon": "flag",
+      "direction": "directed",
+      "builtIn": true
+    }
+  ],
+  "graphLayout": {
+    "character-mara-vale": {
+      "x": 120,
+      "y": 90
+    },
+    "character-orin-ash": {
+      "x": -531.6319444444446,
+      "y": -131.25
+    },
+    "location-glass-quarter": {
+      "x": 578.6111111111111,
+      "y": -114.16666666666663
+    },
+    "event-market-fire": {
+      "x": -281.1111111111111,
+      "y": 304.16666666666663
+    },
+    "item-hidden-crown": {
+      "x": -850.125,
+      "y": 284.6388888888889
+    }
+  },
+  "entityIndex": [
+    {
+      "id": "character-mara-vale",
+      "type": "character",
+      "title": "Mara Vale",
+      "updatedAt": "2026-06-05T10:00:00.000Z",
+      "path": "entities/character/character-mara-vale.md"
+    },
+    {
+      "id": "character-orin-ash",
+      "type": "character",
+      "title": "Orin Ash",
+      "updatedAt": "2026-06-05T10:00:00.000Z",
+      "path": "entities/character/character-orin-ash.md"
+    },
+    {
+      "id": "location-glass-quarter",
+      "type": "location",
+      "title": "The Glass Quarter",
+      "updatedAt": "2026-06-05T10:00:00.000Z",
+      "path": "entities/location/location-glass-quarter.md"
+    },
+    {
+      "id": "event-market-fire",
+      "type": "event",
+      "title": "Market Fire",
+      "updatedAt": "2026-06-05T10:00:00.000Z",
+      "path": "entities/event/event-market-fire.md"
+    },
+    {
+      "id": "item-hidden-crown",
+      "type": "item",
+      "title": "Hidden Crown",
+      "updatedAt": "2026-06-05T10:00:00.000Z",
+      "path": "entities/item/item-hidden-crown.md"
+    }
+  ]
+}

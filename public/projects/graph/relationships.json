@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 2,
+  "relationships": [
+    {
+      "id": "link-orin-hides-mara",
+      "sourceId": "character-orin-ash",
+      "targetId": "character-mara-vale",
+      "type": "hides",
+      "label": "Hides",
+      "notes": "",
+      "startsAtEventId": "event-market-fire",
+      "timelineVersions": []
+    },
+    {
+      "id": "link-mara-located-in-glass-quarter",
+      "sourceId": "character-mara-vale",
+      "targetId": "location-glass-quarter",
+      "type": "located_in",
+      "label": "Located in",
+      "notes": "",
+      "timelineVersions": []
+    },
+    {
+      "id": "link-market-fire-causes-mara",
+      "sourceId": "event-market-fire",
+      "targetId": "character-mara-vale",
+      "type": "causes",
+      "label": "Causes",
+      "notes": "",
+      "timelineVersions": []
+    },
+    {
+      "id": "link-crown-causes-market-fire",
+      "sourceId": "item-hidden-crown",
+      "targetId": "event-market-fire",
+      "type": "causes",
+      "label": "Causes",
+      "notes": "",
+      "timelineVersions": []
+    }
+  ]
+}
