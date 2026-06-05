@@ -1,18 +1,34 @@
-import { StoryEntity, StoryProject, StoryRelationship } from "../types";
-import { createBlankProject } from "./story";
+import { ItemTypeDefinition, LinkTypeDefinition, StoryEntity, StoryProject, StoryRelationship } from "../types";
+import { migrateProjectShape } from "./story";
 
 const MANIFEST_PATH = "storyteller.project.json";
 const RELATIONSHIPS_PATH = "graph/relationships.json";
 const BUNDLE_KIND = "storyteller.project.bundle";
 
-interface ProjectManifest {
+interface ProjectManifestV1 {
   schemaVersion: 1;
   title: string;
   updatedAt: string;
   graphLayout: StoryProject["layout"];
   entityIndex: Array<{
     id: string;
-    type: StoryEntity["type"];
+    type: string;
+    title: string;
+    updatedAt: string;
+    path: string;
+  }>;
+}
+
+interface ProjectManifestV2 {
+  schemaVersion: 2;
+  title: string;
+  updatedAt: string;
+  itemTypes: ItemTypeDefinition[];
+  linkTypes: LinkTypeDefinition[];
+  graphLayout: StoryProject["layout"];
+  entityIndex: Array<{
+    id: string;
+    type: string;
     title: string;
     updatedAt: string;
     path: string;
@@ -20,7 +36,7 @@ interface ProjectManifest {
 }
 
 interface RelationshipsFile {
-  schemaVersion: 1;
+  schemaVersion: 1 | 2;
   relationships: StoryRelationship[];
 }
 
@@ -30,13 +46,17 @@ interface ProjectBundle {
   files: Record<string, string>;
 }
 
+type ProjectManifest = ProjectManifestV1 | ProjectManifestV2;
+
 export function buildProjectFiles(project: StoryProject): Record<string, string> {
   const files: Record<string, string> = {};
   const entities = Object.values(project.entities);
-  const manifest: ProjectManifest = {
-    schemaVersion: 1,
+  const manifest: ProjectManifestV2 = {
+    schemaVersion: 2,
     title: project.title,
     updatedAt: project.updatedAt,
+    itemTypes: project.itemTypes,
+    linkTypes: project.linkTypes,
     graphLayout: project.layout,
     entityIndex: entities.map((entity) => ({
       id: entity.id,
@@ -47,7 +67,7 @@ export function buildProjectFiles(project: StoryProject): Record<string, string>
     }))
   };
   const relationships: RelationshipsFile = {
-    schemaVersion: 1,
+    schemaVersion: 2,
     relationships: project.relationships
   };
 
@@ -70,13 +90,12 @@ export function projectFromFiles(files: Record<string, string>): StoryProject {
 
   const manifest = parseJson<ProjectManifest>(manifestText, "project manifest");
 
-  if (manifest.schemaVersion !== 1 || !Array.isArray(manifest.entityIndex)) {
+  if (manifest.schemaVersion !== 1 && manifest.schemaVersion !== 2) {
     throw new Error("Unsupported or invalid StoryTeller project manifest");
   }
 
-  const relationshipText = files[RELATIONSHIPS_PATH] ?? prettyJson({ schemaVersion: 1, relationships: [] });
+  const relationshipText = files[RELATIONSHIPS_PATH] ?? prettyJson({ schemaVersion: manifest.schemaVersion, relationships: [] });
   const relationshipFile = parseJson<RelationshipsFile>(relationshipText, "relationships file");
-  const project = createBlankProject(manifest.title || "Untitled Story");
   const entities: StoryProject["entities"] = {};
 
   for (const indexedEntity of manifest.entityIndex) {
@@ -90,16 +109,18 @@ export function projectFromFiles(files: Record<string, string>): StoryProject {
     entities[entity.id] = entity;
   }
 
-  return {
-    ...project,
-    title: manifest.title || project.title,
-    updatedAt: manifest.updatedAt || project.updatedAt,
+  return migrateProjectShape({
+    schemaVersion: manifest.schemaVersion,
+    title: manifest.title,
+    updatedAt: manifest.updatedAt,
+    itemTypes: manifest.schemaVersion === 2 ? manifest.itemTypes : undefined,
+    linkTypes: manifest.schemaVersion === 2 ? manifest.linkTypes : undefined,
     entities,
     relationships: (relationshipFile.relationships ?? []).filter(
       (relationship) => entities[relationship.sourceId] && entities[relationship.targetId]
     ),
     layout: manifest.graphLayout ?? {}
-  };
+  });
 }
 
 export function serializeEntityMarkdown(entity: StoryEntity): string {
@@ -133,14 +154,18 @@ export function createProjectBundle(project: StoryProject): Blob {
   return new Blob([prettyJson(bundle)], { type: "application/json" });
 }
 
-export async function projectFromBundleFile(file: File): Promise<StoryProject> {
-  const bundle = parseJson<ProjectBundle>(await file.text(), "project bundle");
+export function projectFromBundleText(text: string): StoryProject {
+  const bundle = parseJson<ProjectBundle>(text, "project bundle");
 
   if (bundle.kind !== BUNDLE_KIND || !bundle.files) {
     throw new Error("The selected file is not a StoryTeller project bundle");
   }
 
   return projectFromFiles(bundle.files);
+}
+
+export async function projectFromBundleFile(file: File): Promise<StoryProject> {
+  return projectFromBundleText(await file.text());
 }
 
 export function hasFolderProjectSupport(): boolean {

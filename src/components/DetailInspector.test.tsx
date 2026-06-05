@@ -1,19 +1,27 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { createStarterProject } from "../data/story";
+import { createBlankProject, createStoryEntity } from "../data/story";
 import { DetailInspector } from "./DetailInspector";
 
 describe("DetailInspector", () => {
   it("keeps private character information collapsed until the author reveals it", () => {
-    const project = createStarterProject();
-    const character = Object.values(project.entities).find((entity) => entity.type === "character")!;
+    const project = createBlankProject("Inspector Test");
+    const character = createStoryEntity("character", project.itemTypes, "Mara Vale");
+    character.privateInfo = "Carries the royal bloodline without knowing it.";
+    const projectWithCharacter = {
+      ...project,
+      entities: {
+        [character.id]: character
+      }
+    };
 
     render(
       <DetailInspector
-        project={project}
+        project={projectWithCharacter}
         selection={{ kind: "entity", id: character.id }}
         onEntityChange={vi.fn()}
         onRelationshipChange={vi.fn()}
+        onTimelineEffect={vi.fn()}
         onDeleteEntity={vi.fn()}
         onDeleteRelationship={vi.fn()}
       />

@@ -1,46 +1,35 @@
 import {
   BookMarked,
-  Box,
-  CalendarDays,
   Download,
-  Flag,
+  FilePlus2,
+  FolderPlus,
   FolderOpen,
-  MapPin,
-  Plus,
   Save,
   Search,
-  StickyNote,
-  Upload,
-  Users
+  Settings2
 } from "lucide-react";
-import { entityTypes, EntityType, RelationshipType, StoryEntity, StoryProject } from "../types";
-import { entityTypeMeta, relationshipTypeMeta } from "../data/story";
-
-const entityIcons: Record<EntityType, typeof Users> = {
-  character: Users,
-  note: StickyNote,
-  location: MapPin,
-  event: CalendarDays,
-  item: Box,
-  faction: Flag
-};
+import { iconForName } from "../data/icons";
+import { findItemType } from "../data/story";
+import { ItemTypeId, LinkTypeId, StoryEntity, StoryProject } from "../types";
 
 interface SidebarProps {
   project: StoryProject;
   search: string;
   status: string;
   isDirty: boolean;
-  folderProjectSupported: boolean;
-  defaultRelationshipType: RelationshipType;
-  onCreateEntity: (type: EntityType) => void;
-  onOpenFolder: () => void;
-  onSaveFolder: () => void;
-  onExportBundle: () => void;
-  onImportBundle: () => void;
+  projectFolderName: string | null;
+  defaultRelationshipType: LinkTypeId;
+  onCreateEntity: (type: ItemTypeId) => void;
+  onNewProject: () => void;
+  onOpenTypeManager: () => void;
+  onOpenProject: () => void;
+  onSelectProjectFolder: () => void;
+  onSaveProject: () => void;
+  onExportBackup: () => void;
   onSelectEntity: (id: string) => void;
   onSearchChange: (value: string) => void;
   onProjectTitleChange: (title: string) => void;
-  onDefaultRelationshipTypeChange: (type: RelationshipType) => void;
+  onDefaultRelationshipTypeChange: (type: LinkTypeId) => void;
 }
 
 export function Sidebar({
@@ -48,13 +37,15 @@ export function Sidebar({
   search,
   status,
   isDirty,
-  folderProjectSupported,
+  projectFolderName,
   defaultRelationshipType,
   onCreateEntity,
-  onOpenFolder,
-  onSaveFolder,
-  onExportBundle,
-  onImportBundle,
+  onNewProject,
+  onOpenTypeManager,
+  onOpenProject,
+  onSelectProjectFolder,
+  onSaveProject,
+  onExportBackup,
   onSelectEntity,
   onSearchChange,
   onProjectTitleChange,
@@ -77,39 +68,49 @@ export function Sidebar({
       </div>
 
       <div className="project-actions">
-        <button type="button" onClick={onSaveFolder} disabled={!folderProjectSupported}>
-          <Save aria-hidden="true" />
-          Save folder
+        <button type="button" onClick={onNewProject}>
+          <FilePlus2 aria-hidden="true" />
+          New Project
         </button>
-        <button type="button" onClick={onOpenFolder} disabled={!folderProjectSupported}>
+        <button type="button" onClick={onOpenProject}>
           <FolderOpen aria-hidden="true" />
-          Open folder
+          Open Project
         </button>
-        <button type="button" onClick={onExportBundle}>
+        <button type="button" onClick={onSelectProjectFolder}>
+          <FolderPlus aria-hidden="true" />
+          Select Folder
+        </button>
+        <button type="button" onClick={onSaveProject}>
+          <Save aria-hidden="true" />
+          Save Project
+        </button>
+        <button type="button" onClick={onExportBackup}>
           <Download aria-hidden="true" />
-          Export
-        </button>
-        <button type="button" onClick={onImportBundle}>
-          <Upload aria-hidden="true" />
-          Import
+          Export Backup
         </button>
       </div>
 
+      <p className="folder-line">
+        Folder: <strong>{projectFolderName ?? "Not selected"}</strong>
+      </p>
       <p className={`status-line ${isDirty ? "is-dirty" : ""}`}>{status}</p>
 
       <section className="sidebar-section">
         <div className="section-heading">
           <h2>Add Item</h2>
+          <button type="button" className="text-tool-button" onClick={onOpenTypeManager}>
+            <Settings2 aria-hidden="true" />
+            Types
+          </button>
         </div>
         <div className="entity-type-grid">
-          {entityTypes.map((type) => {
-            const Icon = entityIcons[type];
-            const meta = entityTypeMeta[type];
+          {project.itemTypes.map((type) => {
+            const Icon = iconForName(type.icon);
 
             return (
-              <button key={type} type="button" onClick={() => onCreateEntity(type)}>
+              <button key={type.id} type="button" onClick={() => onCreateEntity(type.id)}>
                 <Icon aria-hidden="true" />
-                {meta.label}
+                {type.label}
               </button>
             );
           })}
@@ -123,10 +124,10 @@ export function Sidebar({
         <select
           id="default-link-type"
           value={defaultRelationshipType}
-          onChange={(event) => onDefaultRelationshipTypeChange(event.target.value as RelationshipType)}
+          onChange={(event) => onDefaultRelationshipTypeChange(event.target.value)}
         >
-          {relationshipTypeMeta.map((type) => (
-            <option key={type.value} value={type.value}>
+          {project.linkTypes.map((type) => (
+            <option key={type.id} value={type.id}>
               {type.label}
             </option>
           ))}
@@ -149,11 +150,11 @@ export function Sidebar({
         </label>
         <div className="entity-list">
           {visibleEntities.map((entity) => {
-            const meta = entityTypeMeta[entity.type];
+            const meta = findItemType(project, entity.type);
 
             return (
               <button key={entity.id} type="button" onClick={() => onSelectEntity(entity.id)}>
-                <span style={{ backgroundColor: meta.accent }} />
+                <span style={{ backgroundColor: meta.color }} />
                 <strong>{entity.title}</strong>
                 <small>{meta.label}</small>
               </button>
