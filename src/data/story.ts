@@ -361,11 +361,11 @@ export function resolveRelationshipAt(
   relationship: StoryRelationship,
   eventId: string | null
 ): StoryRelationship {
-  if (!eventId || !relationship.timelineVersions?.length) {
+  if (!relationship.timelineVersions?.length) {
     return relationship;
   }
 
-  const selectedOrder = eventOrder(project, eventId);
+  const selectedOrder = eventId ? eventOrder(project, eventId) : Number.POSITIVE_INFINITY;
 
   if (selectedOrder === null) {
     return relationship;

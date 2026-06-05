@@ -9,7 +9,8 @@ import {
   createStoryEntity,
   findItemType,
   isRelationshipActiveAt,
-  linkDirection
+  linkDirection,
+  resolveRelationshipAt
 } from "./story";
 import {
   buildProjectFiles,
@@ -159,6 +160,48 @@ describe("project file model", () => {
     expect(isRelationshipActiveAt(ended.project, endedRelationship, end.id)).toBe(true);
     expect(isRelationshipActiveAt(ended.project, endedRelationship, after.id)).toBe(false);
     expect(isRelationshipActiveAt(ended.project, endedRelationship, "missing-event")).toBe(true);
+  });
+
+  it("resolves relationship versions for full and selected timeline states", () => {
+    let project = createBlankProject("Timeline Versions");
+    const a = createStoryEntity("character", project.itemTypes, "A");
+    const b = createStoryEntity("character", project.itemTypes, "B");
+    const start = createStoryEntity("event", project.itemTypes, "Meet");
+    const update = createStoryEntity("event", project.itemTypes, "Trust");
+    start.timeline = { order: 1, effects: [] };
+    update.timeline = { order: 2, effects: [] };
+    const relationship = {
+      id: "link-versioned",
+      sourceId: a.id,
+      targetId: b.id,
+      type: "hides",
+      label: "Keeps secret",
+      notes: "",
+      startsAtEventId: start.id,
+      timelineVersions: [
+        {
+          id: "version-trust",
+          eventId: update.id,
+          type: "protects",
+          label: "Protects openly",
+          notes: "The secret becomes a promise."
+        }
+      ]
+    };
+    project = {
+      ...project,
+      entities: {
+        [a.id]: a,
+        [b.id]: b,
+        [start.id]: start,
+        [update.id]: update
+      },
+      relationships: [relationship]
+    };
+
+    expect(resolveRelationshipAt(project, relationship, start.id).label).toBe("Keeps secret");
+    expect(resolveRelationshipAt(project, relationship, update.id).label).toBe("Protects openly");
+    expect(resolveRelationshipAt(project, relationship, null).label).toBe("Protects openly");
   });
 
   it("keeps private entity information out of markdown body text", () => {

@@ -9,10 +9,29 @@ import {
   readProjectFromDirectory,
   writeProjectToDirectory
 } from "./data/projectFiles";
-import { createBlankProject } from "./data/story";
+import { loadStarterProject } from "./data/starterProject";
+import { createBlankProject, createStoryEntity } from "./data/story";
 
 vi.mock("@xyflow/react", () => ({
   addEdge: (edge: unknown, edges: unknown[]) => [...edges, edge],
+  applyNodeChanges: (
+    changes: Array<{
+      dimensions?: { height: number; width: number };
+      id: string;
+      position?: { x: number; y: number };
+      type: string;
+    }>,
+    nodes: any[]
+  ) =>
+    nodes.map((node) => {
+      const change = changes.find((item) => item.id === node.id);
+
+      if (change?.type === "dimensions" && change.dimensions) {
+        return { ...node, measured: change.dimensions };
+      }
+
+      return change?.type === "position" && change.position ? { ...node, position: change.position } : node;
+    }),
   Background: () => null,
   BackgroundVariant: {
     Dots: "dots"
@@ -22,7 +41,57 @@ vi.mock("@xyflow/react", () => ({
     ArrowClosed: "arrowclosed"
   },
   MiniMap: () => null,
-  ReactFlow: ({ children }: { children: ReactNode }) => <div>{children}</div>,
+  ReactFlow: ({
+    children,
+    nodes = [],
+    onNodesChange
+  }: {
+    children: ReactNode;
+    nodes?: Array<{
+      data: { entity: { title: string } };
+      id: string;
+      measured?: { height: number; width: number };
+      position: { x: number; y: number };
+    }>;
+    onNodesChange?: (
+      changes: Array<{
+        dimensions?: { height: number; width: number };
+        id: string;
+        position?: { x: number; y: number };
+        type: string;
+      }>
+    ) => void;
+  }) => (
+    <div>
+      {nodes.length ? (
+        <>
+          <button
+            type="button"
+            onClick={() => onNodesChange?.([{ id: nodes[0].id, type: "dimensions", dimensions: { width: 230, height: 128 } }])}
+          >
+            Initialize first graph node
+          </button>
+          <button
+            type="button"
+            onClick={() => onNodesChange?.([{ id: nodes[0].id, type: "position", position: { x: 321, y: 654 } }])}
+          >
+            Move first graph node
+          </button>
+        </>
+      ) : null}
+      {nodes.map((node) => (
+        <div
+          key={node.id}
+          data-measured={`${node.measured?.width ?? ""},${node.measured?.height ?? ""}`}
+          data-position={`${node.position.x},${node.position.y}`}
+          data-testid={`flow-node-${node.id}`}
+        >
+          {node.data.entity.title}
+        </div>
+      ))}
+      {children}
+    </div>
+  ),
   ReactFlowProvider: ({ children }: { children: ReactNode }) => <>{children}</>
 }));
 
@@ -58,6 +127,7 @@ describe("App project commands", () => {
   let fileClickSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
+    vi.mocked(loadStarterProject).mockResolvedValue(createBlankProject("Loaded Project"));
     vi.mocked(hasFolderProjectSupport).mockReturnValue(true);
     vi.mocked(readProjectFromDirectory).mockResolvedValue(createBlankProject("Opened Project"));
     vi.mocked(projectFromBundleFile).mockResolvedValue(createBlankProject("Backup Project"));
@@ -230,6 +300,40 @@ describe("App project commands", () => {
     await waitFor(() => expect(readProjectFromDirectory).toHaveBeenCalledWith(folderHandle));
     expect(screen.getByDisplayValue("Opened Project")).toBeInTheDocument();
     expect(screen.getByText("Project opened")).toBeInTheDocument();
+  });
+
+  it("keeps graph nodes rendered after node position changes", async () => {
+    const project = createBlankProject("Graph Project");
+    const hero = createStoryEntity("character", project.itemTypes, "Draggable Hero");
+    vi.mocked(loadStarterProject).mockResolvedValue({
+      ...project,
+      entities: {
+        [hero.id]: hero
+      },
+      layout: {
+        [hero.id]: { x: 10, y: 20 }
+      }
+    });
+
+    render(<App />);
+
+    await waitFor(() => expect(screen.getByDisplayValue("Graph Project")).toBeInTheDocument());
+    expect(screen.getByTestId(`flow-node-${hero.id}`)).toHaveAttribute("data-position", "10,20");
+
+    fireEvent.click(screen.getByRole("button", { name: "Initialize first graph node" }));
+
+    await waitFor(() =>
+      expect(screen.getByTestId(`flow-node-${hero.id}`)).toHaveAttribute("data-measured", "230,128")
+    );
+    expect(screen.getByText("Starter project loaded")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Move first graph node" }));
+
+    await waitFor(() =>
+      expect(screen.getByTestId(`flow-node-${hero.id}`)).toHaveAttribute("data-position", "321,654")
+    );
+    expect(screen.getByTestId(`flow-node-${hero.id}`)).toHaveTextContent("Draggable Hero");
+    expect(screen.getByText("Unsaved changes")).toBeInTheDocument();
   });
 
   it("falls back to opening a backup file when folder access is unavailable", async () => {

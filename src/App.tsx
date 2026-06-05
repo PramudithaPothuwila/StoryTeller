@@ -1,5 +1,6 @@
 import {
   addEdge,
+  applyNodeChanges,
   Background,
   BackgroundVariant,
   Connection,
@@ -56,6 +57,7 @@ import {
   ItemTypeId,
   LinkTypeDefinition,
   LinkTypeId,
+  Point,
   Selection,
   StoryEntity,
   StoryProject,
@@ -65,10 +67,11 @@ import {
 
 type PositionNodeChange = NodeChange & {
   id: string;
-  position: {
-    x: number;
-    y: number;
-  };
+  position?: Point;
+};
+
+type ValidPositionNodeChange = PositionNodeChange & {
+  position: Point;
 };
 
 const nodeTypes = {
@@ -88,8 +91,12 @@ export function App() {
 
 function StoryWorkspace() {
   const initialProject = useMemo(() => createLoadingProject(), []);
+  const initialSelection = useMemo(() => firstProjectSelection(initialProject), [initialProject]);
   const [project, setProject] = useState<StoryProject>(() => initialProject);
-  const [selection, setSelection] = useState<Selection | null>(() => firstProjectSelection(initialProject));
+  const [selection, setSelection] = useState<Selection | null>(() => initialSelection);
+  const [flowNodes, setFlowNodes] = useState<Node<EntityNodeData, "storyEntity">[]>(() =>
+    projectNodes(initialProject, initialSelection)
+  );
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("Ready");
   const [isDirty, setIsDirty] = useState(false);
@@ -111,8 +118,10 @@ function StoryWorkspace() {
           return;
         }
 
+        const nextSelection = firstProjectSelection(starterProject);
         setProject(starterProject);
-        setSelection(firstProjectSelection(starterProject));
+        setSelection(nextSelection);
+        setFlowNodes(projectNodes(starterProject, nextSelection));
         setSelectedTimelineEventId(null);
         setIsDirty(false);
         setStatus("Starter project loaded");
@@ -124,6 +133,7 @@ function StoryWorkspace() {
         const blankProject = createBlankProject();
         setProject(blankProject);
         setSelection(null);
+        setFlowNodes(projectNodes(blankProject, null));
         setStatus((error as Error).message);
       }
     }
@@ -135,20 +145,9 @@ function StoryWorkspace() {
     };
   }, []);
 
-  const nodes = useMemo<Node<EntityNodeData, "storyEntity">[]>(
-    () =>
-      Object.values(project.entities).map((entity) => ({
-        id: entity.id,
-        type: "storyEntity",
-        position: project.layout[entity.id] ?? { x: 80, y: 80 },
-        data: {
-          entity,
-          itemType: findItemType(project, entity.type),
-          isSelected: selection?.kind === "entity" && selection.id === entity.id
-        }
-      })),
-    [project, selection]
-  );
+  useEffect(() => {
+    setFlowNodes((currentNodes) => syncProjectNodes(currentNodes, project, selection));
+  }, [project, selection]);
 
   const edges = useMemo<Edge[]>(
     () =>
@@ -217,21 +216,43 @@ function StoryWorkspace() {
 
   const handleNodesChange = useCallback(
     (changes: NodeChange[]) => {
-      const positionChanges = changes.filter(isPositionNodeChange);
+      setFlowNodes(
+        (currentNodes) => applyNodeChanges(changes, currentNodes) as Node<EntityNodeData, "storyEntity">[]
+      );
+
+      const positionChanges = changes.filter(isValidPositionNodeChange);
 
       if (!positionChanges.length) {
         return;
       }
 
-      const nextLayout = { ...project.layout };
+      setProject((currentProject) => {
+        const nextLayout = { ...currentProject.layout };
+        let moved = false;
 
-      for (const change of positionChanges) {
-        nextLayout[change.id] = change.position;
-      }
+        for (const change of positionChanges) {
+          if (!currentProject.entities[change.id]) {
+            continue;
+          }
 
-      markProjectChanged(setProjectLayout(project, nextLayout));
+          const currentPosition = currentProject.layout[change.id] ?? { x: 80, y: 80 };
+
+          if (currentPosition.x !== change.position.x || currentPosition.y !== change.position.y) {
+            nextLayout[change.id] = {
+              x: change.position.x,
+              y: change.position.y
+            };
+            moved = true;
+          }
+        }
+
+        return moved ? setProjectLayout(currentProject, nextLayout) : currentProject;
+      });
+
+      setIsDirty(true);
+      setStatus("Unsaved changes");
     },
-    [markProjectChanged, project]
+    []
   );
 
   const handleConnect = useCallback(
@@ -319,6 +340,7 @@ function StoryWorkspace() {
       setProject(nextProject);
       setFolderHandle(handle);
       setSelection(null);
+      setFlowNodes(projectNodes(nextProject, null));
       setSelectedTimelineEventId(null);
       setIsDirty(false);
       setStatus("Project saved");
@@ -479,9 +501,11 @@ function StoryWorkspace() {
       }
 
       const loadedProject = await readProjectFromDirectory(handle);
+      const nextSelection = firstProjectSelection(loadedProject);
       setProject(loadedProject);
       setFolderHandle(handle);
-      setSelection(firstProjectSelection(loadedProject));
+      setSelection(nextSelection);
+      setFlowNodes(projectNodes(loadedProject, nextSelection));
       setSelectedTimelineEventId(null);
       setIsDirty(false);
       setStatus("Project opened");
@@ -502,9 +526,11 @@ function StoryWorkspace() {
 
     try {
       const loadedProject = await projectFromBundleFile(file);
+      const nextSelection = firstProjectSelection(loadedProject);
       setProject(loadedProject);
       setFolderHandle(null);
-      setSelection(firstProjectSelection(loadedProject));
+      setSelection(nextSelection);
+      setFlowNodes(projectNodes(loadedProject, nextSelection));
       setSelectedTimelineEventId(null);
       setIsDirty(false);
       setStatus("Project opened from backup");
@@ -559,7 +585,7 @@ function StoryWorkspace() {
         <section className="graph-column">
           <section className="graph-shell" aria-label="Story graph">
             <ReactFlow
-              nodes={nodes}
+              nodes={flowNodes}
               edges={edges}
               nodeTypes={nodeTypes}
               fitView
@@ -622,8 +648,59 @@ function firstProjectSelection(project: StoryProject): Selection | null {
   return firstEntity ? { kind: "entity", id: firstEntity } : null;
 }
 
+function projectNodes(project: StoryProject, selection: Selection | null): Node<EntityNodeData, "storyEntity">[] {
+  return Object.values(project.entities).map((entity) => ({
+    id: entity.id,
+    type: "storyEntity",
+    position: project.layout[entity.id] ?? { x: 80, y: 80 },
+    data: {
+      entity,
+      itemType: findItemType(project, entity.type),
+      isSelected: selection?.kind === "entity" && selection.id === entity.id
+    }
+  }));
+}
+
+function syncProjectNodes(
+  currentNodes: Node<EntityNodeData, "storyEntity">[],
+  project: StoryProject,
+  selection: Selection | null
+): Node<EntityNodeData, "storyEntity">[] {
+  const currentNodeById = new Map(currentNodes.map((node) => [node.id, node]));
+
+  return Object.values(project.entities).map((entity) => {
+    const currentNode = currentNodeById.get(entity.id);
+    const savedPosition = project.layout[entity.id];
+    const position = isFinitePoint(savedPosition)
+      ? savedPosition
+      : isFinitePoint(currentNode?.position)
+        ? currentNode.position
+        : { x: 80, y: 80 };
+
+    return {
+      ...currentNode,
+      id: entity.id,
+      type: "storyEntity",
+      position,
+      data: {
+        entity,
+        itemType: findItemType(project, entity.type),
+        isSelected: selection?.kind === "entity" && selection.id === entity.id
+      }
+    };
+  });
+}
+
 function isPositionNodeChange(change: NodeChange): change is PositionNodeChange {
-  return change.type === "position" && "position" in change && Boolean(change.position);
+  return change.type === "position";
+}
+
+function isValidPositionNodeChange(change: NodeChange): change is ValidPositionNodeChange {
+  return isPositionNodeChange(change) && isFinitePoint(change.position);
+}
+
+function isFinitePoint(point: Point | undefined): point is Point {
+  return point !== undefined && Number.isFinite(point.x) && Number.isFinite(point.y);
 }
 
 function projectFolderErrorMessage(error: unknown, abortMessage: string): string {
