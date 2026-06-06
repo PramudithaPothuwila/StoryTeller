@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "./App";
@@ -46,6 +46,7 @@ vi.mock("@xyflow/react", () => ({
     edges = [],
     onEdgeClick,
     onNodeClick,
+    onPaneClick,
     nodes = [],
     onNodesChange
   }: {
@@ -60,6 +61,7 @@ vi.mock("@xyflow/react", () => ({
     }>;
     onEdgeClick?: (event: unknown, edge: unknown) => void;
     onNodeClick?: (event: unknown, node: unknown) => void;
+    onPaneClick?: () => void;
     nodes?: Array<{
       data: {
         entity: { title: string };
@@ -81,6 +83,9 @@ vi.mock("@xyflow/react", () => ({
     ) => void;
   }) => (
     <div>
+      <button type="button" onClick={() => onPaneClick?.()}>
+        Click graph pane
+      </button>
       {nodes.length ? (
         <>
           <button
@@ -181,12 +186,14 @@ describe("App project commands", () => {
       configurable: true,
       value: vi.fn()
     });
+    window.localStorage.clear();
     anchorClickSpy = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => undefined);
     fileClickSpy = vi.spyOn(HTMLInputElement.prototype, "click").mockImplementation(() => undefined);
   });
 
   afterEach(() => {
     cleanup();
+    window.localStorage.clear();
     anchorClickSpy.mockRestore();
     fileClickSpy.mockRestore();
     vi.clearAllMocks();
@@ -197,6 +204,10 @@ describe("App project commands", () => {
 
     await waitFor(() => expect(screen.getByDisplayValue("Loaded Project")).toBeInTheDocument());
 
+    expect(document.querySelector(".workspace")).not.toHaveClass("has-inspector");
+    expect(document.querySelector(".inspector")).toBeNull();
+    expect(screen.queryByText("Select an item")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Rulebook" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "New Project" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Open Project" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Select Folder" })).toBeInTheDocument();
@@ -207,6 +218,137 @@ describe("App project commands", () => {
     expect(screen.queryByRole("button", { name: "Open folder" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Import" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Export" })).not.toBeInTheDocument();
+  });
+
+  it("hides the detail inspector when the graph pane clears an entity selection", async () => {
+    const project = createBlankProject("Selection Project");
+    const hero = createStoryEntity("character", project.itemTypes, "Pane Click Hero");
+
+    vi.mocked(loadStarterProject).mockResolvedValue({
+      ...project,
+      entities: {
+        [hero.id]: hero
+      }
+    });
+
+    render(<App />);
+
+    await waitFor(() => expect(screen.getByDisplayValue("Selection Project")).toBeInTheDocument());
+    expect(document.querySelector(".workspace")).toHaveClass("has-inspector");
+    expect(screen.getByRole("button", { name: "Delete selected item" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Click graph pane" }));
+
+    await waitFor(() => expect(document.querySelector(".workspace")).not.toHaveClass("has-inspector"));
+    expect(document.querySelector(".inspector")).toBeNull();
+    expect(screen.queryByText("Select an item")).not.toBeInTheDocument();
+    expect(screen.getByTestId(`flow-node-${hero.id}`)).toHaveAttribute("data-selected", "false");
+
+    fireEvent.click(screen.getByTestId(`flow-node-${hero.id}`));
+
+    await waitFor(() => expect(document.querySelector(".workspace")).toHaveClass("has-inspector"));
+    expect(screen.getByRole("button", { name: "Delete selected item" })).toBeInTheDocument();
+  });
+
+  it("hides the detail inspector after deleting the selected entity", async () => {
+    const project = createBlankProject("Delete Entity Project");
+    const hero = createStoryEntity("character", project.itemTypes, "Short-Lived Hero");
+
+    vi.mocked(loadStarterProject).mockResolvedValue({
+      ...project,
+      entities: {
+        [hero.id]: hero
+      }
+    });
+
+    render(<App />);
+
+    await waitFor(() => expect(screen.getByDisplayValue("Delete Entity Project")).toBeInTheDocument());
+    expect(document.querySelector(".workspace")).toHaveClass("has-inspector");
+
+    fireEvent.click(screen.getByRole("button", { name: "Delete selected item" }));
+
+    await waitFor(() => expect(document.querySelector(".workspace")).not.toHaveClass("has-inspector"));
+    expect(document.querySelector(".inspector")).toBeNull();
+    expect(screen.queryByTestId(`flow-node-${hero.id}`)).not.toBeInTheDocument();
+  });
+
+  it("keeps relationship inspection visible and hides it after deleting the relationship", async () => {
+    const project = createBlankProject("Relationship Inspector Project");
+    const source = createStoryEntity("character", project.itemTypes, "Source Character");
+    const target = createStoryEntity("location", project.itemTypes, "Target Harbor");
+    const relationship = createStoryRelationship(project, source.id, target.id, "relates_to");
+
+    vi.mocked(loadStarterProject).mockResolvedValue({
+      ...project,
+      entities: {
+        [source.id]: source,
+        [target.id]: target
+      },
+      relationships: [relationship]
+    });
+
+    render(<App />);
+
+    await waitFor(() => expect(screen.getByDisplayValue("Relationship Inspector Project")).toBeInTheDocument());
+
+    fireEvent.click(screen.getByTestId(`flow-edge-${relationship.id}`));
+
+    await waitFor(() => expect(screen.getByRole("button", { name: "Delete selected relationship" })).toBeInTheDocument());
+    expect(document.querySelector(".workspace")).toHaveClass("has-inspector");
+    expect(screen.getByText("Relationship")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Delete selected relationship" }));
+
+    await waitFor(() => expect(document.querySelector(".workspace")).not.toHaveClass("has-inspector"));
+    expect(document.querySelector(".inspector")).toBeNull();
+    expect(screen.queryByTestId(`flow-edge-${relationship.id}`)).not.toBeInTheDocument();
+  });
+
+  it("opens the rulebook sidebar to create, filter, focus, and delete world rules", async () => {
+    render(<App />);
+    await waitFor(() => expect(screen.getByDisplayValue("Loaded Project")).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("button", { name: "Rulebook" }));
+
+    const rulebook = screen.getByRole("complementary", { name: "Rulebook" });
+    expect(within(rulebook).getByText("Rulebook")).toBeInTheDocument();
+
+    fireEvent.click(within(rulebook).getByRole("button", { name: "New Rule" }));
+
+    await waitFor(() => expect(within(rulebook).getByLabelText("Rule title")).toHaveValue("New World Rule"));
+
+    fireEvent.change(within(rulebook).getByLabelText("Rule title"), { target: { value: "Blue Fire Rule" } });
+    fireEvent.change(within(rulebook).getByLabelText("Rule domain"), { target: { value: "Magic" } });
+    fireEvent.change(within(rulebook).getByLabelText("Rule status"), { target: { value: "Canon" } });
+    fireEvent.change(within(rulebook).getByLabelText("Rule statement"), {
+      target: { value: "Blue fire only burns reflected lies." }
+    });
+
+    await waitFor(() => expect(within(rulebook).getAllByText("Blue Fire Rule").length).toBeGreaterThan(0));
+    expect(within(rulebook).getByText("Magic / Canon")).toBeInTheDocument();
+
+    fireEvent.change(within(rulebook).getByLabelText("Rulebook search"), { target: { value: "reflected lies" } });
+    fireEvent.change(within(rulebook).getByLabelText("Filter rules by domain"), { target: { value: "Magic" } });
+    fireEvent.change(within(rulebook).getByLabelText("Filter rules by status"), { target: { value: "Canon" } });
+
+    expect(within(rulebook).getAllByText("Blue Fire Rule").length).toBeGreaterThan(0);
+
+    fireEvent.click(within(rulebook).getByRole("button", { name: "Focus In Graph" }));
+
+    const ruleNode = await waitFor(() => {
+      const node = document.querySelector('[data-testid^="flow-node-world-rule-"]');
+      expect(node).not.toBeNull();
+      return node as HTMLElement;
+    });
+
+    expect(ruleNode).toHaveAttribute("data-selected", "true");
+    expect(screen.getByRole("complementary", { name: "Rulebook" })).toBeInTheDocument();
+
+    fireEvent.click(within(rulebook).getByRole("button", { name: "Delete Rule" }));
+
+    await waitFor(() => expect(document.querySelector('[data-testid^="flow-node-world-rule-"]')).toBeNull());
+    expect(within(rulebook).getAllByText("No rules").length).toBeGreaterThan(0);
   });
 
   it("asks for a project folder and saves immediately when creating a new project", async () => {
@@ -424,6 +566,102 @@ describe("App project commands", () => {
     expect(screen.getByTestId(`flow-edge-${outsideLink.id}`)).toHaveAttribute("data-stroke-width", "3");
   });
 
+  it("changes graph focus depth and persists the browser preference", async () => {
+    const fixture = createFocusDepthProject();
+    vi.mocked(loadStarterProject).mockResolvedValue(fixture.project);
+
+    render(<App />);
+
+    await waitFor(() => expect(screen.getByDisplayValue("Focus Depth Project")).toBeInTheDocument());
+    expect(screen.queryByRole("button", { name: "Graph focus depth 0" })).not.toBeInTheDocument();
+    expect(screen.getByTestId(`flow-node-${fixture.ally.id}`)).toHaveAttribute("data-connected", "true");
+    expect(screen.getByTestId(`flow-node-${fixture.clue.id}`)).toHaveAttribute("data-faded", "true");
+    expect(screen.getByTestId(`flow-edge-${fixture.allyLink.id}`)).toHaveAttribute("data-opacity", "0.12");
+
+    fireEvent.click(screen.getByRole("button", { name: "Graph focus depth 2" }));
+
+    await waitFor(() => expect(screen.getByTestId(`flow-node-${fixture.clue.id}`)).toHaveAttribute("data-connected", "true"));
+    expect(screen.getByTestId(`flow-node-${fixture.faction.id}`)).toHaveAttribute("data-faded", "true");
+    expect(window.localStorage.getItem("storyteller.graphFocusDepth")).toBe("2");
+
+    fireEvent.click(screen.getByRole("button", { name: "Graph focus depth 3" }));
+
+    await waitFor(() => expect(screen.getByTestId(`flow-node-${fixture.faction.id}`)).toHaveAttribute("data-connected", "true"));
+    expect(screen.getByTestId(`flow-node-${fixture.relic.id}`)).toHaveAttribute("data-faded", "true");
+
+    fireEvent.click(screen.getByRole("button", { name: "Graph focus depth 4" }));
+
+    await waitFor(() => expect(screen.getByTestId(`flow-node-${fixture.relic.id}`)).toHaveAttribute("data-connected", "true"));
+    expect(window.localStorage.getItem("storyteller.graphFocusDepth")).toBe("4");
+
+    fireEvent.click(screen.getByRole("button", { name: "Graph focus depth All" }));
+
+    await waitFor(() => expect(screen.getByTestId(`flow-node-${fixture.relic.id}`)).toHaveAttribute("data-faded", "false"));
+    expect(screen.getByTestId(`flow-node-${fixture.hero.id}`)).toHaveAttribute("data-connected", "false");
+    expect(window.localStorage.getItem("storyteller.graphFocusDepth")).toBe("all");
+  });
+
+  it("restores graph focus depth from browser storage", async () => {
+    const fixture = createFocusDepthProject();
+    window.localStorage.setItem("storyteller.graphFocusDepth", "3");
+    vi.mocked(loadStarterProject).mockResolvedValue(fixture.project);
+
+    render(<App />);
+
+    await waitFor(() => expect(screen.getByDisplayValue("Focus Depth Project")).toBeInTheDocument());
+    expect(screen.getByRole("button", { name: "Graph focus depth 3" })).toHaveClass("is-active");
+    expect(screen.getByTestId(`flow-node-${fixture.faction.id}`)).toHaveAttribute("data-connected", "true");
+    expect(screen.getByTestId(`flow-node-${fixture.relic.id}`)).toHaveAttribute("data-faded", "true");
+  });
+
+  it("scrubs graph time from the timeline without changing the selected graph item", async () => {
+    const project = createBlankProject("Timeline Scrub Project");
+    const source = createStoryEntity("character", project.itemTypes, "Mara Vale");
+    const target = createStoryEntity("character", project.itemTypes, "Orin Ash");
+    const before = createStoryEntity("event", project.itemTypes, "Before the Meeting");
+    const meeting = createStoryEntity("event", project.itemTypes, "The Meeting");
+    const relationship = {
+      ...createStoryRelationship(project, source.id, target.id, "knows"),
+      startsAtEventId: meeting.id
+    };
+    before.timeline = { order: 1, effects: [] };
+    meeting.timeline = { order: 2, effects: [] };
+
+    vi.mocked(loadStarterProject).mockResolvedValue({
+      ...project,
+      entities: {
+        [source.id]: source,
+        [target.id]: target,
+        [before.id]: before,
+        [meeting.id]: meeting
+      },
+      relationships: [relationship],
+      layout: {
+        [source.id]: { x: 10, y: 20 },
+        [target.id]: { x: 310, y: 20 },
+        [before.id]: { x: 10, y: 240 },
+        [meeting.id]: { x: 310, y: 240 }
+      }
+    });
+
+    render(<App />);
+
+    await waitFor(() => expect(screen.getByDisplayValue("Timeline Scrub Project")).toBeInTheDocument());
+    expect(screen.getByTestId(`flow-node-${source.id}`)).toHaveAttribute("data-selected", "true");
+    expect(screen.getByTestId(`flow-edge-${relationship.id}`)).toHaveAttribute("data-opacity", "1");
+
+    fireEvent.change(screen.getByLabelText("Timeline time"), { target: { value: "1" } });
+
+    await waitFor(() => expect(screen.getByTestId(`flow-edge-${relationship.id}`)).toHaveAttribute("data-opacity", "0.42"));
+    expect(screen.getByTestId(`flow-node-${source.id}`)).toHaveAttribute("data-selected", "true");
+    expect(screen.getByTestId(`flow-node-${before.id}`)).toHaveAttribute("data-selected", "false");
+
+    fireEvent.click(screen.getByRole("button", { name: "Show full graph state" }));
+
+    await waitFor(() => expect(screen.getByTestId(`flow-edge-${relationship.id}`)).toHaveAttribute("data-opacity", "1"));
+    expect(screen.getByTestId(`flow-node-${source.id}`)).toHaveAttribute("data-selected", "true");
+  });
+
   it("falls back to opening a backup file when folder access is unavailable", async () => {
     vi.mocked(hasFolderProjectSupport).mockReturnValue(false);
     const { container } = render(<App />);
@@ -447,3 +685,46 @@ describe("App project commands", () => {
     expect(screen.getByText("Project opened from backup")).toBeInTheDocument();
   });
 });
+
+function createFocusDepthProject() {
+  const project = createBlankProject("Focus Depth Project");
+  const hero = createStoryEntity("character", project.itemTypes, "Focused Hero");
+  const ally = createStoryEntity("character", project.itemTypes, "First Ally");
+  const clue = createStoryEntity("note", project.itemTypes, "Second Clue");
+  const faction = createStoryEntity("faction", project.itemTypes, "Third Faction");
+  const relic = createStoryEntity("item", project.itemTypes, "Fourth Relic");
+  const heroLink = createStoryRelationship(project, hero.id, ally.id, "relates_to");
+  const allyLink = createStoryRelationship(project, ally.id, clue.id, "relates_to");
+  const clueLink = createStoryRelationship(project, clue.id, faction.id, "relates_to");
+  const factionLink = createStoryRelationship(project, faction.id, relic.id, "relates_to");
+
+  return {
+    project: {
+      ...project,
+      entities: {
+        [hero.id]: hero,
+        [ally.id]: ally,
+        [clue.id]: clue,
+        [faction.id]: faction,
+        [relic.id]: relic
+      },
+      relationships: [heroLink, allyLink, clueLink, factionLink],
+      layout: {
+        [hero.id]: { x: 10, y: 20 },
+        [ally.id]: { x: 310, y: 20 },
+        [clue.id]: { x: 610, y: 20 },
+        [faction.id]: { x: 910, y: 20 },
+        [relic.id]: { x: 1210, y: 20 }
+      }
+    },
+    hero,
+    ally,
+    clue,
+    faction,
+    relic,
+    heroLink,
+    allyLink,
+    clueLink,
+    factionLink
+  };
+}

@@ -16,6 +16,8 @@ events.
 - Project-level type manager for adding custom item and link types.
 - Detail inspector for titles, summaries, tags, public notes, private notes, and
   Markdown body notes.
+- Structured worldbuilding rulebook for tracking canon rules, domains, limits,
+  exceptions, and story purpose.
 - Timeline events that can start, update, or end relationships.
 - Folder-based project storage using readable Markdown entity files and JSON
   graph files.
@@ -109,6 +111,7 @@ src/
   components/
     Sidebar.tsx              Project actions, item creation, search
     DetailInspector.tsx      Entity, relationship, and event editing
+    RulebookSidebar.tsx      Worldbuilding rule browsing and editing
     TimelinePanel.tsx        Event timeline navigation
     TypeManager.tsx          Custom item/link type management
   data/
@@ -125,6 +128,8 @@ public/
 - Built-in item and link types are locked in the UI.
 - Custom types can be deleted only when they are not in use.
 - Event entities carry timeline order and relationship effects.
+- World rule entities carry structured rulebook metadata in Markdown
+  frontmatter.
 - Selecting a timeline event dims inactive relationships and resolves any
   relationship versions active at that point in the story.
 - Project files currently use schema version `2`; older project shapes are

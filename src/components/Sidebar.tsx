@@ -173,7 +173,14 @@ function matchesSearch(entity: StoryEntity, search: string): boolean {
     return true;
   }
 
-  return [entity.title, entity.summary, entity.publicInfo, entity.bodyMarkdown, entity.tags.join(" ")]
+  return [
+    entity.title,
+    entity.summary,
+    entity.publicInfo,
+    entity.bodyMarkdown,
+    entity.tags.join(" "),
+    ...Object.values(entity.worldRule ?? {})
+  ]
     .join(" ")
     .toLowerCase()
     .includes(query);

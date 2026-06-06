@@ -303,6 +303,78 @@
       "label": "Tests Mara's ending choice",
       "notes": "The theme note is linked to Mara so revisions keep the protagonist's choice connected to the memory motif.",
       "timelineVersions": []
+    },
+    {
+      "id": "link-rule-memory-bellwater",
+      "sourceId": "world-rule-memory-trade-is-final",
+      "targetId": "location-bellwater-archive",
+      "type": "governs",
+      "label": "Governs Archive bargains",
+      "notes": "The rule defines why Bellwater memory contracts cannot be casually undone.",
+      "timelineVersions": []
+    },
+    {
+      "id": "link-rule-memory-ledger",
+      "sourceId": "world-rule-memory-trade-is-final",
+      "targetId": "item-moonlit-ledger",
+      "type": "governs",
+      "label": "Governs memory records",
+      "notes": "The Ledger proves traces and ownership, not full restoration.",
+      "timelineVersions": []
+    },
+    {
+      "id": "link-rule-memory-archive-bargain",
+      "sourceId": "world-rule-memory-trade-is-final",
+      "targetId": "event-archive-bargain",
+      "type": "governs",
+      "label": "Sets the bargain cost",
+      "notes": "The event should preserve the rule's cost even when it reveals an echo.",
+      "timelineVersions": []
+    },
+    {
+      "id": "link-rule-memory-mirror-guild",
+      "sourceId": "world-rule-memory-trade-is-final",
+      "targetId": "faction-mirror-guild",
+      "type": "known_by",
+      "label": "Known by record keepers",
+      "notes": "The Mirror Guild understands the difference between restored memory and reflected evidence.",
+      "timelineVersions": []
+    },
+    {
+      "id": "link-rule-memory-lysandra",
+      "sourceId": "world-rule-memory-trade-is-final",
+      "targetId": "character-lysandra-veil",
+      "type": "known_by",
+      "label": "Known by Lysandra",
+      "notes": "Lysandra exploits the rule because victims cannot simply recover what she arranged to trade away.",
+      "timelineVersions": []
+    },
+    {
+      "id": "link-rule-blue-glass-lantern",
+      "sourceId": "world-rule-blue-glass-anchors-storm-routes",
+      "targetId": "item-blue-glass-lantern",
+      "type": "governs",
+      "label": "Governs lantern navigation",
+      "notes": "The Lantern matters because blue glass holds reflection lines through weather.",
+      "timelineVersions": []
+    },
+    {
+      "id": "link-rule-blue-glass-docks",
+      "sourceId": "world-rule-blue-glass-anchors-storm-routes",
+      "targetId": "location-blackwater-docks",
+      "type": "governs",
+      "label": "Governs storm routes",
+      "notes": "The docks become dangerous when mirror lines fail or storms outrun bell cadence.",
+      "timelineVersions": []
+    },
+    {
+      "id": "link-rule-ritual-speech-ember-choir",
+      "sourceId": "world-rule-ritual-speech-cannot-lie",
+      "targetId": "faction-ember-choir",
+      "type": "known_by",
+      "label": "Known by the Choir",
+      "notes": "The Choir relies on this rule for public trust and political leverage.",
+      "timelineVersions": []
     }
   ]
 }

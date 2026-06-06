@@ -46,6 +46,13 @@
       "builtIn": true
     },
     {
+      "id": "world_rule",
+      "label": "World Rule",
+      "color": "#0e7490",
+      "icon": "scroll-text",
+      "builtIn": true
+    },
+    {
       "id": "clue",
       "label": "Clue",
       "color": "#0891b2",
@@ -123,6 +130,30 @@
       "label": "Member of",
       "color": "#15803d",
       "icon": "flag",
+      "direction": "directed",
+      "builtIn": true
+    },
+    {
+      "id": "governs",
+      "label": "Governs",
+      "color": "#0e7490",
+      "icon": "scroll-text",
+      "direction": "directed",
+      "builtIn": true
+    },
+    {
+      "id": "known_by",
+      "label": "Known by",
+      "color": "#0f766e",
+      "icon": "users",
+      "direction": "directed",
+      "builtIn": true
+    },
+    {
+      "id": "exception_to",
+      "label": "Exception to",
+      "color": "#b45309",
+      "icon": "git-branch",
       "direction": "directed",
       "builtIn": true
     },
@@ -227,6 +258,18 @@
     "clue-mirror-shard": {
       "x": -280,
       "y": 330
+    },
+    "world-rule-memory-trade-is-final": {
+      "x": 760,
+      "y": 140
+    },
+    "world-rule-blue-glass-anchors-storm-routes": {
+      "x": -860,
+      "y": 430
+    },
+    "world-rule-ritual-speech-cannot-lie": {
+      "x": -1180,
+      "y": 40
     },
     "note-act-ii-pressure-map": {
       "x": -1030,
@@ -376,6 +419,27 @@
       "title": "Mirror Shard with a Fifth Reflection",
       "updatedAt": "2026-06-05T12:30:00.000Z",
       "path": "entities/clue/clue-mirror-shard.md"
+    },
+    {
+      "id": "world-rule-memory-trade-is-final",
+      "type": "world_rule",
+      "title": "Memory Trade Is Final",
+      "updatedAt": "2026-06-05T12:30:00.000Z",
+      "path": "entities/world_rule/world-rule-memory-trade-is-final.md"
+    },
+    {
+      "id": "world-rule-blue-glass-anchors-storm-routes",
+      "type": "world_rule",
+      "title": "Blue Glass Anchors Storm Routes",
+      "updatedAt": "2026-06-05T12:30:00.000Z",
+      "path": "entities/world_rule/world-rule-blue-glass-anchors-storm-routes.md"
+    },
+    {
+      "id": "world-rule-ritual-speech-cannot-lie",
+      "type": "world_rule",
+      "title": "Ritual Speech Cannot Lie",
+      "updatedAt": "2026-06-05T12:30:00.000Z",
+      "path": "entities/world_rule/world-rule-ritual-speech-cannot-lie.md"
     },
     {
       "id": "note-act-ii-pressure-map",

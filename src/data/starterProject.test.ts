@@ -1,4 +1,8 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { BUILT_IN_WORLD_RULE_TYPE_ID } from "../types";
+import { projectFromFiles } from "./projectFiles";
 import { loadStarterProject } from "./starterProject";
 
 describe("starter project loader", () => {
@@ -83,4 +87,62 @@ describe("starter project loader", () => {
     expect(requestedUrls).toContain("/projects/graph/relationships.json");
     expect(requestedUrls).toContain("/projects/entities/character/character-mara-vale.md");
   });
+
+  it("bundles sample world rules with valid graph relationships", () => {
+    const files = readBundledStarterProjectFiles();
+    const project = projectFromFiles(files);
+    const rules = Object.values(project.entities).filter((entity) => entity.type === BUILT_IN_WORLD_RULE_TYPE_ID);
+
+    expect(rules.map((rule) => rule.title)).toEqual(
+      expect.arrayContaining([
+        "Memory Trade Is Final",
+        "Blue Glass Anchors Storm Routes",
+        "Ritual Speech Cannot Lie"
+      ])
+    );
+    expect(project.relationships).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sourceId: "world-rule-memory-trade-is-final",
+          targetId: "location-bellwater-archive",
+          type: "governs"
+        }),
+        expect.objectContaining({
+          sourceId: "world-rule-memory-trade-is-final",
+          targetId: "faction-mirror-guild",
+          type: "known_by"
+        }),
+        expect.objectContaining({
+          sourceId: "world-rule-blue-glass-anchors-storm-routes",
+          targetId: "item-blue-glass-lantern",
+          type: "governs"
+        }),
+        expect.objectContaining({
+          sourceId: "world-rule-ritual-speech-cannot-lie",
+          targetId: "faction-ember-choir",
+          type: "known_by"
+        })
+      ])
+    );
+  });
 });
+
+function readBundledStarterProjectFiles(): Record<string, string> {
+  const manifest = JSON.parse(readBundledStarterFile("storyteller.project.json")) as {
+    entityIndex: Array<{ path: string }>;
+  };
+  const files: Record<string, string> = {
+    "storyteller.project.json": readBundledStarterFile("storyteller.project.json"),
+    "graph/relationships.json": readBundledStarterFile("graph/relationships.json")
+  };
+
+  for (const indexedEntity of manifest.entityIndex) {
+    files[indexedEntity.path] = readBundledStarterFile(indexedEntity.path);
+  }
+
+  return files;
+}
+
+function readBundledStarterFile(path: string): string {
+  return readFileSync(join(process.cwd(), "public", "projects", path), "utf8");
+}

@@ -1,7 +1,17 @@
 import { Eye, EyeOff, Link2, Plus, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { BUILT_IN_EVENT_TYPE_ID, LinkTypeId, Selection, StoryEntity, StoryProject, StoryRelationship, TimelineEffectDraft } from "../types";
+import {
+  BUILT_IN_EVENT_TYPE_ID,
+  BUILT_IN_WORLD_RULE_TYPE_ID,
+  LinkTypeId,
+  Selection,
+  StoryEntity,
+  StoryProject,
+  StoryRelationship,
+  TimelineEffectDraft
+} from "../types";
 import { ensureEventTimeline, findItemType, findLinkType, linkLabel } from "../data/story";
+import { WorldRuleFields } from "./WorldRuleFields";
 
 interface DetailInspectorProps {
   project: StoryProject;
@@ -84,6 +94,14 @@ export function DetailInspector({
             project={project}
             eventEntity={selectedEntity}
             onTimelineEffect={onTimelineEffect}
+          />
+        ) : null}
+
+        {selectedEntity.type === BUILT_IN_WORLD_RULE_TYPE_ID ? (
+          <WorldRuleFields
+            entity={selectedEntity}
+            idPrefix={`inspector-${selectedEntity.id}`}
+            onEntityChange={(patch) => onEntityChange(selectedEntity.id, patch)}
           />
         ) : null}
 

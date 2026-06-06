@@ -25,6 +25,7 @@ interface ProjectManifestV2 {
   updatedAt: string;
   itemTypes: ItemTypeDefinition[];
   linkTypes: LinkTypeDefinition[];
+  timelineLaneNames?: string[];
   graphLayout: StoryProject["layout"];
   entityIndex: Array<{
     id: string;
@@ -57,6 +58,7 @@ export function buildProjectFiles(project: StoryProject): Record<string, string>
     updatedAt: project.updatedAt,
     itemTypes: project.itemTypes,
     linkTypes: project.linkTypes,
+    timelineLaneNames: project.timelineLaneNames,
     graphLayout: project.layout,
     entityIndex: entities.map((entity) => ({
       id: entity.id,
@@ -115,6 +117,7 @@ export function projectFromFiles(files: Record<string, string>): StoryProject {
     updatedAt: manifest.updatedAt,
     itemTypes: manifest.schemaVersion === 2 ? manifest.itemTypes : undefined,
     linkTypes: manifest.schemaVersion === 2 ? manifest.linkTypes : undefined,
+    timelineLaneNames: manifest.schemaVersion === 2 ? manifest.timelineLaneNames : undefined,
     entities,
     relationships: (relationshipFile.relationships ?? []).filter(
       (relationship) => entities[relationship.sourceId] && entities[relationship.targetId]

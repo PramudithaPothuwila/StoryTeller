@@ -14,13 +14,16 @@ import {
   ReactFlow,
   ReactFlowProvider
 } from "@xyflow/react";
+import { ScrollText } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { DetailInspector } from "./components/DetailInspector";
 import { EntityNode, EntityNodeData } from "./components/EntityNode";
+import { RulebookSidebar } from "./components/RulebookSidebar";
 import { Sidebar } from "./components/Sidebar";
 import { TimelinePanel } from "./components/TimelinePanel";
 import { TypeManager } from "./components/TypeManager";
 import {
+  addTimelineLaneToProject,
   addEntityToProject,
   applyTimelineEffectToProject,
   createBlankProject,
@@ -35,10 +38,12 @@ import {
   deleteRelationshipFromProject,
   findItemType,
   findLinkType,
+  getTimelineEvents,
   isRelationshipActiveAt,
   moveTimelineEventInProject,
   nextEntityPosition,
   nextTimelineOrder,
+  renameTimelineLaneInProject,
   resolveRelationshipAt,
   setProjectLayout,
   touchProject,
@@ -55,6 +60,7 @@ import {
 } from "./data/projectFiles";
 import {
   BUILT_IN_EVENT_TYPE_ID,
+  BUILT_IN_WORLD_RULE_TYPE_ID,
   ItemTypeDefinition,
   ItemTypeId,
   LinkTypeDefinition,
@@ -81,12 +87,22 @@ interface EntityGraphFocus {
   relationshipIds: Set<string>;
 }
 
+type GraphFocusDepth = 1 | 2 | 3 | 4 | "all";
+
 const nodeTypes = {
   storyEntity: EntityNode
 } satisfies NodeTypes;
 
 const FOLDER_ACCESS_UNAVAILABLE_MESSAGE =
   "Folder selection is unavailable in this browser. Use a browser with folder access to save folder projects.";
+const GRAPH_FOCUS_DEPTH_STORAGE_KEY = "storyteller.graphFocusDepth";
+const graphFocusDepthOptions: Array<{ label: string; value: GraphFocusDepth }> = [
+  { label: "1", value: 1 },
+  { label: "2", value: 2 },
+  { label: "3", value: 3 },
+  { label: "4", value: 4 },
+  { label: "All", value: "all" }
+];
 
 export function App() {
   return (
@@ -99,9 +115,11 @@ export function App() {
 function StoryWorkspace() {
   const initialProject = useMemo(() => createLoadingProject(), []);
   const initialSelection = useMemo(() => firstProjectSelection(initialProject), [initialProject]);
+  const [graphFocusDepth, setGraphFocusDepth] = useState<GraphFocusDepth>(() => readStoredGraphFocusDepth());
+  const graphFocusDepthRef = useRef(graphFocusDepth);
   const initialGraphFocus = useMemo(
-    () => createEntityGraphFocus(initialProject, initialSelection),
-    [initialProject, initialSelection]
+    () => createEntityGraphFocus(initialProject, initialSelection, graphFocusDepth),
+    [graphFocusDepth, initialProject, initialSelection]
   );
   const [project, setProject] = useState<StoryProject>(() => initialProject);
   const [selection, setSelection] = useState<Selection | null>(() => initialSelection);
@@ -114,10 +132,18 @@ function StoryWorkspace() {
   const [folderHandle, setFolderHandle] = useState<FileSystemDirectoryHandle | null>(null);
   const [defaultRelationshipType, setDefaultRelationshipType] = useState<LinkTypeId>("relates_to");
   const [typeManagerOpen, setTypeManagerOpen] = useState(false);
+  const [rulebookOpen, setRulebookOpen] = useState(false);
   const [selectedTimelineEventId, setSelectedTimelineEventId] = useState<string | null>(null);
   const [timelineCollapsed, setTimelineCollapsed] = useState(false);
   const backupInputRef = useRef<HTMLInputElement>(null);
-  const graphFocus = useMemo(() => createEntityGraphFocus(project, selection), [project, selection]);
+  const graphFocus = useMemo(
+    () => createEntityGraphFocus(project, selection, graphFocusDepth),
+    [graphFocusDepth, project, selection]
+  );
+
+  useEffect(() => {
+    graphFocusDepthRef.current = graphFocusDepth;
+  }, [graphFocusDepth]);
 
   useEffect(() => {
     let cancelled = false;
@@ -131,7 +157,7 @@ function StoryWorkspace() {
         }
 
         const nextSelection = firstProjectSelection(starterProject);
-        const nextGraphFocus = createEntityGraphFocus(starterProject, nextSelection);
+        const nextGraphFocus = createEntityGraphFocus(starterProject, nextSelection, graphFocusDepthRef.current);
         setProject(starterProject);
         setSelection(nextSelection);
         setFlowNodes(projectNodes(starterProject, nextSelection, nextGraphFocus));
@@ -209,6 +235,14 @@ function StoryWorkspace() {
       }),
     [graphFocus, project, selectedTimelineEventId, selection]
   );
+  const inspectorVisible = hasVisibleInspector(project, selection);
+  const workspaceClassName = [
+    "workspace",
+    inspectorVisible ? "has-inspector" : "",
+    rulebookOpen ? "has-rulebook" : ""
+  ]
+    .filter(Boolean)
+    .join(" ");
 
   const markProjectChanged = useCallback((nextProject: StoryProject) => {
     setProject(nextProject);
@@ -383,6 +417,35 @@ function StoryWorkspace() {
     [markProjectChanged, project]
   );
 
+  const handleCreateWorldRule = useCallback(() => {
+    const entity = createStoryEntity(BUILT_IN_WORLD_RULE_TYPE_ID, project.itemTypes);
+    const nextProject = addEntityToProject(project, entity, nextEntityPosition(project));
+
+    markProjectChanged(nextProject);
+    setSelection({ kind: "entity", id: entity.id });
+
+    return entity.id;
+  }, [markProjectChanged, project]);
+
+  const handleFocusWorldRule = useCallback((id: string) => {
+    setSelection({ kind: "entity", id });
+  }, []);
+
+  const handleAddTimelineTrack = useCallback(() => {
+    markProjectChanged(addTimelineLaneToProject(project));
+  }, [markProjectChanged, project]);
+
+  const handleRenameTimelineTrack = useCallback(
+    (track: number, name: string) => {
+      const nextProject = renameTimelineLaneInProject(project, track, name);
+
+      if (nextProject !== project) {
+        markProjectChanged(nextProject);
+      }
+    },
+    [markProjectChanged, project]
+  );
+
   const handleMoveTimelineEvent = useCallback(
     (eventId: string, track: number, index: number) => {
       const nextProject = moveTimelineEventInProject(project, eventId, track, index);
@@ -392,6 +455,22 @@ function StoryWorkspace() {
       }
     },
     [markProjectChanged, project]
+  );
+
+  const handleGraphFocusDepthChange = useCallback((depth: GraphFocusDepth) => {
+    setGraphFocusDepth(depth);
+    writeStoredGraphFocusDepth(depth);
+  }, []);
+
+  const handleTimelineScrub = useCallback(
+    (order: number) => {
+      const event = getTimelineEvents(project).find((timelineEvent) => timelineEvent.timeline?.order === order);
+
+      if (event) {
+        setSelectedTimelineEventId(event.id);
+      }
+    },
+    [project]
   );
 
   const handleDeleteEmptyTimelineTrack = useCallback(
@@ -541,7 +620,7 @@ function StoryWorkspace() {
 
       const loadedProject = await readProjectFromDirectory(handle);
       const nextSelection = firstProjectSelection(loadedProject);
-      const nextGraphFocus = createEntityGraphFocus(loadedProject, nextSelection);
+      const nextGraphFocus = createEntityGraphFocus(loadedProject, nextSelection, graphFocusDepthRef.current);
       setProject(loadedProject);
       setFolderHandle(handle);
       setSelection(nextSelection);
@@ -567,7 +646,7 @@ function StoryWorkspace() {
     try {
       const loadedProject = await projectFromBundleFile(file);
       const nextSelection = firstProjectSelection(loadedProject);
-      const nextGraphFocus = createEntityGraphFocus(loadedProject, nextSelection);
+      const nextGraphFocus = createEntityGraphFocus(loadedProject, nextSelection, graphFocusDepthRef.current);
       setProject(loadedProject);
       setFolderHandle(null);
       setSelection(nextSelection);
@@ -600,9 +679,13 @@ function StoryWorkspace() {
           <span>{Object.keys(project.entities).length} items</span>
           <span>{project.relationships.length} links</span>
         </div>
+        <button type="button" onClick={() => setRulebookOpen(true)}>
+          <ScrollText aria-hidden="true" />
+          Rulebook
+        </button>
       </header>
 
-      <main className="workspace">
+      <main className={workspaceClassName}>
         <Sidebar
           project={project}
           search={search}
@@ -625,6 +708,20 @@ function StoryWorkspace() {
 
         <section className="graph-column">
           <section className="graph-shell" aria-label="Story graph">
+            <div className="graph-focus-control" role="group" aria-label="Graph focus depth">
+              {graphFocusDepthOptions.map((option) => (
+                <button
+                  key={option.label}
+                  type="button"
+                  className={graphFocusDepth === option.value ? "is-active" : ""}
+                  aria-label={`Graph focus depth ${option.label}`}
+                  title={`Graph focus depth ${option.label}`}
+                  onClick={() => handleGraphFocusDepthChange(option.value)}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
             <ReactFlow
               nodes={flowNodes}
               edges={edges}
@@ -647,8 +744,11 @@ function StoryWorkspace() {
             selectedEventId={selectedTimelineEventId}
             collapsed={timelineCollapsed}
             onToggleCollapsed={() => setTimelineCollapsed((collapsed) => !collapsed)}
+            onAddTrack={handleAddTimelineTrack}
             onMoveEvent={handleMoveTimelineEvent}
             onDeleteEmptyTrack={handleDeleteEmptyTimelineTrack}
+            onRenameTrack={handleRenameTimelineTrack}
+            onScrubTimelineOrder={handleTimelineScrub}
             onSelectEvent={(eventId) => {
               setSelectedTimelineEventId(eventId);
               if (eventId) {
@@ -658,15 +758,28 @@ function StoryWorkspace() {
           />
         </section>
 
-        <DetailInspector
-          project={project}
-          selection={selection}
-          onEntityChange={handleEntityChange}
-          onRelationshipChange={handleRelationshipChange}
-          onTimelineEffect={handleTimelineEffect}
-          onDeleteEntity={handleDeleteEntity}
-          onDeleteRelationship={handleDeleteRelationship}
-        />
+        {inspectorVisible ? (
+          <DetailInspector
+            project={project}
+            selection={selection}
+            onEntityChange={handleEntityChange}
+            onRelationshipChange={handleRelationshipChange}
+            onTimelineEffect={handleTimelineEffect}
+            onDeleteEntity={handleDeleteEntity}
+            onDeleteRelationship={handleDeleteRelationship}
+          />
+        ) : null}
+
+        {rulebookOpen ? (
+          <RulebookSidebar
+            project={project}
+            onClose={() => setRulebookOpen(false)}
+            onCreateRule={handleCreateWorldRule}
+            onDeleteRule={handleDeleteEntity}
+            onFocusRule={handleFocusWorldRule}
+            onRuleChange={handleEntityChange}
+          />
+        ) : null}
       </main>
 
       {typeManagerOpen ? (
@@ -681,6 +794,7 @@ function StoryWorkspace() {
           onDeleteLinkType={handleDeleteLinkType}
         />
       ) : null}
+
     </div>
   );
 }
@@ -691,22 +805,58 @@ function firstProjectSelection(project: StoryProject): Selection | null {
   return firstEntity ? { kind: "entity", id: firstEntity } : null;
 }
 
-function createEntityGraphFocus(project: StoryProject, selection: Selection | null): EntityGraphFocus | null {
-  if (selection?.kind !== "entity" || !project.entities[selection.id]) {
+function hasVisibleInspector(project: StoryProject, selection: Selection | null): boolean {
+  if (selection?.kind === "entity") {
+    return Boolean(project.entities[selection.id]);
+  }
+
+  if (selection?.kind === "relationship") {
+    return project.relationships.some((relationship) => relationship.id === selection.id);
+  }
+
+  return false;
+}
+
+function createEntityGraphFocus(
+  project: StoryProject,
+  selection: Selection | null,
+  depth: GraphFocusDepth
+): EntityGraphFocus | null {
+  if (depth === "all" || selection?.kind !== "entity" || !project.entities[selection.id]) {
     return null;
   }
 
   const connectedEntityIds = new Set([selection.id]);
   const relationshipIds = new Set<string>();
+  let frontier = [selection.id];
 
-  for (const relationship of project.relationships) {
-    if (relationship.sourceId !== selection.id && relationship.targetId !== selection.id) {
-      continue;
+  for (let currentDepth = 0; currentDepth < depth && frontier.length; currentDepth += 1) {
+    const frontierIds = new Set(frontier);
+    const nextFrontier: string[] = [];
+
+    for (const relationship of project.relationships) {
+      const sourceInFrontier = frontierIds.has(relationship.sourceId);
+      const targetInFrontier = frontierIds.has(relationship.targetId);
+
+      if (!sourceInFrontier && !targetInFrontier) {
+        continue;
+      }
+
+      relationshipIds.add(relationship.id);
+
+      const relatedEntityIds = [relationship.sourceId, relationship.targetId];
+
+      for (const entityId of relatedEntityIds) {
+        if (!project.entities[entityId] || connectedEntityIds.has(entityId)) {
+          continue;
+        }
+
+        connectedEntityIds.add(entityId);
+        nextFrontier.push(entityId);
+      }
     }
 
-    relationshipIds.add(relationship.id);
-    connectedEntityIds.add(relationship.sourceId);
-    connectedEntityIds.add(relationship.targetId);
+    frontier = nextFrontier;
   }
 
   return {
@@ -801,6 +951,50 @@ function isValidPositionNodeChange(change: NodeChange): change is ValidPositionN
 
 function isFinitePoint(point: Point | undefined): point is Point {
   return point !== undefined && Number.isFinite(point.x) && Number.isFinite(point.y);
+}
+
+function readStoredGraphFocusDepth(): GraphFocusDepth {
+  if (typeof window === "undefined") {
+    return 1;
+  }
+
+  try {
+    return parseGraphFocusDepth(window.localStorage.getItem(GRAPH_FOCUS_DEPTH_STORAGE_KEY)) ?? 1;
+  } catch {
+    return 1;
+  }
+}
+
+function writeStoredGraphFocusDepth(depth: GraphFocusDepth) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  try {
+    window.localStorage.setItem(GRAPH_FOCUS_DEPTH_STORAGE_KEY, String(depth));
+  } catch {
+    // Ignore unavailable browser storage; focus depth can still work for the current session.
+  }
+}
+
+function parseGraphFocusDepth(value: string | null): GraphFocusDepth | null {
+  if (value === "1") {
+    return 1;
+  }
+
+  if (value === "2") {
+    return 2;
+  }
+
+  if (value === "3") {
+    return 3;
+  }
+
+  if (value === "4") {
+    return 4;
+  }
+
+  return value === "all" ? "all" : null;
 }
 
 function projectFolderErrorMessage(error: unknown, abortMessage: string): string {

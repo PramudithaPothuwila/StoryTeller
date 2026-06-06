@@ -1,5 +1,6 @@
 import {
   BUILT_IN_EVENT_TYPE_ID,
+  BUILT_IN_WORLD_RULE_TYPE_ID,
   EventTimeline,
   ItemTypeDefinition,
   ItemTypeId,
@@ -12,8 +13,24 @@ import {
   StoryProject,
   StoryRelationship,
   TimelineEffect,
-  TimelineEffectDraft
+  TimelineEffectDraft,
+  WorldRuleMetadata
 } from "../types";
+
+export const worldRuleDomainPresets = [
+  "Magic",
+  "Technology",
+  "Culture",
+  "Politics",
+  "Religion",
+  "Geography",
+  "Economy",
+  "History",
+  "Biology",
+  "Language"
+];
+
+export const worldRuleStatusPresets = ["Canon", "Tentative", "Deprecated"];
 
 export const builtInItemTypes: ItemTypeDefinition[] = [
   { id: "character", label: "Character", color: "#0f766e", icon: "users", builtIn: true },
@@ -21,7 +38,8 @@ export const builtInItemTypes: ItemTypeDefinition[] = [
   { id: "location", label: "Location", color: "#2563eb", icon: "map-pin", builtIn: true },
   { id: BUILT_IN_EVENT_TYPE_ID, label: "Event", color: "#be123c", icon: "calendar-days", builtIn: true },
   { id: "item", label: "Item", color: "#7c3aed", icon: "box", builtIn: true },
-  { id: "faction", label: "Faction", color: "#15803d", icon: "flag", builtIn: true }
+  { id: "faction", label: "Faction", color: "#15803d", icon: "flag", builtIn: true },
+  { id: BUILT_IN_WORLD_RULE_TYPE_ID, label: "World Rule", color: "#0e7490", icon: "scroll-text", builtIn: true }
 ];
 
 export const builtInLinkTypes: LinkTypeDefinition[] = [
@@ -33,7 +51,10 @@ export const builtInLinkTypes: LinkTypeDefinition[] = [
   { id: "owns", label: "Owns", color: "#7c3aed", icon: "key", direction: "directed", builtIn: true },
   { id: "located_in", label: "Located in", color: "#2563eb", icon: "map-pin", direction: "directed", builtIn: true },
   { id: "causes", label: "Causes", color: "#b45309", icon: "git-branch", direction: "directed", builtIn: true },
-  { id: "member_of", label: "Member of", color: "#15803d", icon: "flag", direction: "directed", builtIn: true }
+  { id: "member_of", label: "Member of", color: "#15803d", icon: "flag", direction: "directed", builtIn: true },
+  { id: "governs", label: "Governs", color: "#0e7490", icon: "scroll-text", direction: "directed", builtIn: true },
+  { id: "known_by", label: "Known by", color: "#0f766e", icon: "users", direction: "directed", builtIn: true },
+  { id: "exception_to", label: "Exception to", color: "#b45309", icon: "git-branch", direction: "directed", builtIn: true }
 ];
 
 export function nowIso(): string {
@@ -104,6 +125,32 @@ export function createStoryEntity(type: ItemTypeId, itemTypes: ItemTypeDefinitio
   });
 }
 
+export function defaultWorldRuleMetadata(): WorldRuleMetadata {
+  return {
+    domain: "",
+    status: "Tentative",
+    statement: "",
+    reason: "",
+    limits: "",
+    exceptions: "",
+    storyPurpose: ""
+  };
+}
+
+export function normalizeWorldRuleMetadata(metadata: Partial<WorldRuleMetadata> | undefined): WorldRuleMetadata {
+  const defaults = defaultWorldRuleMetadata();
+
+  return {
+    domain: normalizeRuleText(metadata?.domain, defaults.domain),
+    status: normalizeRuleText(metadata?.status, defaults.status),
+    statement: normalizeRuleText(metadata?.statement, defaults.statement),
+    reason: normalizeRuleText(metadata?.reason, defaults.reason),
+    limits: normalizeRuleText(metadata?.limits, defaults.limits),
+    exceptions: normalizeRuleText(metadata?.exceptions, defaults.exceptions),
+    storyPurpose: normalizeRuleText(metadata?.storyPurpose, defaults.storyPurpose)
+  };
+}
+
 export function createStoryRelationship(
   project: Pick<StoryProject, "linkTypes">,
   sourceId: string,
@@ -128,6 +175,7 @@ export function createBlankProject(title = "Untitled Story"): StoryProject {
     updatedAt: nowIso(),
     itemTypes: cloneBuiltInItemTypes(),
     linkTypes: cloneBuiltInLinkTypes(),
+    timelineLaneNames: [defaultTimelineLaneName(0)],
     entities: {},
     relationships: [],
     layout: {}
@@ -321,6 +369,37 @@ export function getTimelineEvents(project: StoryProject): StoryEntity[] {
     });
 }
 
+export function getTimelineLaneNames(project: StoryProject): string[] {
+  return normalizeTimelineLaneNames(project.timelineLaneNames, project.entities);
+}
+
+export function addTimelineLaneToProject(project: StoryProject): StoryProject {
+  const laneNames = getTimelineLaneNames(project);
+
+  return touchProject({
+    ...project,
+    timelineLaneNames: [...laneNames, defaultTimelineLaneName(laneNames.length)]
+  });
+}
+
+export function renameTimelineLaneInProject(project: StoryProject, track: number, name: string): StoryProject {
+  const normalizedTrack = normalizeTimelineTrack(track);
+  const laneNames = normalizeTimelineLaneNames(project.timelineLaneNames, project.entities, normalizedTrack + 1);
+  const nextName = name.trim() || defaultTimelineLaneName(normalizedTrack);
+
+  if (laneNames[normalizedTrack] === nextName) {
+    return project;
+  }
+
+  const nextLaneNames = [...laneNames];
+  nextLaneNames[normalizedTrack] = nextName;
+
+  return touchProject({
+    ...project,
+    timelineLaneNames: nextLaneNames
+  });
+}
+
 export function nextTimelineOrder(project: StoryProject, track = 0): number {
   const normalizedTrack = normalizeTimelineTrack(track);
   const orders = Object.values(project.entities)
@@ -344,6 +423,7 @@ export function moveTimelineEventInProject(
   }
 
   const normalizedTrack = normalizeTimelineTrack(targetTrack);
+  const laneNames = normalizeTimelineLaneNames(project.timelineLaneNames, project.entities, normalizedTrack + 1);
   const events = getTimelineEvents(project);
   const sourceTimeline = ensureEventTimeline(movedEvent);
   const sourceTrack = sourceTimeline.track ?? 0;
@@ -407,7 +487,8 @@ export function moveTimelineEventInProject(
   return changed
     ? touchProject({
         ...project,
-        entities: nextEntities
+        entities: nextEntities,
+        timelineLaneNames: laneNames
       })
     : project;
 }
@@ -415,14 +496,13 @@ export function moveTimelineEventInProject(
 export function deleteEmptyTimelineTrackFromProject(project: StoryProject, targetTrack: number): StoryProject {
   const normalizedTrack = normalizeTimelineTrack(targetTrack);
   const events = getTimelineEvents(project);
+  const laneNames = getTimelineLaneNames(project);
 
   if (events.some((event) => (event.timeline?.track ?? 0) === normalizedTrack)) {
     return project;
   }
 
-  const maxTrack = events.reduce((track, event) => Math.max(track, event.timeline?.track ?? 0), 0);
-
-  if (normalizedTrack > maxTrack) {
+  if (laneNames.length <= 1 || normalizedTrack >= laneNames.length) {
     return project;
   }
 
@@ -451,9 +531,13 @@ export function deleteEmptyTimelineTrackFromProject(project: StoryProject, targe
   return changed
     ? touchProject({
         ...project,
-        entities: nextEntities
+        entities: nextEntities,
+        timelineLaneNames: removeTimelineLaneName(laneNames, normalizedTrack)
       })
-    : project;
+    : touchProject({
+        ...project,
+        timelineLaneNames: removeTimelineLaneName(laneNames, normalizedTrack)
+      });
 }
 
 export function eventOrder(project: StoryProject, eventId: string): number | null {
@@ -661,6 +745,7 @@ export function migrateProjectShape(project: unknown): StoryProject {
     updatedAt: value.updatedAt || nowIso(),
     itemTypes: mergeTypeCatalog(cloneBuiltInItemTypes(), value.itemTypes ?? []),
     linkTypes: mergeTypeCatalog(cloneBuiltInLinkTypes(), value.linkTypes ?? []),
+    timelineLaneNames: [],
     entities: {},
     relationships: [],
     layout: value.layout ?? {}
@@ -673,6 +758,7 @@ export function migrateProjectShape(project: unknown): StoryProject {
     })
   );
   migrated.relationships = (value.relationships ?? []).map(normalizeRelationship);
+  migrated.timelineLaneNames = normalizeTimelineLaneNames(value.timelineLaneNames, migrated.entities);
 
   return migrated;
 }
@@ -688,6 +774,10 @@ export function ensureEntityDefaults(entity: StoryEntity): StoryEntity {
 
   if (normalized.type === BUILT_IN_EVENT_TYPE_ID) {
     normalized.timeline = ensureEventTimeline(normalized);
+  }
+
+  if (normalized.type === BUILT_IN_WORLD_RULE_TYPE_ID) {
+    normalized.worldRule = normalizeWorldRuleMetadata(normalized.worldRule);
   }
 
   return normalized;
@@ -775,6 +865,46 @@ function humanizeId(value: string): string {
   return value
     .replace(/[_-]+/g, " ")
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function normalizeRuleText(value: string | undefined, fallback: string): string {
+  return typeof value === "string" ? value.trim() : fallback;
+}
+
+function defaultTimelineLaneName(track: number): string {
+  return `Track ${track + 1}`;
+}
+
+function normalizeTimelineLaneNames(
+  laneNames: string[] | undefined,
+  entities: Record<string, StoryEntity>,
+  minCount = 1
+): string[] {
+  const maxEventTrack = Object.values(entities)
+    .filter((entity) => entity.type === BUILT_IN_EVENT_TYPE_ID)
+    .reduce((maxTrack, entity) => Math.max(maxTrack, normalizeTimelineTrack(entity.timeline?.track)), 0);
+  const count = Math.max(1, minCount, laneNames?.length ?? 0, maxEventTrack + 1);
+
+  return Array.from({ length: count }, (_, track) => {
+    const name = laneNames?.[track];
+
+    return typeof name === "string" && name.trim() ? name.trim() : defaultTimelineLaneName(track);
+  });
+}
+
+function removeTimelineLaneName(laneNames: string[], targetTrack: number): string[] {
+  const nextLaneNames: string[] = [];
+
+  laneNames.forEach((name, track) => {
+    if (track === targetTrack) {
+      return;
+    }
+
+    const nextTrack = nextLaneNames.length;
+    nextLaneNames.push(name === defaultTimelineLaneName(track) ? defaultTimelineLaneName(nextTrack) : name);
+  });
+
+  return nextLaneNames.length ? nextLaneNames : [defaultTimelineLaneName(0)];
 }
 
 function normalizeTimelineTrack(track: number | undefined): number {

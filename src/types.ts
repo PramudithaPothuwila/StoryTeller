@@ -1,4 +1,5 @@
 export const BUILT_IN_EVENT_TYPE_ID = "event";
+export const BUILT_IN_WORLD_RULE_TYPE_ID = "world_rule";
 
 export type ItemTypeId = string;
 export type LinkTypeId = string;
@@ -86,6 +87,16 @@ export interface RelationshipTimelineVersion {
   notes?: string;
 }
 
+export interface WorldRuleMetadata {
+  domain: string;
+  status: string;
+  statement: string;
+  reason: string;
+  limits: string;
+  exceptions: string;
+  storyPurpose: string;
+}
+
 export interface StoryEntity {
   id: string;
   type: ItemTypeId;
@@ -98,6 +109,7 @@ export interface StoryEntity {
   createdAt: string;
   updatedAt: string;
   timeline?: EventTimeline;
+  worldRule?: WorldRuleMetadata;
 }
 
 export interface StoryRelationship {
@@ -121,6 +133,7 @@ export interface StoryProject {
   updatedAt: string;
   itemTypes: ItemTypeDefinition[];
   linkTypes: LinkTypeDefinition[];
+  timelineLaneNames: string[];
   entities: Record<string, StoryEntity>;
   relationships: StoryRelationship[];
   layout: Record<string, Point>;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { StoryEntity } from "../types";
+import { BUILT_IN_WORLD_RULE_TYPE_ID, StoryEntity } from "../types";
 import {
   applyTimelineEffectToProject,
   createBlankProject,
@@ -33,9 +33,11 @@ describe("project file model", () => {
     expect(files["graph/relationships.json"]).toBeTruthy();
     expect(Object.keys(files).some((path) => path.startsWith("entities/character/"))).toBe(true);
     expect(JSON.parse(files["storyteller.project.json"]).schemaVersion).toBe(2);
+    expect(JSON.parse(files["storyteller.project.json"]).timelineLaneNames).toEqual(project.timelineLaneNames);
     expect(Object.keys(restoredProject.entities)).toHaveLength(Object.keys(project.entities).length);
     expect(restoredProject.relationships).toHaveLength(project.relationships.length);
     expect(restoredProject.layout).toEqual(project.layout);
+    expect(restoredProject.timelineLaneNames).toEqual(project.timelineLaneNames);
   });
 
   it("migrates v1 project files to schema v2 with built-in type catalogs", () => {
@@ -79,6 +81,7 @@ describe("project file model", () => {
     expect(project.schemaVersion).toBe(2);
     expect(project.itemTypes.some((type) => type.id === "character")).toBe(true);
     expect(project.linkTypes.some((type) => type.id === "relates_to")).toBe(true);
+    expect(project.timelineLaneNames).toEqual(["Track 1"]);
     expect(project.entities[entity.id].privateInfo).toBe("Villain");
   });
 
@@ -122,6 +125,72 @@ describe("project file model", () => {
     expect(findItemType(restoredFromFiles, customItemType.id).label).toBe("Prophecy");
     expect(linkDirection(restoredFromFiles, customLinkType.id)).toBe("mutual");
     expect(findItemType(restoredFromBundle, customItemType.id).label).toBe("Prophecy");
+  });
+
+  it("round-trips timeline lane names through folder files and bundles", async () => {
+    const project = createBlankProject("Named Lanes");
+    const event = createStoryEntity("event", project.itemTypes, "Parallel Scene");
+    event.timeline = { order: 1, track: 1, effects: [] };
+    const projectWithLanes = {
+      ...project,
+      timelineLaneNames: ["Main Plot", "Parallel Plot"],
+      entities: {
+        [event.id]: event
+      }
+    };
+
+    const files = buildProjectFiles(projectWithLanes);
+    const restoredFromFiles = projectFromFiles(files);
+    const restoredFromBundle = await projectFromBundleFile({
+      text: async () =>
+        JSON.stringify({
+          kind: "storyteller.project.bundle",
+          exportedAt: "2026-01-01T00:00:00.000Z",
+          files
+        })
+    } as File);
+
+    expect(JSON.parse(files["storyteller.project.json"]).timelineLaneNames).toEqual(["Main Plot", "Parallel Plot"]);
+    expect(restoredFromFiles.timelineLaneNames).toEqual(["Main Plot", "Parallel Plot"]);
+    expect(restoredFromBundle.timelineLaneNames).toEqual(["Main Plot", "Parallel Plot"]);
+  });
+
+  it("round-trips structured world rule metadata through folder files and bundles", async () => {
+    const project = createBlankProject("Rules");
+    const rule = createStoryEntity(BUILT_IN_WORLD_RULE_TYPE_ID, project.itemTypes, "Memory Trade Is Final");
+    rule.worldRule = {
+      domain: "Magic",
+      status: "Canon",
+      statement: "A willingly traded memory cannot be restored.",
+      reason: "Memory exchange rewrites the owner and the civic record.",
+      limits: "Coerced theft leaves fragments.",
+      exceptions: "Charged objects can hold echoes.",
+      storyPurpose: "Keeps memory magic costly."
+    };
+    const projectWithRule = {
+      ...project,
+      entities: {
+        [rule.id]: rule
+      },
+      layout: {
+        [rule.id]: { x: 10, y: 20 }
+      }
+    };
+
+    const files = buildProjectFiles(projectWithRule);
+    const restoredFromFiles = projectFromFiles(files);
+    const restoredFromBundle = await projectFromBundleFile({
+      text: async () =>
+        JSON.stringify({
+          kind: "storyteller.project.bundle",
+          exportedAt: "2026-01-01T00:00:00.000Z",
+          files
+        })
+    } as File);
+
+    expect(files[`entities/${BUILT_IN_WORLD_RULE_TYPE_ID}/${rule.id}.md`]).toContain('"worldRule"');
+    expect(restoredFromFiles.entities[rule.id].worldRule).toEqual(rule.worldRule);
+    expect(restoredFromBundle.entities[rule.id].worldRule).toEqual(rule.worldRule);
   });
 
   it("removes stale entity markdown files when saving a folder project", async () => {

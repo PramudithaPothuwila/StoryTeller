@@ -16,6 +16,8 @@ persistent structure:
 - Turning a loose premise into a connected story world.
 - Mapping characters, factions, places, important objects, clues, and major
   events.
+- Defining worldbuilding rules, limits, exceptions, and who knows or is governed
+  by those rules.
 - Tracking how relationships change across the timeline.
 - Finding gaps, contradictions, missing motivations, or weak cause-and-effect.
 - Comparing alternate plot directions without losing the current structure.
@@ -193,6 +195,8 @@ type:
 - `item`: objects with ownership, symbolic weight, power, or plot utility.
 - `event`: scenes, turning points, revelations, battles, promises, betrayals,
   discoveries, and consequences.
+- `world_rule`: canon or tentative rules for magic, technology, culture,
+  politics, religion, geography, economy, history, biology, or language.
 - `note`: themes, act plans, open questions, tone references, rules,
   constraints, and unresolved decisions.
 
@@ -209,10 +213,31 @@ Use the relationship types already listed in the manifest. Common built-in IDs:
 - `located_in`
 - `causes`
 - `member_of`
+- `governs`
+- `known_by`
+- `exception_to`
 
 Custom link types may also exist, such as `protects`, `owes`, `betrays`, or
 `decodes`. If a needed relationship type is missing, either use `relates_to` or
 ask the user before adding a custom type to `linkTypes`.
+
+World rule entities may include `worldRule` metadata in frontmatter:
+
+```json
+"worldRule": {
+  "domain": "Magic",
+  "status": "Canon",
+  "statement": "Memory cannot be restored once willingly traded.",
+  "reason": "Memory bargains rewrite the civic record and the self.",
+  "limits": "Coerced theft can leave fragments.",
+  "exceptions": "Charged objects can hold echoes.",
+  "storyPurpose": "Keeps power costly and prevents easy reversals."
+}
+```
+
+Use `governs` from a rule to the entity, item, location, faction, or event it
+constrains. Use `known_by` from a rule to a character or faction that understands
+it. Use `exception_to` from an exception rule to the broader rule it modifies.
 
 ## Relationship File
 
