@@ -7,6 +7,7 @@ import {
   createCustomLinkType,
   createStoryRelationship,
   createStoryEntity,
+  deleteEntityFromProject,
   findItemType,
   isRelationshipActiveAt,
   linkDirection,
@@ -17,7 +18,9 @@ import {
   parseEntityMarkdown,
   projectFromBundleFile,
   projectFromFiles,
-  serializeEntityMarkdown
+  readProjectFromDirectory,
+  serializeEntityMarkdown,
+  writeProjectToDirectory
 } from "./projectFiles";
 
 describe("project file model", () => {
@@ -119,6 +122,29 @@ describe("project file model", () => {
     expect(findItemType(restoredFromFiles, customItemType.id).label).toBe("Prophecy");
     expect(linkDirection(restoredFromFiles, customLinkType.id)).toBe("mutual");
     expect(findItemType(restoredFromBundle, customItemType.id).label).toBe("Prophecy");
+  });
+
+  it("removes stale entity markdown files when saving a folder project", async () => {
+    const project = createProjectFixture();
+    const directory = createMemoryDirectoryHandle();
+    const deletedEntity = Object.values(project.entities).find((entity) => entity.type === "item")!;
+    const deletedPath = `entities/${deletedEntity.type}/${deletedEntity.id}.md`;
+
+    await writeProjectToDirectory(project, directory.handle);
+
+    expect(directory.hasFile(deletedPath)).toBe(true);
+
+    const nextProject = deleteEntityFromProject(project, deletedEntity.id);
+    await writeProjectToDirectory(nextProject, directory.handle);
+
+    const savedManifest = JSON.parse(directory.readFile("storyteller.project.json")) as {
+      entityIndex: Array<{ id: string; path: string }>;
+    };
+    const restoredProject = await readProjectFromDirectory(directory.handle);
+
+    expect(directory.hasFile(deletedPath)).toBe(false);
+    expect(savedManifest.entityIndex).not.toContainEqual(expect.objectContaining({ id: deletedEntity.id }));
+    expect(restoredProject.entities[deletedEntity.id]).toBeUndefined();
   });
 
   it("applies event relationship changes across timeline positions", () => {
@@ -243,4 +269,117 @@ function createProjectFixture() {
       [secret.id]: { x: 300, y: 40 }
     }
   };
+}
+
+type MemoryDirectoryEntry = string | Map<string, MemoryDirectoryEntry>;
+
+function createMemoryDirectoryHandle() {
+  const root = new Map<string, MemoryDirectoryEntry>();
+
+  return {
+    handle: directoryHandle(root),
+    hasFile: (path: string) => typeof entryAtPath(root, path) === "string",
+    readFile: (path: string) => {
+      const entry = entryAtPath(root, path);
+
+      if (typeof entry !== "string") {
+        throw fileSystemError("NotFoundError", `File not found: ${path}`);
+      }
+
+      return entry;
+    }
+  };
+}
+
+function directoryHandle(entries: Map<string, MemoryDirectoryEntry>): FileSystemDirectoryHandle {
+  return {
+    getDirectoryHandle: async (name: string, options?: { create?: boolean }) => {
+      const entry = entries.get(name);
+
+      if (entry instanceof Map) {
+        return directoryHandle(entry);
+      }
+
+      if (entry === undefined && options?.create) {
+        const nextDirectory = new Map<string, MemoryDirectoryEntry>();
+        entries.set(name, nextDirectory);
+
+        return directoryHandle(nextDirectory);
+      }
+
+      throw fileSystemError("NotFoundError", `Directory not found: ${name}`);
+    },
+    getFileHandle: async (name: string, options?: { create?: boolean }) => {
+      const entry = entries.get(name);
+
+      if (typeof entry === "string") {
+        return fileHandle(entries, name);
+      }
+
+      if (entry === undefined && options?.create) {
+        entries.set(name, "");
+
+        return fileHandle(entries, name);
+      }
+
+      throw fileSystemError("NotFoundError", `File not found: ${name}`);
+    },
+    removeEntry: async (name: string) => {
+      const entry = entries.get(name);
+
+      if (entry === undefined) {
+        throw fileSystemError("NotFoundError", `Entry not found: ${name}`);
+      }
+
+      if (entry instanceof Map && entry.size > 0) {
+        throw fileSystemError("InvalidModificationError", `Directory is not empty: ${name}`);
+      }
+
+      entries.delete(name);
+    }
+  } as FileSystemDirectoryHandle;
+}
+
+function fileHandle(entries: Map<string, MemoryDirectoryEntry>, name: string): FileSystemFileHandle {
+  return {
+    getFile: async () =>
+      ({
+        text: async () => String(entries.get(name) ?? "")
+      }) as File,
+    createWritable: async () =>
+      ({
+        write: async (data: string | Blob | BufferSource) => {
+          entries.set(name, typeof data === "string" ? data : String(data));
+        },
+        close: async () => undefined
+      }) as FileSystemWritableFileStream
+  } as FileSystemFileHandle;
+}
+
+function entryAtPath(root: Map<string, MemoryDirectoryEntry>, path: string): MemoryDirectoryEntry | undefined {
+  const parts = path.split("/");
+  let current: MemoryDirectoryEntry = root;
+
+  for (const part of parts) {
+    if (!(current instanceof Map)) {
+      return undefined;
+    }
+
+    const entry = current.get(part);
+
+    if (entry === undefined) {
+      return undefined;
+    }
+
+    current = entry;
+  }
+
+  return current;
+}
+
+function fileSystemError(name: string, message: string): Error {
+  const error = new Error(message);
+  error.name = name;
+
+  return error;
 }

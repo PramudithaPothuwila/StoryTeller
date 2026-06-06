@@ -129,3 +129,7 @@ public/
   relationship versions active at that point in the story.
 - Project files currently use schema version `2`; older project shapes are
   migrated on load.
+
+## Documentation
+
+- [Agent-assisted story creation](docs/agent-story-creation.md)
