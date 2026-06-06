@@ -1,4 +1,13 @@
-import { ItemTypeDefinition, LinkTypeDefinition, StoryEntity, StoryProject, StoryRelationship } from "../types";
+import {
+  GameStoryProjectMetadata,
+  ItemTypeDefinition,
+  LinkTypeDefinition,
+  ProjectMode,
+  STORY_PROJECT_SCHEMA_VERSION,
+  StoryEntity,
+  StoryProject,
+  StoryRelationship
+} from "../types";
 import { migrateProjectShape } from "./story";
 
 const MANIFEST_PATH = "storyteller.project.json";
@@ -36,8 +45,27 @@ interface ProjectManifestV2 {
   }>;
 }
 
+interface ProjectManifestV3 {
+  schemaVersion: 3;
+  title: string;
+  updatedAt: string;
+  projectMode: ProjectMode;
+  gameStory?: GameStoryProjectMetadata;
+  itemTypes: ItemTypeDefinition[];
+  linkTypes: LinkTypeDefinition[];
+  timelineLaneNames?: string[];
+  graphLayout: StoryProject["layout"];
+  entityIndex: Array<{
+    id: string;
+    type: string;
+    title: string;
+    updatedAt: string;
+    path: string;
+  }>;
+}
+
 interface RelationshipsFile {
-  schemaVersion: 1 | 2;
+  schemaVersion: 1 | 2 | 3;
   relationships: StoryRelationship[];
 }
 
@@ -47,15 +75,17 @@ interface ProjectBundle {
   files: Record<string, string>;
 }
 
-type ProjectManifest = ProjectManifestV1 | ProjectManifestV2;
+type ProjectManifest = ProjectManifestV1 | ProjectManifestV2 | ProjectManifestV3;
 
 export function buildProjectFiles(project: StoryProject): Record<string, string> {
   const files: Record<string, string> = {};
   const entities = Object.values(project.entities);
-  const manifest: ProjectManifestV2 = {
-    schemaVersion: 2,
+  const manifest: ProjectManifestV3 = {
+    schemaVersion: STORY_PROJECT_SCHEMA_VERSION,
     title: project.title,
     updatedAt: project.updatedAt,
+    projectMode: project.projectMode,
+    gameStory: project.gameStory,
     itemTypes: project.itemTypes,
     linkTypes: project.linkTypes,
     timelineLaneNames: project.timelineLaneNames,
@@ -69,7 +99,7 @@ export function buildProjectFiles(project: StoryProject): Record<string, string>
     }))
   };
   const relationships: RelationshipsFile = {
-    schemaVersion: 2,
+    schemaVersion: STORY_PROJECT_SCHEMA_VERSION,
     relationships: project.relationships
   };
 
@@ -92,7 +122,7 @@ export function projectFromFiles(files: Record<string, string>): StoryProject {
 
   const manifest = parseJson<ProjectManifest>(manifestText, "project manifest");
 
-  if (manifest.schemaVersion !== 1 && manifest.schemaVersion !== 2) {
+  if (manifest.schemaVersion !== 1 && manifest.schemaVersion !== 2 && manifest.schemaVersion !== 3) {
     throw new Error("Unsupported or invalid StoryTeller project manifest");
   }
 
@@ -115,9 +145,11 @@ export function projectFromFiles(files: Record<string, string>): StoryProject {
     schemaVersion: manifest.schemaVersion,
     title: manifest.title,
     updatedAt: manifest.updatedAt,
-    itemTypes: manifest.schemaVersion === 2 ? manifest.itemTypes : undefined,
-    linkTypes: manifest.schemaVersion === 2 ? manifest.linkTypes : undefined,
-    timelineLaneNames: manifest.schemaVersion === 2 ? manifest.timelineLaneNames : undefined,
+    projectMode: manifest.schemaVersion === 3 ? manifest.projectMode : undefined,
+    gameStory: manifest.schemaVersion === 3 ? manifest.gameStory : undefined,
+    itemTypes: manifest.schemaVersion === 2 || manifest.schemaVersion === 3 ? manifest.itemTypes : undefined,
+    linkTypes: manifest.schemaVersion === 2 || manifest.schemaVersion === 3 ? manifest.linkTypes : undefined,
+    timelineLaneNames: manifest.schemaVersion === 2 || manifest.schemaVersion === 3 ? manifest.timelineLaneNames : undefined,
     entities,
     relationships: (relationshipFile.relationships ?? []).filter(
       (relationship) => entities[relationship.sourceId] && entities[relationship.targetId]
@@ -214,7 +246,8 @@ async function readExistingProjectManifest(directoryHandle: FileSystemDirectoryH
   try {
     const manifest = parseJson<ProjectManifest>(await readTextPath(directoryHandle, MANIFEST_PATH), "project manifest");
 
-    return (manifest.schemaVersion === 1 || manifest.schemaVersion === 2) && Array.isArray(manifest.entityIndex)
+    return (manifest.schemaVersion === 1 || manifest.schemaVersion === 2 || manifest.schemaVersion === 3) &&
+      Array.isArray(manifest.entityIndex)
       ? manifest
       : null;
   } catch (error) {

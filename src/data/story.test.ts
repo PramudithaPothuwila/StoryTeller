@@ -1,15 +1,26 @@
 import { describe, expect, it } from "vitest";
 import { BUILT_IN_WORLD_RULE_TYPE_ID, StoryEntity } from "../types";
 import {
+  addGameStateVariableToProject,
   addTimelineLaneToProject,
+  applyGamePlaythroughChoice,
   createBlankProject,
+  createGameStateCondition,
+  createGameStateEffect,
   createStoryEntity,
+  createStoryRelationship,
   deleteEmptyTimelineTrackFromProject,
   ensureEventTimeline,
+  getGameContinuityIssues,
+  getGamePlayableChoices,
+  getInitialGameState,
   getTimelineLaneNames,
   migrateProjectShape,
   moveTimelineEventInProject,
-  renameTimelineLaneInProject
+  renameTimelineLaneInProject,
+  setProjectModeInProject,
+  updateGameStateVariableInProject,
+  updateGameStoryProjectMetadata
 } from "./story";
 
 describe("story timeline tracks", () => {
@@ -174,3 +185,124 @@ describe("story world rules", () => {
     expect(migrated.entities[character.id].worldRule).toBeUndefined();
   });
 });
+
+describe("game story mode", () => {
+  it("upgrades projects to schema v3 and installs game story catalogs only when enabled", () => {
+    const storyProject = createBlankProject("Story");
+    const gameProject = setProjectModeInProject(storyProject, "game_story");
+
+    expect(storyProject.schemaVersion).toBe(3);
+    expect(storyProject.projectMode).toBe("story");
+    expect(storyProject.itemTypes.some((type) => type.id === "scene")).toBe(false);
+    expect(gameProject.projectMode).toBe("game_story");
+    expect(gameProject.gameStory?.stateVariables).toEqual([]);
+    expect(gameProject.itemTypes).toEqual(expect.arrayContaining([expect.objectContaining({ id: "scene", builtIn: true })]));
+    expect(gameProject.linkTypes).toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: "branches_to", builtIn: true })])
+    );
+  });
+
+  it("simulates available and locked branches from state variables without mutating the project", () => {
+    let project = setProjectModeInProject(createBlankProject("Game"), "game_story");
+    project = addGameStateVariableToProject(project, "flag");
+    const variable = project.gameStory!.stateVariables[0];
+    project = updateGameStateVariableInProject(project, variable.id, {
+      id: "has-key",
+      label: "Has Key",
+      defaultValue: false
+    });
+    const start = createStoryEntity("scene", project.itemTypes, "Locked Door");
+    const open = createStoryEntity("scene", project.itemTypes, "Open Door");
+    const ending = createStoryEntity("ending", project.itemTypes, "Escape");
+    const lockedBranch = {
+      ...createStoryRelationship(project, start.id, open.id, "branches_to"),
+      gameStory: {
+        choiceText: "Unlock the door",
+        requirements: [{ ...createGameStateCondition("has-key"), value: true }],
+        effects: [],
+        consequenceNotes: "",
+        priority: 0
+      }
+    };
+    const exitBranch = {
+      ...createStoryRelationship(project, open.id, ending.id, "branches_to"),
+      gameStory: {
+        choiceText: "Leave",
+        requirements: [],
+        effects: [{ ...createGameStateEffect("has-key"), operation: "remove" as const, value: false }],
+        consequenceNotes: "",
+        priority: 0
+      }
+    };
+    project = updateGameStoryProjectMetadata(
+      {
+        ...project,
+        entities: {
+          [start.id]: start,
+          [open.id]: open,
+          [ending.id]: ending
+        },
+        relationships: [lockedBranch, exitBranch]
+      },
+      { startNodeId: start.id }
+    );
+
+    const initialState = getInitialGameState(project);
+    const lockedChoices = getGamePlayableChoices(project, start.id, initialState);
+    const unlockedChoices = getGamePlayableChoices(project, start.id, { ...initialState, "has-key": true });
+    const nextState = applyGamePlaythroughChoice(project, open.id, { ...initialState, "has-key": true }, exitBranchToChoice(project, exitBranch.id));
+
+    expect(lockedChoices[0].available).toBe(false);
+    expect(unlockedChoices[0].available).toBe(true);
+    expect(nextState["has-key"]).toBe(false);
+    expect(project.gameStory?.stateVariables[0].defaultValue).toBe(false);
+  });
+
+  it("reports continuity issues for unreachable nodes, dead ends, invalid state refs, and empty quests", () => {
+    let project = setProjectModeInProject(createBlankProject("Continuity"), "game_story");
+    const start = createStoryEntity("scene", project.itemTypes, "Start");
+    const lonely = createStoryEntity("scene", project.itemTypes, "Lonely Scene");
+    const quest = createStoryEntity("quest", project.itemTypes, "Empty Quest");
+    const branch = {
+      ...createStoryRelationship(project, start.id, quest.id, "branches_to"),
+      gameStory: {
+        choiceText: "Take quest",
+        requirements: [{ ...createGameStateCondition("missing-flag"), value: true }],
+        effects: [],
+        consequenceNotes: "",
+        priority: 0
+      }
+    };
+    project = updateGameStoryProjectMetadata(
+      {
+        ...project,
+        entities: {
+          [start.id]: start,
+          [lonely.id]: lonely,
+          [quest.id]: quest
+        },
+        relationships: [branch]
+      },
+      { startNodeId: start.id }
+    );
+
+    const issueTitles = getGameContinuityIssues(project).map((issue) => issue.title);
+
+    expect(issueTitles).toEqual(
+      expect.arrayContaining([
+        "Unreachable node",
+        "Non-ending dead end",
+        "Invalid state reference",
+        "Quest has no objectives"
+      ])
+    );
+  });
+});
+
+function exitBranchToChoice(project: ReturnType<typeof createBlankProject>, relationshipId: string) {
+  const relationship = project.relationships.find((item) => item.id === relationshipId)!;
+
+  return getGamePlayableChoices(project, relationship.sourceId, { "has-key": true }).find(
+    (choice) => choice.relationshipId === relationshipId
+  )!;
+}

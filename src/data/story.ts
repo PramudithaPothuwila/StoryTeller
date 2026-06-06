@@ -2,13 +2,33 @@ import {
   BUILT_IN_EVENT_TYPE_ID,
   BUILT_IN_WORLD_RULE_TYPE_ID,
   EventTimeline,
+  GameContinuityIssue,
+  GameDialogueLine,
+  GameDialogueMetadata,
+  GameDialogueResponse,
+  GameDialogueVariant,
+  GamePlaythroughChoice,
+  GameQuestMetadata,
+  GameQuestObjective,
+  GameStateCondition,
+  GameStateEffect,
+  GameStateValue,
+  GameStateVariableDefinition,
+  GameStateVariableKind,
+  GameStoryEntityMetadata,
+  GameStoryNodeRole,
+  GameStoryProjectMetadata,
+  GameStoryRelationshipMetadata,
+  GameStoryValidationSettings,
   ItemTypeDefinition,
   ItemTypeId,
   LinkDirection,
   LinkTypeDefinition,
   LinkTypeId,
   Point,
+  ProjectMode,
   RelationshipTimelineVersion,
+  STORY_PROJECT_SCHEMA_VERSION,
   StoryEntity,
   StoryProject,
   StoryRelationship,
@@ -42,6 +62,13 @@ export const builtInItemTypes: ItemTypeDefinition[] = [
   { id: BUILT_IN_WORLD_RULE_TYPE_ID, label: "World Rule", color: "#0e7490", icon: "scroll-text", builtIn: true }
 ];
 
+export const builtInGameItemTypes: ItemTypeDefinition[] = [
+  { id: "scene", label: "Scene", color: "#dc2626", icon: "calendar-days", builtIn: true },
+  { id: "quest", label: "Quest", color: "#0891b2", icon: "flag", builtIn: true },
+  { id: "dialogue", label: "Dialogue", color: "#7c3aed", icon: "users", builtIn: true },
+  { id: "ending", label: "Ending", color: "#d97706", icon: "sparkles", builtIn: true }
+];
+
 export const builtInLinkTypes: LinkTypeDefinition[] = [
   { id: "relates_to", label: "Relates to", color: "#46605a", icon: "link", direction: "directed", builtIn: true },
   { id: "knows", label: "Knows", color: "#0f766e", icon: "users", direction: "mutual", builtIn: true },
@@ -56,6 +83,15 @@ export const builtInLinkTypes: LinkTypeDefinition[] = [
   { id: "known_by", label: "Known by", color: "#0f766e", icon: "users", direction: "directed", builtIn: true },
   { id: "exception_to", label: "Exception to", color: "#b45309", icon: "git-branch", direction: "directed", builtIn: true }
 ];
+
+export const builtInGameLinkTypes: LinkTypeDefinition[] = [
+  { id: "branches_to", label: "Branches to", color: "#dc2626", icon: "git-branch", direction: "directed", builtIn: true },
+  { id: "requires", label: "Requires", color: "#7c3aed", icon: "key", direction: "directed", builtIn: true },
+  { id: "unlocks", label: "Unlocks", color: "#0891b2", icon: "sparkles", direction: "directed", builtIn: true }
+];
+
+export const gameStoryItemTypeIds = new Set(builtInGameItemTypes.map((type) => type.id));
+export const gameStoryLinkTypeIds = new Set(builtInGameLinkTypes.map((type) => type.id));
 
 export function nowIso(): string {
   return new Date().toISOString();
@@ -75,14 +111,23 @@ export function cloneBuiltInItemTypes(): ItemTypeDefinition[] {
   return builtInItemTypes.map((type) => ({ ...type }));
 }
 
+export function cloneBuiltInGameItemTypes(): ItemTypeDefinition[] {
+  return builtInGameItemTypes.map((type) => ({ ...type }));
+}
+
 export function cloneBuiltInLinkTypes(): LinkTypeDefinition[] {
   return builtInLinkTypes.map((type) => ({ ...type }));
+}
+
+export function cloneBuiltInGameLinkTypes(): LinkTypeDefinition[] {
+  return builtInGameLinkTypes.map((type) => ({ ...type }));
 }
 
 export function findItemType(project: Pick<StoryProject, "itemTypes">, typeId: ItemTypeId): ItemTypeDefinition {
   return (
     project.itemTypes.find((type) => type.id === typeId) ??
     builtInItemTypes.find((type) => type.id === typeId) ??
+    builtInGameItemTypes.find((type) => type.id === typeId) ??
     fallbackItemType(typeId)
   );
 }
@@ -91,6 +136,7 @@ export function findLinkType(project: Pick<StoryProject, "linkTypes">, typeId: L
   return (
     project.linkTypes.find((type) => type.id === typeId) ??
     builtInLinkTypes.find((type) => type.id === typeId) ??
+    builtInGameLinkTypes.find((type) => type.id === typeId) ??
     fallbackLinkType(typeId)
   );
 }
@@ -151,13 +197,207 @@ export function normalizeWorldRuleMetadata(metadata: Partial<WorldRuleMetadata> 
   };
 }
 
+export function defaultGameStoryValidationSettings(): GameStoryValidationSettings {
+  return {
+    checkUnreachableNodes: true,
+    checkInvalidStateReferences: true,
+    checkDialogueDeadEnds: true
+  };
+}
+
+export function defaultGameStoryProjectMetadata(): GameStoryProjectMetadata {
+  return {
+    startNodeId: undefined,
+    stateVariables: [],
+    validation: defaultGameStoryValidationSettings()
+  };
+}
+
+export function normalizeGameStoryProjectMetadata(
+  metadata: Partial<GameStoryProjectMetadata> | undefined
+): GameStoryProjectMetadata {
+  return {
+    startNodeId: normalizeOptionalId(metadata?.startNodeId),
+    stateVariables: (metadata?.stateVariables ?? []).map(normalizeGameStateVariable),
+    validation: {
+      ...defaultGameStoryValidationSettings(),
+      ...(metadata?.validation ?? {})
+    }
+  };
+}
+
+export function defaultGameStoryEntityMetadata(type: ItemTypeId = "scene"): GameStoryEntityMetadata {
+  const role = gameStoryRoleForType(type);
+
+  return {
+    role,
+    status: "draft",
+    criticalPath: role !== "ending",
+    timelineAnchorId: undefined,
+    entryConditions: [],
+    exitEffects: [],
+    dialogue: role === "dialogue" ? defaultGameDialogueMetadata() : undefined,
+    quest: role === "quest" ? defaultGameQuestMetadata() : undefined
+  };
+}
+
+export function normalizeGameStoryEntityMetadata(
+  metadata: Partial<GameStoryEntityMetadata> | undefined,
+  type: ItemTypeId = "scene"
+): GameStoryEntityMetadata {
+  const defaults = defaultGameStoryEntityMetadata(type);
+  const role = isGameStoryRole(metadata?.role) ? metadata.role : defaults.role;
+
+  return {
+    role,
+    status: isGameStoryStatus(metadata?.status) ? metadata.status : defaults.status,
+    criticalPath: typeof metadata?.criticalPath === "boolean" ? metadata.criticalPath : defaults.criticalPath,
+    timelineAnchorId: normalizeOptionalId(metadata?.timelineAnchorId),
+    entryConditions: normalizeGameStateConditions(metadata?.entryConditions),
+    exitEffects: normalizeGameStateEffects(metadata?.exitEffects),
+    dialogue: role === "dialogue" ? normalizeGameDialogueMetadata(metadata?.dialogue) : metadata?.dialogue ? normalizeGameDialogueMetadata(metadata.dialogue) : undefined,
+    quest: role === "quest" ? normalizeGameQuestMetadata(metadata?.quest) : metadata?.quest ? normalizeGameQuestMetadata(metadata.quest) : undefined
+  };
+}
+
+export function defaultGameStoryRelationshipMetadata(): GameStoryRelationshipMetadata {
+  return {
+    choiceText: "",
+    requirements: [],
+    effects: [],
+    consequenceNotes: "",
+    priority: 0
+  };
+}
+
+export function normalizeGameStoryRelationshipMetadata(
+  metadata: Partial<GameStoryRelationshipMetadata> | undefined
+): GameStoryRelationshipMetadata {
+  return {
+    choiceText: normalizeRuleText(metadata?.choiceText, ""),
+    requirements: normalizeGameStateConditions(metadata?.requirements),
+    effects: normalizeGameStateEffects(metadata?.effects),
+    consequenceNotes: normalizeRuleText(metadata?.consequenceNotes, ""),
+    priority: typeof metadata?.priority === "number" && Number.isFinite(metadata.priority) ? Math.floor(metadata.priority) : 0
+  };
+}
+
+export function defaultGameDialogueMetadata(): GameDialogueMetadata {
+  return {
+    lines: [],
+    responses: [],
+    variants: []
+  };
+}
+
+export function normalizeGameDialogueMetadata(metadata: Partial<GameDialogueMetadata> | undefined): GameDialogueMetadata {
+  return {
+    lines: (metadata?.lines ?? []).map(normalizeGameDialogueLine),
+    responses: (metadata?.responses ?? []).map(normalizeGameDialogueResponse),
+    variants: (metadata?.variants ?? []).map(normalizeGameDialogueVariant)
+  };
+}
+
+export function defaultGameQuestMetadata(): GameQuestMetadata {
+  return {
+    questType: "main",
+    giverId: undefined,
+    objectives: [],
+    successConditions: [],
+    failureConditions: [],
+    rewards: "",
+    consequences: ""
+  };
+}
+
+export function normalizeGameQuestMetadata(metadata: Partial<GameQuestMetadata> | undefined): GameQuestMetadata {
+  return {
+    questType: isGameQuestType(metadata?.questType) ? metadata.questType : "main",
+    giverId: normalizeOptionalId(metadata?.giverId),
+    objectives: (metadata?.objectives ?? []).map(normalizeGameQuestObjective),
+    successConditions: normalizeGameStateConditions(metadata?.successConditions),
+    failureConditions: normalizeGameStateConditions(metadata?.failureConditions),
+    rewards: normalizeRuleText(metadata?.rewards, ""),
+    consequences: normalizeRuleText(metadata?.consequences, "")
+  };
+}
+
+export function createGameStateVariable(kind: GameStateVariableKind = "flag"): GameStateVariableDefinition {
+  const id = makeId(kind);
+
+  return normalizeGameStateVariable({
+    id,
+    label: humanizeId(id),
+    kind,
+    defaultValue: defaultGameStateValue(kind),
+    enumOptions: kind === "enum" ? ["Unset", "Known", "Resolved"] : [],
+    notes: ""
+  });
+}
+
+export function createGameStateCondition(variableId = ""): GameStateCondition {
+  return normalizeGameStateCondition({
+    id: makeId("condition"),
+    variableId,
+    operator: "equals",
+    value: true
+  });
+}
+
+export function createGameStateEffect(variableId = ""): GameStateEffect {
+  return normalizeGameStateEffect({
+    id: makeId("effect"),
+    variableId,
+    operation: "set",
+    value: true
+  });
+}
+
+export function createGameDialogueLine(): GameDialogueLine {
+  return normalizeGameDialogueLine({
+    id: makeId("line"),
+    text: "",
+    tone: "",
+    voiceNotes: ""
+  });
+}
+
+export function createGameDialogueResponse(): GameDialogueResponse {
+  return normalizeGameDialogueResponse({
+    id: makeId("response"),
+    text: "",
+    conditions: [],
+    effects: [],
+    notes: ""
+  });
+}
+
+export function createGameDialogueVariant(): GameDialogueVariant {
+  return normalizeGameDialogueVariant({
+    id: makeId("variant"),
+    label: "Variant",
+    conditions: [],
+    lines: []
+  });
+}
+
+export function createGameQuestObjective(): GameQuestObjective {
+  return normalizeGameQuestObjective({
+    id: makeId("objective"),
+    text: "",
+    optional: false,
+    hidden: false,
+    completeConditions: []
+  });
+}
+
 export function createStoryRelationship(
   project: Pick<StoryProject, "linkTypes">,
   sourceId: string,
   targetId: string,
   type: LinkTypeId = "relates_to"
 ): StoryRelationship {
-  return {
+  return normalizeRelationship({
     id: makeId("link"),
     sourceId,
     targetId,
@@ -165,21 +405,25 @@ export function createStoryRelationship(
     label: linkLabel(project, type),
     notes: "",
     timelineVersions: []
-  };
+  });
 }
 
-export function createBlankProject(title = "Untitled Story"): StoryProject {
-  return {
-    schemaVersion: 2,
+export function createBlankProject(title = "Untitled Story", projectMode: ProjectMode = "story"): StoryProject {
+  const project: StoryProject = {
+    schemaVersion: STORY_PROJECT_SCHEMA_VERSION,
     title,
     updatedAt: nowIso(),
-    itemTypes: cloneBuiltInItemTypes(),
-    linkTypes: cloneBuiltInLinkTypes(),
+    projectMode,
+    gameStory: projectMode === "game_story" ? defaultGameStoryProjectMetadata() : undefined,
+    itemTypes: projectMode === "game_story" ? [...cloneBuiltInItemTypes(), ...cloneBuiltInGameItemTypes()] : cloneBuiltInItemTypes(),
+    linkTypes: projectMode === "game_story" ? [...cloneBuiltInLinkTypes(), ...cloneBuiltInGameLinkTypes()] : cloneBuiltInLinkTypes(),
     timelineLaneNames: [defaultTimelineLaneName(0)],
     entities: {},
     relationships: [],
     layout: {}
   };
+
+  return projectMode === "game_story" ? ensureGameStoryCatalog(project) : project;
 }
 
 export function addEntityToProject(project: StoryProject, entity: StoryEntity, position: Point): StoryProject {
@@ -337,6 +581,76 @@ export function deleteLinkTypeFromProject(project: StoryProject, typeId: LinkTyp
   return touchProject({
     ...project,
     linkTypes: project.linkTypes.filter((linkType) => linkType.id !== typeId)
+  });
+}
+
+export function setProjectModeInProject(project: StoryProject, projectMode: ProjectMode): StoryProject {
+  const nextProject = touchProject({
+    ...project,
+    schemaVersion: STORY_PROJECT_SCHEMA_VERSION,
+    projectMode,
+    gameStory:
+      projectMode === "game_story" || project.gameStory
+        ? normalizeGameStoryProjectMetadata(project.gameStory)
+        : undefined
+  });
+
+  return projectMode === "game_story" ? ensureGameStoryCatalog(nextProject) : nextProject;
+}
+
+export function ensureGameStoryCatalog(project: StoryProject): StoryProject {
+  return {
+    ...project,
+    itemTypes: mergeTypeCatalog([...cloneBuiltInItemTypes(), ...cloneBuiltInGameItemTypes()], project.itemTypes),
+    linkTypes: mergeTypeCatalog([...cloneBuiltInLinkTypes(), ...cloneBuiltInGameLinkTypes()], project.linkTypes),
+    gameStory: normalizeGameStoryProjectMetadata(project.gameStory)
+  };
+}
+
+export function updateGameStoryProjectMetadata(
+  project: StoryProject,
+  patch: Partial<GameStoryProjectMetadata>
+): StoryProject {
+  return touchProject({
+    ...project,
+    gameStory: normalizeGameStoryProjectMetadata({
+      ...(project.gameStory ?? defaultGameStoryProjectMetadata()),
+      ...patch
+    })
+  });
+}
+
+export function addGameStateVariableToProject(
+  project: StoryProject,
+  kind: GameStateVariableKind = "flag"
+): StoryProject {
+  const metadata = normalizeGameStoryProjectMetadata(project.gameStory);
+  const variable = createGameStateVariable(kind);
+
+  return updateGameStoryProjectMetadata(project, {
+    stateVariables: [...metadata.stateVariables, variable]
+  });
+}
+
+export function updateGameStateVariableInProject(
+  project: StoryProject,
+  variableId: string,
+  patch: Partial<GameStateVariableDefinition>
+): StoryProject {
+  const metadata = normalizeGameStoryProjectMetadata(project.gameStory);
+
+  return updateGameStoryProjectMetadata(project, {
+    stateVariables: metadata.stateVariables.map((variable) =>
+      variable.id === variableId ? normalizeGameStateVariable({ ...variable, ...patch }) : variable
+    )
+  });
+}
+
+export function deleteGameStateVariableFromProject(project: StoryProject, variableId: string): StoryProject {
+  const metadata = normalizeGameStoryProjectMetadata(project.gameStory);
+
+  return updateGameStoryProjectMetadata(project, {
+    stateVariables: metadata.stateVariables.filter((variable) => variable.id !== variableId)
   });
 }
 
@@ -739,12 +1053,22 @@ export function nextEntityPosition(project: StoryProject): Point {
 
 export function migrateProjectShape(project: unknown): StoryProject {
   const value = project as Partial<StoryProject> & { schemaVersion?: number };
+  const projectMode: ProjectMode = value.projectMode === "game_story" ? "game_story" : "story";
+  const defaultItemTypes =
+    projectMode === "game_story" ? [...cloneBuiltInItemTypes(), ...cloneBuiltInGameItemTypes()] : cloneBuiltInItemTypes();
+  const defaultLinkTypes =
+    projectMode === "game_story" ? [...cloneBuiltInLinkTypes(), ...cloneBuiltInGameLinkTypes()] : cloneBuiltInLinkTypes();
   const migrated: StoryProject = {
-    schemaVersion: 2,
+    schemaVersion: STORY_PROJECT_SCHEMA_VERSION,
     title: value.title || "Untitled Story",
     updatedAt: value.updatedAt || nowIso(),
-    itemTypes: mergeTypeCatalog(cloneBuiltInItemTypes(), value.itemTypes ?? []),
-    linkTypes: mergeTypeCatalog(cloneBuiltInLinkTypes(), value.linkTypes ?? []),
+    projectMode,
+    gameStory:
+      projectMode === "game_story" || value.gameStory
+        ? normalizeGameStoryProjectMetadata(value.gameStory)
+        : undefined,
+    itemTypes: mergeTypeCatalog(defaultItemTypes, value.itemTypes ?? []),
+    linkTypes: mergeTypeCatalog(defaultLinkTypes, value.linkTypes ?? []),
     timelineLaneNames: [],
     entities: {},
     relationships: [],
@@ -760,7 +1084,7 @@ export function migrateProjectShape(project: unknown): StoryProject {
   migrated.relationships = (value.relationships ?? []).map(normalizeRelationship);
   migrated.timelineLaneNames = normalizeTimelineLaneNames(value.timelineLaneNames, migrated.entities);
 
-  return migrated;
+  return migrated.projectMode === "game_story" ? ensureGameStoryCatalog(migrated) : migrated;
 }
 
 export function ensureEntityDefaults(entity: StoryEntity): StoryEntity {
@@ -780,15 +1104,362 @@ export function ensureEntityDefaults(entity: StoryEntity): StoryEntity {
     normalized.worldRule = normalizeWorldRuleMetadata(normalized.worldRule);
   }
 
+  if (isGameStoryItemType(normalized.type) || normalized.gameStory) {
+    normalized.gameStory = normalizeGameStoryEntityMetadata(normalized.gameStory, normalized.type);
+  }
+
   return normalized;
 }
 
 export function normalizeRelationship(relationship: StoryRelationship): StoryRelationship {
-  return {
+  const normalized: StoryRelationship = {
     ...relationship,
     notes: relationship.notes ?? "",
     timelineVersions: relationship.timelineVersions ?? []
   };
+
+  if (isGameStoryLinkType(normalized.type) || normalized.gameStory) {
+    normalized.gameStory = normalizeGameStoryRelationshipMetadata(normalized.gameStory);
+  }
+
+  return normalized;
+}
+
+export function isGameStoryItemType(typeId: ItemTypeId): boolean {
+  return gameStoryItemTypeIds.has(typeId);
+}
+
+export function isGameStoryLinkType(typeId: LinkTypeId): boolean {
+  return gameStoryLinkTypeIds.has(typeId);
+}
+
+export function gameStoryRoleForType(typeId: ItemTypeId): GameStoryNodeRole {
+  if (typeId === "quest" || typeId === "dialogue" || typeId === "ending") {
+    return typeId;
+  }
+
+  return "scene";
+}
+
+export function getGameStoryNodes(project: StoryProject): StoryEntity[] {
+  return Object.values(project.entities)
+    .filter((entity) => isGameStoryItemType(entity.type) || entity.gameStory)
+    .map((entity) => ensureEntityDefaults(entity));
+}
+
+export function getGameStoryRelationships(project: StoryProject): StoryRelationship[] {
+  const gameNodeIds = new Set(getGameStoryNodes(project).map((entity) => entity.id));
+
+  return project.relationships
+    .filter(
+      (relationship) =>
+        (isGameStoryLinkType(relationship.type) || relationship.gameStory) &&
+        gameNodeIds.has(relationship.sourceId) &&
+        gameNodeIds.has(relationship.targetId)
+    )
+    .map(normalizeRelationship);
+}
+
+export function getInitialGameState(project: StoryProject): Record<string, GameStateValue> {
+  return Object.fromEntries(
+    normalizeGameStoryProjectMetadata(project.gameStory).stateVariables.map((variable) => [
+      variable.id,
+      variable.defaultValue
+    ])
+  );
+}
+
+export function evaluateGameStateConditions(
+  project: StoryProject,
+  conditions: GameStateCondition[],
+  state: Record<string, GameStateValue>
+): boolean {
+  const variables = gameStateVariableMap(project);
+
+  return conditions.every((condition) => evaluateGameStateCondition(condition, state, variables));
+}
+
+export function applyGameStateEffects(
+  project: StoryProject,
+  effects: GameStateEffect[],
+  state: Record<string, GameStateValue>
+): Record<string, GameStateValue> {
+  const variables = gameStateVariableMap(project);
+  const nextState = { ...state };
+
+  for (const effect of effects) {
+    const variable = variables.get(effect.variableId);
+
+    if (!variable) {
+      continue;
+    }
+
+    const currentValue = nextState[variable.id] ?? variable.defaultValue;
+    const effectValue = coerceGameStateValue(effect.value, variable.kind);
+
+    if (effect.operation === "increment" || effect.operation === "decrement") {
+      const direction = effect.operation === "increment" ? 1 : -1;
+      const amount = typeof effectValue === "number" ? effectValue : 1;
+      nextState[variable.id] = Number(currentValue || 0) + direction * amount;
+      continue;
+    }
+
+    if (effect.operation === "add") {
+      nextState[variable.id] = variable.kind === "inventory" || variable.kind === "flag" ? true : effectValue;
+      continue;
+    }
+
+    if (effect.operation === "remove") {
+      nextState[variable.id] = variable.kind === "number" || variable.kind === "faction_reputation" ? 0 : false;
+      continue;
+    }
+
+    nextState[variable.id] = effectValue;
+  }
+
+  return nextState;
+}
+
+export function applyGamePlaythroughChoice(
+  project: StoryProject,
+  currentNodeId: string,
+  state: Record<string, GameStateValue>,
+  choice: GamePlaythroughChoice
+): Record<string, GameStateValue> {
+  const currentNode = project.entities[currentNodeId];
+  const exitEffects = currentNode?.gameStory?.exitEffects ?? [];
+
+  return applyGameStateEffects(project, [...exitEffects, ...choice.effects], state);
+}
+
+export function getGamePlayableChoices(
+  project: StoryProject,
+  currentNodeId: string,
+  state: Record<string, GameStateValue>
+): GamePlaythroughChoice[] {
+  const currentNode = project.entities[currentNodeId];
+  const branchChoices: GamePlaythroughChoice[] = project.relationships
+    .filter((relationship) => relationship.sourceId === currentNodeId && relationship.type === "branches_to")
+    .filter((relationship) => project.entities[relationship.targetId])
+    .map((relationship) => {
+      const metadata = normalizeGameStoryRelationshipMetadata(relationship.gameStory);
+      const target = project.entities[relationship.targetId];
+      const targetEntryConditions = target?.gameStory?.entryConditions ?? [];
+      const conditions = [...metadata.requirements, ...targetEntryConditions];
+      const available = evaluateGameStateConditions(project, conditions, state);
+
+      return {
+        id: relationship.id,
+        label: metadata.choiceText || relationship.label || target?.title || "Continue",
+        targetNodeId: relationship.targetId,
+        available,
+        lockedReason: available ? undefined : "Requirements not met",
+        conditions,
+        effects: metadata.effects,
+        relationshipId: relationship.id
+      } satisfies GamePlaythroughChoice;
+    });
+  const dialogueChoices: GamePlaythroughChoice[] = currentNode?.gameStory?.dialogue?.responses
+    .filter((response) => response.targetNodeId && project.entities[response.targetNodeId])
+    .map((response) => {
+      const targetId = response.targetNodeId!;
+      const targetEntryConditions = project.entities[targetId]?.gameStory?.entryConditions ?? [];
+      const conditions = [...response.conditions, ...targetEntryConditions];
+      const available = evaluateGameStateConditions(project, conditions, state);
+
+      return {
+        id: response.id,
+        label: response.text || project.entities[targetId]?.title || "Respond",
+        targetNodeId: targetId,
+        available,
+        lockedReason: available ? undefined : "Requirements not met",
+        conditions,
+        effects: response.effects,
+        responseId: response.id
+      } satisfies GamePlaythroughChoice;
+    }) ?? [];
+
+  return [...branchChoices, ...dialogueChoices].sort((a, b) => {
+    const aPriority = a.relationshipId
+      ? normalizeGameStoryRelationshipMetadata(project.relationships.find((item) => item.id === a.relationshipId)?.gameStory).priority
+      : 0;
+    const bPriority = b.relationshipId
+      ? normalizeGameStoryRelationshipMetadata(project.relationships.find((item) => item.id === b.relationshipId)?.gameStory).priority
+      : 0;
+
+    return aPriority === bPriority ? a.label.localeCompare(b.label) : aPriority - bPriority;
+  });
+}
+
+export function getReachableGameNodeIds(project: StoryProject): Set<string> {
+  const metadata = normalizeGameStoryProjectMetadata(project.gameStory);
+  const startNodeId = metadata.startNodeId;
+  const gameNodes = new Set(getGameStoryNodes(project).map((entity) => entity.id));
+  const reachable = new Set<string>();
+
+  if (!startNodeId || !gameNodes.has(startNodeId)) {
+    return reachable;
+  }
+
+  const queue = [startNodeId];
+
+  while (queue.length) {
+    const nodeId = queue.shift()!;
+
+    if (reachable.has(nodeId)) {
+      continue;
+    }
+
+    reachable.add(nodeId);
+
+    for (const targetId of outgoingGameStoryTargetIds(project, nodeId)) {
+      if (gameNodes.has(targetId) && !reachable.has(targetId)) {
+        queue.push(targetId);
+      }
+    }
+  }
+
+  return reachable;
+}
+
+export function getGameContinuityIssues(project: StoryProject): GameContinuityIssue[] {
+  const metadata = normalizeGameStoryProjectMetadata(project.gameStory);
+  const issues: GameContinuityIssue[] = [];
+  const nodes = getGameStoryNodes(project);
+  const nodeIds = new Set(nodes.map((node) => node.id));
+  const variableIds = new Set(metadata.stateVariables.map((variable) => variable.id));
+  const startNode = metadata.startNodeId ? project.entities[metadata.startNodeId] : null;
+
+  if (nodes.length && (!metadata.startNodeId || !startNode || !nodeIds.has(metadata.startNodeId))) {
+    issues.push({
+      id: "missing-start-node",
+      severity: "error",
+      title: "Missing start node",
+      details: "Choose a valid game story start node."
+    });
+  }
+
+  const reachable = getReachableGameNodeIds(project);
+
+  if (metadata.validation.checkUnreachableNodes && metadata.startNodeId && reachable.size) {
+    for (const node of nodes) {
+      if (!reachable.has(node.id)) {
+        issues.push({
+          id: `unreachable-${node.id}`,
+          severity: "warning",
+          title: "Unreachable node",
+          details: `${node.title} cannot be reached from the start node.`,
+          entityId: node.id
+        });
+      }
+    }
+  }
+
+  for (const relationship of project.relationships) {
+    if (!isGameStoryLinkType(relationship.type) && !relationship.gameStory) {
+      continue;
+    }
+
+    if (!project.entities[relationship.sourceId] || !project.entities[relationship.targetId]) {
+      issues.push({
+        id: `branch-missing-target-${relationship.id}`,
+        severity: "error",
+        title: "Branch with missing endpoint",
+        details: "A game story relationship points to a missing node.",
+        relationshipId: relationship.id
+      });
+    }
+  }
+
+  for (const node of nodes) {
+    const metadataForNode = normalizeGameStoryEntityMetadata(node.gameStory, node.type);
+
+    if (metadataForNode.role !== "ending" && !outgoingGameStoryTargetIds(project, node.id).length) {
+      issues.push({
+        id: `dead-end-${node.id}`,
+        severity: "warning",
+        title: "Non-ending dead end",
+        details: `${node.title} has no outgoing branch or dialogue response.`,
+        entityId: node.id
+      });
+    }
+
+    if (metadataForNode.role === "ending" && node.id !== metadata.startNodeId && !incomingGameStorySourceIds(project, node.id).length) {
+      issues.push({
+        id: `ending-no-path-${node.id}`,
+        severity: "warning",
+        title: "Ending has no incoming path",
+        details: `${node.title} is an ending, but no branch reaches it.`,
+        entityId: node.id
+      });
+    }
+
+    if (metadataForNode.timelineAnchorId && !project.entities[metadataForNode.timelineAnchorId]) {
+      issues.push({
+        id: `missing-timeline-anchor-${node.id}`,
+        severity: "warning",
+        title: "Missing timeline anchor",
+        details: `${node.title} references a missing timeline event.`,
+        entityId: node.id
+      });
+    }
+
+    addInvalidStateReferenceIssues(
+      issues,
+      project,
+      variableIds,
+      `entry-${node.id}`,
+      "Node entry condition references a missing state variable.",
+      metadataForNode.entryConditions,
+      [],
+      node.id
+    );
+    addInvalidStateReferenceIssues(
+      issues,
+      project,
+      variableIds,
+      `exit-${node.id}`,
+      "Node exit effect references a missing state variable.",
+      [],
+      metadataForNode.exitEffects,
+      node.id
+    );
+    addImpossibleConditionIssues(issues, project, `node-${node.id}`, metadataForNode.entryConditions, node.id);
+
+    if (metadataForNode.dialogue) {
+      addDialogueIssues(issues, project, variableIds, node, metadataForNode.dialogue);
+    }
+
+    if (metadataForNode.quest) {
+      addQuestIssues(issues, project, variableIds, node, metadataForNode.quest);
+    }
+  }
+
+  for (const relationship of getGameStoryRelationships(project)) {
+    const relationshipMetadata = normalizeGameStoryRelationshipMetadata(relationship.gameStory);
+
+    addInvalidStateReferenceIssues(
+      issues,
+      project,
+      variableIds,
+      `branch-${relationship.id}`,
+      "Branch requirement or effect references a missing state variable.",
+      relationshipMetadata.requirements,
+      relationshipMetadata.effects,
+      undefined,
+      relationship.id
+    );
+    addImpossibleConditionIssues(
+      issues,
+      project,
+      `branch-${relationship.id}`,
+      relationshipMetadata.requirements,
+      undefined,
+      relationship.id
+    );
+  }
+
+  return issues;
 }
 
 function appendEventEffect(project: StoryProject, eventId: string, effect: TimelineEffect): StoryProject {
@@ -814,6 +1485,480 @@ function appendEventEffect(project: StoryProject, eventId: string, effect: Timel
       }
     }
   });
+}
+
+function normalizeGameStateVariable(variable: Partial<GameStateVariableDefinition>): GameStateVariableDefinition {
+  const kind = isGameStateVariableKind(variable.kind) ? variable.kind : "flag";
+  const id = slugify(variable.id ?? "") || makeId("state");
+  const enumOptions = normalizeStringArray(variable.enumOptions);
+
+  return {
+    id,
+    label: normalizeRuleText(variable.label, humanizeId(id)),
+    kind,
+    defaultValue: coerceGameStateValue(variable.defaultValue ?? defaultGameStateValue(kind), kind),
+    enumOptions: kind === "enum" ? (enumOptions.length ? enumOptions : ["Unset"]) : enumOptions,
+    entityId: normalizeOptionalId(variable.entityId),
+    notes: normalizeRuleText(variable.notes, "")
+  };
+}
+
+function normalizeGameStateConditions(conditions: GameStateCondition[] | undefined): GameStateCondition[] {
+  return (conditions ?? []).map(normalizeGameStateCondition);
+}
+
+function normalizeGameStateCondition(condition: Partial<GameStateCondition>): GameStateCondition {
+  return {
+    id: normalizeOptionalId(condition.id) ?? makeId("condition"),
+    variableId: normalizeOptionalId(condition.variableId) ?? "",
+    operator: isGameStateOperator(condition.operator) ? condition.operator : "equals",
+    value: normalizeGameStateLooseValue(condition.value)
+  };
+}
+
+function normalizeGameStateEffects(effects: GameStateEffect[] | undefined): GameStateEffect[] {
+  return (effects ?? []).map(normalizeGameStateEffect);
+}
+
+function normalizeGameStateEffect(effect: Partial<GameStateEffect>): GameStateEffect {
+  return {
+    id: normalizeOptionalId(effect.id) ?? makeId("effect"),
+    variableId: normalizeOptionalId(effect.variableId) ?? "",
+    operation: isGameStateEffectOperation(effect.operation) ? effect.operation : "set",
+    value: normalizeGameStateLooseValue(effect.value)
+  };
+}
+
+function normalizeGameDialogueLine(line: Partial<GameDialogueLine>): GameDialogueLine {
+  return {
+    id: normalizeOptionalId(line.id) ?? makeId("line"),
+    speakerId: normalizeOptionalId(line.speakerId),
+    text: normalizeRuleText(line.text, ""),
+    tone: normalizeRuleText(line.tone, ""),
+    voiceNotes: normalizeRuleText(line.voiceNotes, "")
+  };
+}
+
+function normalizeGameDialogueResponse(response: Partial<GameDialogueResponse>): GameDialogueResponse {
+  return {
+    id: normalizeOptionalId(response.id) ?? makeId("response"),
+    text: normalizeRuleText(response.text, ""),
+    targetNodeId: normalizeOptionalId(response.targetNodeId),
+    conditions: normalizeGameStateConditions(response.conditions),
+    effects: normalizeGameStateEffects(response.effects),
+    notes: normalizeRuleText(response.notes, "")
+  };
+}
+
+function normalizeGameDialogueVariant(variant: Partial<GameDialogueVariant>): GameDialogueVariant {
+  return {
+    id: normalizeOptionalId(variant.id) ?? makeId("variant"),
+    label: normalizeRuleText(variant.label, "Variant"),
+    conditions: normalizeGameStateConditions(variant.conditions),
+    lines: (variant.lines ?? []).map(normalizeGameDialogueLine)
+  };
+}
+
+function normalizeGameQuestObjective(objective: Partial<GameQuestObjective>): GameQuestObjective {
+  return {
+    id: normalizeOptionalId(objective.id) ?? makeId("objective"),
+    text: normalizeRuleText(objective.text, ""),
+    optional: Boolean(objective.optional),
+    hidden: Boolean(objective.hidden),
+    completeConditions: normalizeGameStateConditions(objective.completeConditions)
+  };
+}
+
+export function coerceGameStateValue(value: unknown, kind: GameStateVariableKind): GameStateValue {
+  if (kind === "flag" || kind === "inventory") {
+    if (typeof value === "string") {
+      return value === "true" || value === "1" || value.toLowerCase() === "yes";
+    }
+
+    return Boolean(value);
+  }
+
+  if (kind === "number" || kind === "faction_reputation") {
+    const numericValue = Number(value);
+
+    return Number.isFinite(numericValue) ? numericValue : 0;
+  }
+
+  return typeof value === "string" ? value : String(value ?? "");
+}
+
+function defaultGameStateValue(kind: GameStateVariableKind): GameStateValue {
+  if (kind === "number" || kind === "faction_reputation") {
+    return 0;
+  }
+
+  if (kind === "enum") {
+    return "Unset";
+  }
+
+  if (kind === "relationship") {
+    return "neutral";
+  }
+
+  return false;
+}
+
+function normalizeGameStateLooseValue(value: unknown): GameStateValue {
+  if (typeof value === "boolean" || typeof value === "number" || typeof value === "string") {
+    return value;
+  }
+
+  return "";
+}
+
+function evaluateGameStateCondition(
+  condition: GameStateCondition,
+  state: Record<string, GameStateValue>,
+  variables: Map<string, GameStateVariableDefinition>
+): boolean {
+  const variable = variables.get(condition.variableId);
+
+  if (!variable) {
+    return false;
+  }
+
+  const currentValue = state[variable.id] ?? variable.defaultValue;
+  const expectedValue = coerceGameStateValue(condition.value, variable.kind);
+
+  if (condition.operator === "has") {
+    return Boolean(currentValue);
+  }
+
+  if (condition.operator === "not_has") {
+    return !currentValue;
+  }
+
+  if (condition.operator === "greater_than") {
+    return Number(currentValue) > Number(expectedValue);
+  }
+
+  if (condition.operator === "less_than") {
+    return Number(currentValue) < Number(expectedValue);
+  }
+
+  if (condition.operator === "not_equals") {
+    return currentValue !== expectedValue;
+  }
+
+  return currentValue === expectedValue;
+}
+
+function gameStateVariableMap(project: StoryProject): Map<string, GameStateVariableDefinition> {
+  return new Map(normalizeGameStoryProjectMetadata(project.gameStory).stateVariables.map((variable) => [variable.id, variable]));
+}
+
+function outgoingGameStoryTargetIds(project: StoryProject, nodeId: string): string[] {
+  const branchTargets = project.relationships
+    .filter((relationship) => relationship.sourceId === nodeId && relationship.type === "branches_to")
+    .map((relationship) => relationship.targetId);
+  const responseTargets =
+    project.entities[nodeId]?.gameStory?.dialogue?.responses
+      .map((response) => response.targetNodeId)
+      .filter((targetId): targetId is string => Boolean(targetId)) ?? [];
+
+  return [...branchTargets, ...responseTargets].filter((targetId) => Boolean(project.entities[targetId]));
+}
+
+function incomingGameStorySourceIds(project: StoryProject, nodeId: string): string[] {
+  const branchSources = project.relationships
+    .filter((relationship) => relationship.targetId === nodeId && relationship.type === "branches_to")
+    .map((relationship) => relationship.sourceId);
+  const responseSources = Object.values(project.entities)
+    .filter((entity) => entity.gameStory?.dialogue?.responses.some((response) => response.targetNodeId === nodeId))
+    .map((entity) => entity.id);
+
+  return [...branchSources, ...responseSources].filter((sourceId) => Boolean(project.entities[sourceId]));
+}
+
+function addInvalidStateReferenceIssues(
+  issues: GameContinuityIssue[],
+  project: StoryProject,
+  variableIds: Set<string>,
+  idPrefix: string,
+  details: string,
+  conditions: GameStateCondition[],
+  effects: GameStateEffect[],
+  entityId?: string,
+  relationshipId?: string
+) {
+  const validation = normalizeGameStoryProjectMetadata(project.gameStory).validation;
+
+  if (!validation.checkInvalidStateReferences) {
+    return;
+  }
+
+  const missingCondition = conditions.find((condition) => condition.variableId && !variableIds.has(condition.variableId));
+  const missingEffect = effects.find((effect) => effect.variableId && !variableIds.has(effect.variableId));
+
+  if (!missingCondition && !missingEffect) {
+    return;
+  }
+
+  issues.push({
+    id: `invalid-state-${idPrefix}`,
+    severity: "error",
+    title: "Invalid state reference",
+    details,
+    entityId,
+    relationshipId
+  });
+}
+
+function addImpossibleConditionIssues(
+  issues: GameContinuityIssue[],
+  project: StoryProject,
+  idPrefix: string,
+  conditions: GameStateCondition[],
+  entityId?: string,
+  relationshipId?: string
+) {
+  const reason = impossibleConditionReason(project, conditions);
+
+  if (!reason) {
+    return;
+  }
+
+  issues.push({
+    id: `impossible-${idPrefix}`,
+    severity: "warning",
+    title: "Impossible condition",
+    details: reason,
+    entityId,
+    relationshipId
+  });
+}
+
+function impossibleConditionReason(project: StoryProject, conditions: GameStateCondition[]): string {
+  const variables = gameStateVariableMap(project);
+  const equalsByVariable = new Map<string, GameStateValue>();
+  const greaterThanByVariable = new Map<string, number>();
+  const lessThanByVariable = new Map<string, number>();
+
+  for (const condition of conditions) {
+    const variable = variables.get(condition.variableId);
+
+    if (!variable) {
+      continue;
+    }
+
+    const value = coerceGameStateValue(condition.value, variable.kind);
+
+    if (condition.operator === "equals") {
+      const existing = equalsByVariable.get(variable.id);
+
+      if (existing !== undefined && existing !== value) {
+        return `${variable.label} is required to equal two different values.`;
+      }
+
+      equalsByVariable.set(variable.id, value);
+    }
+
+    if (condition.operator === "not_equals" && equalsByVariable.get(variable.id) === value) {
+      return `${variable.label} is both required and forbidden.`;
+    }
+
+    if (condition.operator === "greater_than") {
+      greaterThanByVariable.set(variable.id, Math.max(greaterThanByVariable.get(variable.id) ?? -Infinity, Number(value)));
+    }
+
+    if (condition.operator === "less_than") {
+      lessThanByVariable.set(variable.id, Math.min(lessThanByVariable.get(variable.id) ?? Infinity, Number(value)));
+    }
+  }
+
+  for (const [variableId, greaterThan] of greaterThanByVariable) {
+    const lessThan = lessThanByVariable.get(variableId);
+
+    if (lessThan !== undefined && greaterThan >= lessThan) {
+      const label = variables.get(variableId)?.label ?? variableId;
+
+      return `${label} has incompatible numeric bounds.`;
+    }
+  }
+
+  return "";
+}
+
+function addDialogueIssues(
+  issues: GameContinuityIssue[],
+  project: StoryProject,
+  variableIds: Set<string>,
+  node: StoryEntity,
+  dialogue: GameDialogueMetadata
+) {
+  const validation = normalizeGameStoryProjectMetadata(project.gameStory).validation;
+
+  for (const line of dialogue.lines) {
+    if (line.speakerId && !project.entities[line.speakerId]) {
+      issues.push({
+        id: `missing-speaker-${node.id}-${line.id}`,
+        severity: "warning",
+        title: "Missing speaker",
+        details: `${node.title} references a missing dialogue speaker.`,
+        entityId: node.id
+      });
+    }
+  }
+
+  for (const response of dialogue.responses) {
+    if (validation.checkDialogueDeadEnds && !response.targetNodeId && !response.effects.length) {
+      issues.push({
+        id: `dialogue-dead-response-${node.id}-${response.id}`,
+        severity: "warning",
+        title: "Dialogue choice has no outcome",
+        details: `${node.title} has a player response without a branch target or state effect.`,
+        entityId: node.id
+      });
+    }
+
+    if (response.targetNodeId && !project.entities[response.targetNodeId]) {
+      issues.push({
+        id: `dialogue-missing-target-${node.id}-${response.id}`,
+        severity: "error",
+        title: "Dialogue choice target is missing",
+        details: `${node.title} has a response pointing to a missing node.`,
+        entityId: node.id
+      });
+    }
+
+    addInvalidStateReferenceIssues(
+      issues,
+      project,
+      variableIds,
+      `dialogue-response-${node.id}-${response.id}`,
+      "Dialogue response condition or effect references a missing state variable.",
+      response.conditions,
+      response.effects,
+      node.id
+    );
+    addImpossibleConditionIssues(issues, project, `dialogue-response-${node.id}-${response.id}`, response.conditions, node.id);
+  }
+
+  for (const variant of dialogue.variants) {
+    addInvalidStateReferenceIssues(
+      issues,
+      project,
+      variableIds,
+      `dialogue-variant-${node.id}-${variant.id}`,
+      "Dialogue variant references a missing state variable.",
+      variant.conditions,
+      [],
+      node.id
+    );
+    addImpossibleConditionIssues(issues, project, `dialogue-variant-${node.id}-${variant.id}`, variant.conditions, node.id);
+  }
+}
+
+function addQuestIssues(
+  issues: GameContinuityIssue[],
+  project: StoryProject,
+  variableIds: Set<string>,
+  node: StoryEntity,
+  quest: GameQuestMetadata
+) {
+  if (quest.giverId && !project.entities[quest.giverId]) {
+    issues.push({
+      id: `missing-quest-giver-${node.id}`,
+      severity: "warning",
+      title: "Missing quest giver",
+      details: `${node.title} references a missing quest giver.`,
+      entityId: node.id
+    });
+  }
+
+  if (!quest.objectives.length) {
+    issues.push({
+      id: `quest-no-objectives-${node.id}`,
+      severity: "warning",
+      title: "Quest has no objectives",
+      details: `${node.title} needs at least one objective.`,
+      entityId: node.id
+    });
+  }
+
+  addInvalidStateReferenceIssues(
+    issues,
+    project,
+    variableIds,
+    `quest-success-${node.id}`,
+    "Quest success or failure condition references a missing state variable.",
+    [...quest.successConditions, ...quest.failureConditions],
+    [],
+    node.id
+  );
+  addImpossibleConditionIssues(issues, project, `quest-success-${node.id}`, quest.successConditions, node.id);
+  addImpossibleConditionIssues(issues, project, `quest-failure-${node.id}`, quest.failureConditions, node.id);
+
+  for (const objective of quest.objectives) {
+    addInvalidStateReferenceIssues(
+      issues,
+      project,
+      variableIds,
+      `quest-objective-${node.id}-${objective.id}`,
+      "Quest objective condition references a missing state variable.",
+      objective.completeConditions,
+      [],
+      node.id
+    );
+    addImpossibleConditionIssues(
+      issues,
+      project,
+      `quest-objective-${node.id}-${objective.id}`,
+      objective.completeConditions,
+      node.id
+    );
+  }
+}
+
+function isGameStateVariableKind(value: unknown): value is GameStateVariableKind {
+  return (
+    value === "flag" ||
+    value === "number" ||
+    value === "enum" ||
+    value === "relationship" ||
+    value === "faction_reputation" ||
+    value === "inventory"
+  );
+}
+
+function isGameStateOperator(value: unknown): value is GameStateCondition["operator"] {
+  return (
+    value === "equals" ||
+    value === "not_equals" ||
+    value === "greater_than" ||
+    value === "less_than" ||
+    value === "has" ||
+    value === "not_has"
+  );
+}
+
+function isGameStateEffectOperation(value: unknown): value is GameStateEffect["operation"] {
+  return value === "set" || value === "increment" || value === "decrement" || value === "add" || value === "remove";
+}
+
+function isGameStoryRole(value: unknown): value is GameStoryNodeRole {
+  return value === "scene" || value === "quest" || value === "dialogue" || value === "ending";
+}
+
+function isGameStoryStatus(value: unknown): value is GameStoryEntityMetadata["status"] {
+  return value === "draft" || value === "ready" || value === "deprecated";
+}
+
+function isGameQuestType(value: unknown): value is GameQuestMetadata["questType"] {
+  return value === "main" || value === "side" || value === "companion" || value === "faction" || value === "hidden";
+}
+
+function normalizeOptionalId(value: string | undefined): string | undefined {
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+function normalizeStringArray(values: string[] | undefined): string[] {
+  return (values ?? []).map((value) => value.trim()).filter(Boolean);
 }
 
 function mergeTypeCatalog<T extends { id: string; builtIn: boolean }>(defaults: T[], incoming: T[]): T[] {

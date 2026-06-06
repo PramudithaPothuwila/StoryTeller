@@ -10,7 +10,16 @@ import {
   StoryRelationship,
   TimelineEffectDraft
 } from "../types";
-import { ensureEventTimeline, findItemType, findLinkType, linkLabel } from "../data/story";
+import {
+  ensureEventTimeline,
+  findItemType,
+  findLinkType,
+  isGameStoryItemType,
+  isGameStoryLinkType,
+  linkLabel,
+  normalizeGameStoryRelationshipMetadata
+} from "../data/story";
+import { ConditionEffectEditor, GameStoryFields } from "./GameStoryFields";
 import { WorldRuleFields } from "./WorldRuleFields";
 
 interface DetailInspectorProps {
@@ -99,6 +108,15 @@ export function DetailInspector({
 
         {selectedEntity.type === BUILT_IN_WORLD_RULE_TYPE_ID ? (
           <WorldRuleFields
+            entity={selectedEntity}
+            idPrefix={`inspector-${selectedEntity.id}`}
+            onEntityChange={(patch) => onEntityChange(selectedEntity.id, patch)}
+          />
+        ) : null}
+
+        {project.projectMode === "game_story" && (isGameStoryItemType(selectedEntity.type) || selectedEntity.gameStory) ? (
+          <GameStoryFields
+            project={project}
             entity={selectedEntity}
             idPrefix={`inspector-${selectedEntity.id}`}
             onEntityChange={(patch) => onEntityChange(selectedEntity.id, patch)}
@@ -470,7 +488,75 @@ function RelationshipInspector({
           onChange={(event) => onRelationshipChange(relationship.id, { notes: event.target.value })}
         />
       </label>
+
+      {project.projectMode === "game_story" && (isGameStoryLinkType(relationship.type) || relationship.gameStory) ? (
+        <GameRelationshipFields
+          project={project}
+          relationship={relationship}
+          onRelationshipChange={onRelationshipChange}
+        />
+      ) : null}
     </aside>
+  );
+}
+
+interface GameRelationshipFieldsProps {
+  project: StoryProject;
+  relationship: StoryRelationship;
+  onRelationshipChange: (id: string, patch: Partial<StoryRelationship>) => void;
+}
+
+function GameRelationshipFields({ project, relationship, onRelationshipChange }: GameRelationshipFieldsProps) {
+  const metadata = normalizeGameStoryRelationshipMetadata(relationship.gameStory);
+
+  function handleMetadataChange(patch: Partial<typeof metadata>) {
+    onRelationshipChange(relationship.id, {
+      gameStory: normalizeGameStoryRelationshipMetadata({
+        ...metadata,
+        ...patch
+      })
+    });
+  }
+
+  return (
+    <section className="game-story-fields">
+      <h2>Branch Fields</h2>
+      <label className="field-stack">
+        Choice Text
+        <input
+          value={metadata.choiceText}
+          onChange={(event) => handleMetadataChange({ choiceText: event.target.value })}
+        />
+      </label>
+      <label className="field-stack">
+        Priority
+        <input
+          type="number"
+          value={metadata.priority}
+          onChange={(event) => handleMetadataChange({ priority: Number(event.target.value) || 0 })}
+        />
+      </label>
+      <ConditionEffectEditor
+        project={project}
+        title="Branch Requirements"
+        conditions={metadata.requirements}
+        onConditionsChange={(requirements) => handleMetadataChange({ requirements })}
+      />
+      <ConditionEffectEditor
+        project={project}
+        title="Branch Effects"
+        effects={metadata.effects}
+        onEffectsChange={(effects) => handleMetadataChange({ effects })}
+      />
+      <label className="field-stack">
+        Consequence Notes
+        <textarea
+          rows={3}
+          value={metadata.consequenceNotes}
+          onChange={(event) => handleMetadataChange({ consequenceNotes: event.target.value })}
+        />
+      </label>
+    </section>
   );
 }
 

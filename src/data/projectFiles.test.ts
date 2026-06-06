@@ -2,16 +2,21 @@ import { describe, expect, it } from "vitest";
 import { BUILT_IN_WORLD_RULE_TYPE_ID, StoryEntity } from "../types";
 import {
   applyTimelineEffectToProject,
+  addGameStateVariableToProject,
   createBlankProject,
   createCustomItemType,
   createCustomLinkType,
+  createGameStateCondition,
   createStoryRelationship,
   createStoryEntity,
   deleteEntityFromProject,
   findItemType,
   isRelationshipActiveAt,
   linkDirection,
-  resolveRelationshipAt
+  resolveRelationshipAt,
+  setProjectModeInProject,
+  updateGameStateVariableInProject,
+  updateGameStoryProjectMetadata
 } from "./story";
 import {
   buildProjectFiles,
@@ -32,7 +37,8 @@ describe("project file model", () => {
     expect(files["storyteller.project.json"]).toBeTruthy();
     expect(files["graph/relationships.json"]).toBeTruthy();
     expect(Object.keys(files).some((path) => path.startsWith("entities/character/"))).toBe(true);
-    expect(JSON.parse(files["storyteller.project.json"]).schemaVersion).toBe(2);
+    expect(JSON.parse(files["storyteller.project.json"]).schemaVersion).toBe(3);
+    expect(JSON.parse(files["storyteller.project.json"]).projectMode).toBe("story");
     expect(JSON.parse(files["storyteller.project.json"]).timelineLaneNames).toEqual(project.timelineLaneNames);
     expect(Object.keys(restoredProject.entities)).toHaveLength(Object.keys(project.entities).length);
     expect(restoredProject.relationships).toHaveLength(project.relationships.length);
@@ -40,7 +46,7 @@ describe("project file model", () => {
     expect(restoredProject.timelineLaneNames).toEqual(project.timelineLaneNames);
   });
 
-  it("migrates v1 project files to schema v2 with built-in type catalogs", () => {
+  it("migrates v1 project files to schema v3 with built-in type catalogs", () => {
     const entity: StoryEntity = {
       id: "character-1",
       type: "character",
@@ -78,7 +84,8 @@ describe("project file model", () => {
 
     const project = projectFromFiles(files);
 
-    expect(project.schemaVersion).toBe(2);
+    expect(project.schemaVersion).toBe(3);
+    expect(project.projectMode).toBe("story");
     expect(project.itemTypes.some((type) => type.id === "character")).toBe(true);
     expect(project.linkTypes.some((type) => type.id === "relates_to")).toBe(true);
     expect(project.timelineLaneNames).toEqual(["Track 1"]);
@@ -191,6 +198,74 @@ describe("project file model", () => {
     expect(files[`entities/${BUILT_IN_WORLD_RULE_TYPE_ID}/${rule.id}.md`]).toContain('"worldRule"');
     expect(restoredFromFiles.entities[rule.id].worldRule).toEqual(rule.worldRule);
     expect(restoredFromBundle.entities[rule.id].worldRule).toEqual(rule.worldRule);
+  });
+
+  it("round-trips schema v3 game story metadata through folder files and bundles", async () => {
+    let project = setProjectModeInProject(createBlankProject("Branching Game"), "game_story");
+    project = addGameStateVariableToProject(project, "flag");
+    const variable = project.gameStory!.stateVariables[0];
+    project = updateGameStateVariableInProject(project, variable.id, {
+      id: "met-ally",
+      label: "Met Ally",
+      defaultValue: false
+    });
+    const start = createStoryEntity("dialogue", project.itemTypes, "Meet the Ally");
+    const ending = createStoryEntity("ending", project.itemTypes, "Alliance Ending");
+    start.gameStory!.dialogue!.responses = [
+      {
+        id: "response-accept",
+        text: "Accept the offer",
+        targetNodeId: ending.id,
+        conditions: [{ ...createGameStateCondition("met-ally"), value: false }],
+        effects: [],
+        notes: "Locks the alliance route."
+      }
+    ];
+    const relationship = {
+      ...createStoryRelationship(project, start.id, ending.id, "branches_to"),
+      gameStory: {
+        choiceText: "Accept the offer",
+        requirements: [],
+        effects: [],
+        consequenceNotes: "The ally joins the finale.",
+        priority: 1
+      }
+    };
+    project = updateGameStoryProjectMetadata(
+      {
+        ...project,
+        entities: {
+          [start.id]: start,
+          [ending.id]: ending
+        },
+        relationships: [relationship],
+        layout: {
+          [start.id]: { x: 10, y: 20 },
+          [ending.id]: { x: 300, y: 20 }
+        }
+      },
+      { startNodeId: start.id }
+    );
+
+    const files = buildProjectFiles(project);
+    const restoredFromFiles = projectFromFiles(files);
+    const restoredFromBundle = await projectFromBundleFile({
+      text: async () =>
+        JSON.stringify({
+          kind: "storyteller.project.bundle",
+          exportedAt: "2026-01-01T00:00:00.000Z",
+          files
+        })
+    } as File);
+    const manifest = JSON.parse(files["storyteller.project.json"]);
+
+    expect(manifest.schemaVersion).toBe(3);
+    expect(manifest.projectMode).toBe("game_story");
+    expect(manifest.gameStory.startNodeId).toBe(start.id);
+    expect(restoredFromFiles.gameStory?.stateVariables[0].id).toBe("met-ally");
+    expect(restoredFromFiles.entities[start.id].gameStory?.dialogue?.responses[0].targetNodeId).toBe(ending.id);
+    expect(restoredFromFiles.relationships[0].gameStory?.choiceText).toBe("Accept the offer");
+    expect(restoredFromBundle.projectMode).toBe("game_story");
   });
 
   it("removes stale entity markdown files when saving a folder project", async () => {

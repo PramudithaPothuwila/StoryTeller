@@ -14,10 +14,11 @@ import {
   ReactFlow,
   ReactFlowProvider
 } from "@xyflow/react";
-import { ScrollText } from "lucide-react";
+import { BookOpen, Gamepad2, ScrollText } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { DetailInspector } from "./components/DetailInspector";
 import { EntityNode, EntityNodeData } from "./components/EntityNode";
+import { GameStoryPanel, type GameToolTab } from "./components/GameStoryPanel";
 import { RulebookSidebar } from "./components/RulebookSidebar";
 import { Sidebar } from "./components/Sidebar";
 import { TimelinePanel } from "./components/TimelinePanel";
@@ -38,15 +39,22 @@ import {
   deleteRelationshipFromProject,
   findItemType,
   findLinkType,
+  getGameContinuityIssues,
+  getGameStoryNodes,
   getTimelineEvents,
   isRelationshipActiveAt,
+  isGameStoryLinkType,
   moveTimelineEventInProject,
   nextEntityPosition,
   nextTimelineOrder,
+  normalizeGameStoryEntityMetadata,
+  normalizeGameStoryRelationshipMetadata,
   renameTimelineLaneInProject,
   resolveRelationshipAt,
   setProjectLayout,
+  setProjectModeInProject,
   touchProject,
+  updateGameStoryProjectMetadata,
   updateEntityInProject,
   updateRelationshipInProject
 } from "./data/story";
@@ -66,6 +74,7 @@ import {
   LinkTypeDefinition,
   LinkTypeId,
   Point,
+  ProjectMode,
   Selection,
   StoryEntity,
   StoryProject,
@@ -88,6 +97,7 @@ interface EntityGraphFocus {
 }
 
 type GraphFocusDepth = 1 | 2 | 3 | 4 | "all";
+type GraphView = "world" | "story_flow";
 
 const nodeTypes = {
   storyEntity: EntityNode
@@ -118,13 +128,13 @@ function StoryWorkspace() {
   const [graphFocusDepth, setGraphFocusDepth] = useState<GraphFocusDepth>(() => readStoredGraphFocusDepth());
   const graphFocusDepthRef = useRef(graphFocusDepth);
   const initialGraphFocus = useMemo(
-    () => createEntityGraphFocus(initialProject, initialSelection, graphFocusDepth),
+    () => createEntityGraphFocus(initialProject, initialSelection, graphFocusDepth, "world"),
     [graphFocusDepth, initialProject, initialSelection]
   );
   const [project, setProject] = useState<StoryProject>(() => initialProject);
   const [selection, setSelection] = useState<Selection | null>(() => initialSelection);
   const [flowNodes, setFlowNodes] = useState<Node<EntityNodeData, "storyEntity">[]>(() =>
-    projectNodes(initialProject, initialSelection, initialGraphFocus)
+    projectNodes(initialProject, initialSelection, initialGraphFocus, "world")
   );
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("Ready");
@@ -135,10 +145,17 @@ function StoryWorkspace() {
   const [rulebookOpen, setRulebookOpen] = useState(false);
   const [selectedTimelineEventId, setSelectedTimelineEventId] = useState<string | null>(null);
   const [timelineCollapsed, setTimelineCollapsed] = useState(false);
+  const [graphView, setGraphView] = useState<GraphView>("world");
+  const [activeGameTool, setActiveGameTool] = useState<GameToolTab>("state");
   const backupInputRef = useRef<HTMLInputElement>(null);
   const graphFocus = useMemo(
-    () => createEntityGraphFocus(project, selection, graphFocusDepth),
-    [graphFocusDepth, project, selection]
+    () => createEntityGraphFocus(project, selection, graphFocusDepth, graphView),
+    [graphFocusDepth, graphView, project, selection]
+  );
+  const graphRelationships = useMemo(() => graphViewRelationships(project, graphView), [graphView, project]);
+  const continuityIssueCount = useMemo(
+    () => (project.projectMode === "game_story" ? getGameContinuityIssues(project).length : 0),
+    [project]
   );
 
   useEffect(() => {
@@ -157,10 +174,12 @@ function StoryWorkspace() {
         }
 
         const nextSelection = firstProjectSelection(starterProject);
-        const nextGraphFocus = createEntityGraphFocus(starterProject, nextSelection, graphFocusDepthRef.current);
+        const nextGraphView = starterProject.projectMode === "game_story" ? "story_flow" : "world";
+        const nextGraphFocus = createEntityGraphFocus(starterProject, nextSelection, graphFocusDepthRef.current, nextGraphView);
         setProject(starterProject);
         setSelection(nextSelection);
-        setFlowNodes(projectNodes(starterProject, nextSelection, nextGraphFocus));
+        setGraphView(nextGraphView);
+        setFlowNodes(projectNodes(starterProject, nextSelection, nextGraphFocus, nextGraphView));
         setSelectedTimelineEventId(null);
         setIsDirty(false);
         setStatus("Starter project loaded");
@@ -172,7 +191,8 @@ function StoryWorkspace() {
         const blankProject = createBlankProject();
         setProject(blankProject);
         setSelection(null);
-        setFlowNodes(projectNodes(blankProject, null, null));
+        setGraphView("world");
+        setFlowNodes(projectNodes(blankProject, null, null, "world"));
         setStatus((error as Error).message);
       }
     }
@@ -185,12 +205,12 @@ function StoryWorkspace() {
   }, []);
 
   useEffect(() => {
-    setFlowNodes((currentNodes) => syncProjectNodes(currentNodes, project, selection, graphFocus));
-  }, [graphFocus, project, selection]);
+    setFlowNodes((currentNodes) => syncProjectNodes(currentNodes, project, selection, graphFocus, graphView));
+  }, [graphFocus, graphView, project, selection]);
 
   const edges = useMemo<Edge[]>(
     () =>
-      project.relationships.map((relationship) => {
+      graphRelationships.map((relationship) => {
         const resolvedRelationship = resolveRelationshipAt(project, relationship, selectedTimelineEventId);
         const linkType = findLinkType(project, resolvedRelationship.type);
         const active = isRelationshipActiveAt(project, relationship, selectedTimelineEventId);
@@ -199,12 +219,14 @@ function StoryWorkspace() {
         const fadedByFocus = Boolean(graphFocus && !connectedToFocus);
         const edgeOpacity = relationshipOpacity(active, fadedByFocus, connectedToFocus);
         const markerColor = fadedByFocus ? "#9aa8a4" : selected ? "#be123c" : linkType.color;
+        const gameBranch = graphView === "story_flow" && resolvedRelationship.gameStory;
+        const gameRelationship = gameBranch ? normalizeGameStoryRelationshipMetadata(gameBranch) : null;
 
         return {
           id: relationship.id,
           source: relationship.sourceId,
           target: relationship.targetId,
-          label: resolvedRelationship.label || linkType.label,
+          label: gameRelationship?.choiceText || resolvedRelationship.label || linkType.label,
           type: "default",
           markerEnd:
             linkType.direction === "directed"
@@ -219,7 +241,7 @@ function StoryWorkspace() {
             stroke: markerColor,
             strokeWidth: selected || connectedToFocus ? 3 : 2,
             opacity: edgeOpacity,
-            strokeDasharray: active ? undefined : "7 7"
+            strokeDasharray: active ? (gameRelationship?.requirements.length ? "4 4" : undefined) : "7 7"
           },
           labelStyle: {
             fill: fadedByFocus ? "#697a75" : "#17201f",
@@ -233,13 +255,15 @@ function StoryWorkspace() {
           }
         };
       }),
-    [graphFocus, project, selectedTimelineEventId, selection]
+    [graphFocus, graphRelationships, graphView, project, selectedTimelineEventId, selection]
   );
   const inspectorVisible = hasVisibleInspector(project, selection);
+  const gameToolsVisible = project.projectMode === "game_story";
   const workspaceClassName = [
     "workspace",
     inspectorVisible ? "has-inspector" : "",
-    rulebookOpen ? "has-rulebook" : ""
+    rulebookOpen ? "has-rulebook" : "",
+    gameToolsVisible ? "has-game-tools" : ""
   ]
     .filter(Boolean)
     .join(" ");
@@ -250,6 +274,34 @@ function StoryWorkspace() {
     setStatus("Unsaved changes");
   }, []);
 
+  const handleProjectModeChange = useCallback(
+    (projectMode: ProjectMode) => {
+      if (project.projectMode === projectMode) {
+        return;
+      }
+
+      const nextProject = setProjectModeInProject(project, projectMode);
+      const nextGraphView = projectMode === "game_story" ? "story_flow" : "world";
+      markProjectChanged(nextProject);
+      setGraphView(nextGraphView);
+
+      if (projectMode === "game_story") {
+        setDefaultRelationshipType("branches_to");
+      } else {
+        setDefaultRelationshipType("relates_to");
+      }
+    },
+    [markProjectChanged, project]
+  );
+
+  const handleGraphViewChange = useCallback((nextGraphView: GraphView) => {
+    setGraphView(nextGraphView);
+
+    if (nextGraphView === "story_flow") {
+      setDefaultRelationshipType("branches_to");
+    }
+  }, []);
+
   const handleCreateEntity = useCallback(
     (type: ItemTypeId) => {
       const entity = createStoryEntity(type, project.itemTypes);
@@ -258,7 +310,12 @@ function StoryWorkspace() {
         entity.timeline = { order: nextTimelineOrder(project), track: 0, effects: [] };
       }
 
-      const nextProject = addEntityToProject(project, entity, nextEntityPosition(project));
+      let nextProject = addEntityToProject(project, entity, nextEntityPosition(project));
+
+      if (project.projectMode === "game_story" && entity.gameStory && !project.gameStory?.startNodeId) {
+        nextProject = updateGameStoryProjectMetadata(nextProject, { startNodeId: entity.id });
+      }
+
       markProjectChanged(nextProject);
       setSelection({ kind: "entity", id: entity.id });
     },
@@ -312,7 +369,8 @@ function StoryWorkspace() {
         return;
       }
 
-      const relationship = createStoryRelationship(project, connection.source, connection.target, defaultRelationshipType);
+      const relationshipType = graphView === "story_flow" && project.projectMode === "game_story" ? "branches_to" : defaultRelationshipType;
+      const relationship = createStoryRelationship(project, connection.source, connection.target, relationshipType);
       const nextEdges = addEdge({ ...connection, id: relationship.id }, edges);
 
       if (nextEdges.length === edges.length) {
@@ -325,7 +383,7 @@ function StoryWorkspace() {
       });
       setSelection({ kind: "relationship", id: relationship.id });
     },
-    [defaultRelationshipType, edges, markProjectChanged, project]
+    [defaultRelationshipType, edges, graphView, markProjectChanged, project]
   );
 
   const handleEntityChange = useCallback(
@@ -391,7 +449,8 @@ function StoryWorkspace() {
       setProject(nextProject);
       setFolderHandle(handle);
       setSelection(null);
-      setFlowNodes(projectNodes(nextProject, null, null));
+      setGraphView("world");
+      setFlowNodes(projectNodes(nextProject, null, null, "world"));
       setSelectedTimelineEventId(null);
       setIsDirty(false);
       setStatus("Project saved");
@@ -620,11 +679,13 @@ function StoryWorkspace() {
 
       const loadedProject = await readProjectFromDirectory(handle);
       const nextSelection = firstProjectSelection(loadedProject);
-      const nextGraphFocus = createEntityGraphFocus(loadedProject, nextSelection, graphFocusDepthRef.current);
+      const nextGraphView = loadedProject.projectMode === "game_story" ? "story_flow" : "world";
+      const nextGraphFocus = createEntityGraphFocus(loadedProject, nextSelection, graphFocusDepthRef.current, nextGraphView);
       setProject(loadedProject);
       setFolderHandle(handle);
       setSelection(nextSelection);
-      setFlowNodes(projectNodes(loadedProject, nextSelection, nextGraphFocus));
+      setGraphView(nextGraphView);
+      setFlowNodes(projectNodes(loadedProject, nextSelection, nextGraphFocus, nextGraphView));
       setSelectedTimelineEventId(null);
       setIsDirty(false);
       setStatus("Project opened");
@@ -646,11 +707,13 @@ function StoryWorkspace() {
     try {
       const loadedProject = await projectFromBundleFile(file);
       const nextSelection = firstProjectSelection(loadedProject);
-      const nextGraphFocus = createEntityGraphFocus(loadedProject, nextSelection, graphFocusDepthRef.current);
+      const nextGraphView = loadedProject.projectMode === "game_story" ? "story_flow" : "world";
+      const nextGraphFocus = createEntityGraphFocus(loadedProject, nextSelection, graphFocusDepthRef.current, nextGraphView);
       setProject(loadedProject);
       setFolderHandle(null);
       setSelection(nextSelection);
-      setFlowNodes(projectNodes(loadedProject, nextSelection, nextGraphFocus));
+      setGraphView(nextGraphView);
+      setFlowNodes(projectNodes(loadedProject, nextSelection, nextGraphFocus, nextGraphView));
       setSelectedTimelineEventId(null);
       setIsDirty(false);
       setStatus("Project opened from backup");
@@ -678,11 +741,34 @@ function StoryWorkspace() {
           <strong>{project.title}</strong>
           <span>{Object.keys(project.entities).length} items</span>
           <span>{project.relationships.length} links</span>
+          {project.projectMode === "game_story" ? <span>{continuityIssueCount} issues</span> : null}
         </div>
-        <button type="button" onClick={() => setRulebookOpen(true)}>
-          <ScrollText aria-hidden="true" />
-          Rulebook
-        </button>
+        <div className="topbar-actions">
+          <div className="mode-toggle" role="group" aria-label="Project mode">
+            <button
+              type="button"
+              className={project.projectMode === "story" ? "is-active" : ""}
+              aria-pressed={project.projectMode === "story"}
+              onClick={() => handleProjectModeChange("story")}
+            >
+              <BookOpen aria-hidden="true" />
+              Story
+            </button>
+            <button
+              type="button"
+              className={project.projectMode === "game_story" ? "is-active" : ""}
+              aria-pressed={project.projectMode === "game_story"}
+              onClick={() => handleProjectModeChange("game_story")}
+            >
+              <Gamepad2 aria-hidden="true" />
+              Game Story
+            </button>
+          </div>
+          <button type="button" onClick={() => setRulebookOpen(true)}>
+            <ScrollText aria-hidden="true" />
+            Rulebook
+          </button>
+        </div>
       </header>
 
       <main className={workspaceClassName}>
@@ -708,6 +794,24 @@ function StoryWorkspace() {
 
         <section className="graph-column">
           <section className="graph-shell" aria-label="Story graph">
+            {project.projectMode === "game_story" ? (
+              <div className="graph-view-control" role="group" aria-label="Graph view">
+                <button
+                  type="button"
+                  className={graphView === "world" ? "is-active" : ""}
+                  onClick={() => handleGraphViewChange("world")}
+                >
+                  World
+                </button>
+                <button
+                  type="button"
+                  className={graphView === "story_flow" ? "is-active" : ""}
+                  onClick={() => handleGraphViewChange("story_flow")}
+                >
+                  Story Flow
+                </button>
+              </div>
+            ) : null}
             <div className="graph-focus-control" role="group" aria-label="Graph focus depth">
               {graphFocusDepthOptions.map((option) => (
                 <button
@@ -770,6 +874,17 @@ function StoryWorkspace() {
           />
         ) : null}
 
+        {gameToolsVisible ? (
+          <GameStoryPanel
+            project={project}
+            activeTab={activeGameTool}
+            onActiveTabChange={setActiveGameTool}
+            onProjectChange={markProjectChanged}
+            onSelectEntity={(id) => setSelection({ kind: "entity", id })}
+            onSelectRelationship={(id) => setSelection({ kind: "relationship", id })}
+          />
+        ) : null}
+
         {rulebookOpen ? (
           <RulebookSidebar
             project={project}
@@ -820,21 +935,30 @@ function hasVisibleInspector(project: StoryProject, selection: Selection | null)
 function createEntityGraphFocus(
   project: StoryProject,
   selection: Selection | null,
-  depth: GraphFocusDepth
+  depth: GraphFocusDepth,
+  graphView: GraphView
 ): EntityGraphFocus | null {
-  if (depth === "all" || selection?.kind !== "entity" || !project.entities[selection.id]) {
+  const visibleEntityIds = graphViewEntityIds(project, graphView);
+
+  if (
+    depth === "all" ||
+    selection?.kind !== "entity" ||
+    !project.entities[selection.id] ||
+    !visibleEntityIds.has(selection.id)
+  ) {
     return null;
   }
 
   const connectedEntityIds = new Set([selection.id]);
   const relationshipIds = new Set<string>();
   let frontier = [selection.id];
+  const relationships = graphViewRelationships(project, graphView);
 
   for (let currentDepth = 0; currentDepth < depth && frontier.length; currentDepth += 1) {
     const frontierIds = new Set(frontier);
     const nextFrontier: string[] = [];
 
-    for (const relationship of project.relationships) {
+    for (const relationship of relationships) {
       const sourceInFrontier = frontierIds.has(relationship.sourceId);
       const targetInFrontier = frontierIds.has(relationship.targetId);
 
@@ -847,7 +971,7 @@ function createEntityGraphFocus(
       const relatedEntityIds = [relationship.sourceId, relationship.targetId];
 
       for (const entityId of relatedEntityIds) {
-        if (!project.entities[entityId] || connectedEntityIds.has(entityId)) {
+        if (!project.entities[entityId] || !visibleEntityIds.has(entityId) || connectedEntityIds.has(entityId)) {
           continue;
         }
 
@@ -868,9 +992,14 @@ function createEntityGraphFocus(
 function projectNodes(
   project: StoryProject,
   selection: Selection | null,
-  graphFocus: EntityGraphFocus | null
+  graphFocus: EntityGraphFocus | null,
+  graphView: GraphView
 ): Node<EntityNodeData, "storyEntity">[] {
-  return Object.values(project.entities).map((entity) => ({
+  return graphViewEntities(project, graphView).map((entity) => {
+    const gameMetadata = entity.gameStory ? normalizeGameStoryEntityMetadata(entity.gameStory, entity.type) : null;
+    const outgoingTargets = outgoingGraphViewTargets(project, entity.id);
+
+    return {
     id: entity.id,
     type: "storyEntity",
     position: project.layout[entity.id] ?? { x: 80, y: 80 },
@@ -879,22 +1008,35 @@ function projectNodes(
       itemType: findItemType(project, entity.type),
       isSelected: selection?.kind === "entity" && selection.id === entity.id,
       isConnectedToFocus: graphFocus?.connectedEntityIds.has(entity.id) ?? false,
-      isFaded: Boolean(graphFocus && !graphFocus.connectedEntityIds.has(entity.id))
+      isFaded: Boolean(graphFocus && !graphFocus.connectedEntityIds.has(entity.id)),
+      isGameStart: graphView === "story_flow" && project.gameStory?.startNodeId === entity.id,
+      isGameEnding: graphView === "story_flow" && gameMetadata?.role === "ending",
+      isGameCriticalPath: graphView === "story_flow" && Boolean(gameMetadata?.criticalPath),
+      isGameGated: graphView === "story_flow" && Boolean(gameMetadata?.entryConditions.length),
+      isGameDeadEnd:
+        graphView === "story_flow" &&
+        Boolean(gameMetadata) &&
+        gameMetadata?.role !== "ending" &&
+        outgoingTargets.length === 0
     }
-  }));
+    };
+  });
 }
 
 function syncProjectNodes(
   currentNodes: Node<EntityNodeData, "storyEntity">[],
   project: StoryProject,
   selection: Selection | null,
-  graphFocus: EntityGraphFocus | null
+  graphFocus: EntityGraphFocus | null,
+  graphView: GraphView
 ): Node<EntityNodeData, "storyEntity">[] {
   const currentNodeById = new Map(currentNodes.map((node) => [node.id, node]));
 
-  return Object.values(project.entities).map((entity) => {
+  return graphViewEntities(project, graphView).map((entity) => {
     const currentNode = currentNodeById.get(entity.id);
     const savedPosition = project.layout[entity.id];
+    const gameMetadata = entity.gameStory ? normalizeGameStoryEntityMetadata(entity.gameStory, entity.type) : null;
+    const outgoingTargets = outgoingGraphViewTargets(project, entity.id);
     const position = isFinitePoint(savedPosition)
       ? savedPosition
       : isFinitePoint(currentNode?.position)
@@ -911,10 +1053,55 @@ function syncProjectNodes(
         itemType: findItemType(project, entity.type),
         isSelected: selection?.kind === "entity" && selection.id === entity.id,
         isConnectedToFocus: graphFocus?.connectedEntityIds.has(entity.id) ?? false,
-        isFaded: Boolean(graphFocus && !graphFocus.connectedEntityIds.has(entity.id))
+        isFaded: Boolean(graphFocus && !graphFocus.connectedEntityIds.has(entity.id)),
+        isGameStart: graphView === "story_flow" && project.gameStory?.startNodeId === entity.id,
+        isGameEnding: graphView === "story_flow" && gameMetadata?.role === "ending",
+        isGameCriticalPath: graphView === "story_flow" && Boolean(gameMetadata?.criticalPath),
+        isGameGated: graphView === "story_flow" && Boolean(gameMetadata?.entryConditions.length),
+        isGameDeadEnd:
+          graphView === "story_flow" &&
+          Boolean(gameMetadata) &&
+          gameMetadata?.role !== "ending" &&
+          outgoingTargets.length === 0
       }
     };
   });
+}
+
+function graphViewEntities(project: StoryProject, graphView: GraphView): StoryEntity[] {
+  if (graphView === "story_flow") {
+    return getGameStoryNodes(project);
+  }
+
+  return Object.values(project.entities);
+}
+
+function graphViewEntityIds(project: StoryProject, graphView: GraphView): Set<string> {
+  return new Set(graphViewEntities(project, graphView).map((entity) => entity.id));
+}
+
+function graphViewRelationships(project: StoryProject, graphView: GraphView): StoryRelationship[] {
+  const visibleEntityIds = graphViewEntityIds(project, graphView);
+
+  return project.relationships.filter((relationship) => {
+    if (!visibleEntityIds.has(relationship.sourceId) || !visibleEntityIds.has(relationship.targetId)) {
+      return false;
+    }
+
+    return graphView === "story_flow" ? isGameStoryLinkType(relationship.type) || Boolean(relationship.gameStory) : true;
+  });
+}
+
+function outgoingGraphViewTargets(project: StoryProject, entityId: string): string[] {
+  const branchTargets = project.relationships
+    .filter((relationship) => relationship.sourceId === entityId && relationship.type === "branches_to")
+    .map((relationship) => relationship.targetId);
+  const responseTargets =
+    project.entities[entityId]?.gameStory?.dialogue?.responses
+      .map((response) => response.targetNodeId)
+      .filter((targetId): targetId is string => Boolean(targetId)) ?? [];
+
+  return [...branchTargets, ...responseTargets].filter((targetId) => Boolean(project.entities[targetId]));
 }
 
 function relationshipOpacity(active: boolean, fadedByFocus: boolean, connectedToFocus: boolean): number {

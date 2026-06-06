@@ -10,7 +10,15 @@ import {
   writeProjectToDirectory
 } from "./data/projectFiles";
 import { loadStarterProject } from "./data/starterProject";
-import { createBlankProject, createStoryEntity, createStoryRelationship } from "./data/story";
+import {
+  addGameStateVariableToProject,
+  createBlankProject,
+  createStoryEntity,
+  createStoryRelationship,
+  setProjectModeInProject,
+  updateGameStateVariableInProject,
+  updateGameStoryProjectMetadata
+} from "./data/story";
 
 vi.mock("@xyflow/react", () => ({
   addEdge: (edge: unknown, edges: unknown[]) => [...edges, edge],
@@ -62,13 +70,16 @@ vi.mock("@xyflow/react", () => ({
     onEdgeClick?: (event: unknown, edge: unknown) => void;
     onNodeClick?: (event: unknown, node: unknown) => void;
     onPaneClick?: () => void;
-    nodes?: Array<{
-      data: {
-        entity: { title: string };
-        isConnectedToFocus?: boolean;
-        isFaded?: boolean;
-        isSelected?: boolean;
-      };
+      nodes?: Array<{
+        data: {
+          entity: { title: string };
+          isConnectedToFocus?: boolean;
+          isFaded?: boolean;
+          isGameDeadEnd?: boolean;
+          isGameEnding?: boolean;
+          isGameStart?: boolean;
+          isSelected?: boolean;
+        };
       id: string;
       measured?: { height: number; width: number };
       position: { x: number; y: number };
@@ -109,6 +120,9 @@ vi.mock("@xyflow/react", () => ({
           onClick={(event) => onNodeClick?.(event, node)}
           data-connected={`${node.data.isConnectedToFocus ?? false}`}
           data-faded={`${node.data.isFaded ?? false}`}
+          data-game-dead-end={`${node.data.isGameDeadEnd ?? false}`}
+          data-game-ending={`${node.data.isGameEnding ?? false}`}
+          data-game-start={`${node.data.isGameStart ?? false}`}
           data-measured={`${node.measured?.width ?? ""},${node.measured?.height ?? ""}`}
           data-position={`${node.position.x},${node.position.y}`}
           data-selected={`${node.data.isSelected ?? false}`}
@@ -614,6 +628,74 @@ describe("App project commands", () => {
     expect(screen.getByTestId(`flow-node-${fixture.relic.id}`)).toHaveAttribute("data-faded", "true");
   });
 
+  it("switches to Game Story Mode and creates state-backed game nodes", async () => {
+    render(<App />);
+
+    await waitFor(() => expect(screen.getByDisplayValue("Loaded Project")).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("button", { name: "Game Story" }));
+
+    await waitFor(() => expect(screen.getByRole("complementary", { name: "Game Story Tools" })).toBeInTheDocument());
+    expect(screen.getByRole("button", { name: "Story Flow" })).toHaveClass("is-active");
+    expect(screen.getByRole("button", { name: "Scene" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Scene" }));
+
+    const sceneNode = await waitFor(() => {
+      const node = document.querySelector('[data-testid^="flow-node-scene-"]');
+      expect(node).not.toBeNull();
+      return node as HTMLElement;
+    });
+
+    expect(sceneNode).toHaveAttribute("data-game-start", "true");
+    expect(screen.getByLabelText("Game node role")).toHaveValue("scene");
+
+    fireEvent.click(screen.getByRole("button", { name: "Variable" }));
+
+    await waitFor(() => expect(screen.getByText("State Variables")).toBeInTheDocument());
+    expect(document.querySelector(".state-variable-card")).not.toBeNull();
+  });
+
+  it("filters Story Flow to game nodes and previews branches", async () => {
+    const fixture = createGameStoryFixture();
+    vi.mocked(loadStarterProject).mockResolvedValue(fixture.project);
+
+    render(<App />);
+
+    await waitFor(() => expect(screen.getByDisplayValue("Game Flow Project")).toBeInTheDocument());
+    expect(screen.getByRole("button", { name: "Story Flow" })).toHaveClass("is-active");
+    expect(screen.getByTestId(`flow-node-${fixture.start.id}`)).toHaveAttribute("data-game-start", "true");
+    expect(screen.getByTestId(`flow-node-${fixture.ending.id}`)).toHaveAttribute("data-game-ending", "true");
+    expect(screen.queryByTestId(`flow-node-${fixture.character.id}`)).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "World" }));
+
+    await waitFor(() => expect(screen.getByTestId(`flow-node-${fixture.character.id}`)).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("button", { name: "Story Flow" }));
+    fireEvent.click(screen.getByRole("button", { name: /Preview/ }));
+
+    await waitFor(() => expect(screen.getByText("Open the gate")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: /Open the gate/ }));
+
+    await waitFor(() => expect(document.querySelector(".play-current-node h3")).toHaveTextContent("Bright Ending"));
+  });
+
+  it("selects the related game node from continuity issues", async () => {
+    const fixture = createGameStoryFixture({ includeLonelyScene: true });
+    vi.mocked(loadStarterProject).mockResolvedValue(fixture.project);
+
+    render(<App />);
+
+    await waitFor(() => expect(screen.getByDisplayValue("Game Flow Project")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: /Continuity/ }));
+
+    await waitFor(() => expect(screen.getByText("Unreachable node")).toBeInTheDocument());
+    fireEvent.click(screen.getByText("Unreachable node"));
+
+    await waitFor(() => expect(screen.getByTestId(`flow-node-${fixture.lonely!.id}`)).toHaveAttribute("data-selected", "true"));
+  });
+
   it("scrubs graph time from the timeline without changing the selected graph item", async () => {
     const project = createBlankProject("Timeline Scrub Project");
     const source = createStoryEntity("character", project.itemTypes, "Mara Vale");
@@ -726,5 +808,64 @@ function createFocusDepthProject() {
     allyLink,
     clueLink,
     factionLink
+  };
+}
+
+function createGameStoryFixture(options: { includeLonelyScene?: boolean } = {}) {
+  let project = setProjectModeInProject(createBlankProject("Game Flow Project"), "game_story");
+  project = addGameStateVariableToProject(project, "flag");
+  const variable = project.gameStory!.stateVariables[0];
+  project = updateGameStateVariableInProject(project, variable.id, {
+    id: "gate-open",
+    label: "Gate Open",
+    defaultValue: false
+  });
+  const start = createStoryEntity("scene", project.itemTypes, "Gate Scene");
+  const ending = createStoryEntity("ending", project.itemTypes, "Bright Ending");
+  const character = createStoryEntity("character", project.itemTypes, "Gatekeeper");
+  const lonely = options.includeLonelyScene ? createStoryEntity("scene", project.itemTypes, "Lonely Scene") : null;
+  const branch = {
+    ...createStoryRelationship(project, start.id, ending.id, "branches_to"),
+    gameStory: {
+      choiceText: "Open the gate",
+      requirements: [],
+      effects: [
+        {
+          id: "effect-open-gate",
+          variableId: "gate-open",
+          operation: "set" as const,
+          value: true
+        }
+      ],
+      consequenceNotes: "The gate opens.",
+      priority: 0
+    }
+  };
+  const entities = {
+    [start.id]: start,
+    [ending.id]: ending,
+    [character.id]: character,
+    ...(lonely ? { [lonely.id]: lonely } : {})
+  };
+
+  project = updateGameStoryProjectMetadata(
+    {
+      ...project,
+      entities,
+      relationships: [branch],
+      layout: Object.fromEntries(
+        Object.values(entities).map((entity, index) => [entity.id, { x: index * 260, y: index % 2 === 0 ? 20 : 240 }])
+      )
+    },
+    { startNodeId: start.id }
+  );
+
+  return {
+    project,
+    start,
+    ending,
+    character,
+    lonely,
+    branch
   };
 }

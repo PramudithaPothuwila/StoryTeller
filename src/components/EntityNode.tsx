@@ -10,6 +10,11 @@ export interface EntityNodeData extends Record<string, unknown> {
   isSelected: boolean;
   isConnectedToFocus: boolean;
   isFaded: boolean;
+  isGameStart?: boolean;
+  isGameEnding?: boolean;
+  isGameCriticalPath?: boolean;
+  isGameGated?: boolean;
+  isGameDeadEnd?: boolean;
 }
 
 export type EntityNodeType = Node<EntityNodeData, "storyEntity">;
@@ -23,7 +28,12 @@ export function EntityNode({ data }: NodeProps<EntityNodeType>) {
         "entity-node",
         data.isSelected ? "is-selected" : "",
         data.isConnectedToFocus ? "is-connected" : "",
-        data.isFaded ? "is-faded" : ""
+        data.isFaded ? "is-faded" : "",
+        data.isGameStart ? "is-game-start" : "",
+        data.isGameEnding ? "is-game-ending" : "",
+        data.isGameCriticalPath ? "is-game-critical" : "",
+        data.isGameGated ? "is-game-gated" : "",
+        data.isGameDeadEnd ? "is-game-dead-end" : ""
       ]
         .filter(Boolean)
         .join(" ")}
@@ -44,6 +54,15 @@ export function EntityNode({ data }: NodeProps<EntityNodeType>) {
       </div>
       <h3>{data.entity.title}</h3>
       <p>{data.entity.summary || "No summary yet."}</p>
+      {data.isGameStart || data.isGameEnding || data.isGameCriticalPath || data.isGameGated || data.isGameDeadEnd ? (
+        <div className="entity-node__game-badges">
+          {data.isGameStart ? <span>Start</span> : null}
+          {data.isGameEnding ? <span>Ending</span> : null}
+          {data.isGameCriticalPath ? <span>Critical</span> : null}
+          {data.isGameGated ? <span>Gated</span> : null}
+          {data.isGameDeadEnd ? <span>Dead End</span> : null}
+        </div>
+      ) : null}
       {data.entity.tags.length ? (
         <div className="entity-node__tags">
           {data.entity.tags.slice(0, 3).map((tag) => (
