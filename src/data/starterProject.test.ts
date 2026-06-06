@@ -3,13 +3,14 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { BUILT_IN_WORLD_RULE_TYPE_ID } from "../types";
 import { projectFromFiles } from "./projectFiles";
-import { loadStarterProject } from "./starterProject";
+import { getGameContinuityIssues } from "./story";
+import { getStarterProjects, loadStarterProject } from "./starterProject";
 
 describe("starter project loader", () => {
   it("loads a starter from public folder project files", async () => {
     const requestedUrls: string[] = [];
     const files: Record<string, string> = {
-      "/projects/storyteller.project.json": JSON.stringify({
+      "/projects/The Crown Beneath Glass/storyteller.project.json": JSON.stringify({
         schemaVersion: 2,
         title: "The Hidden Crown",
         updatedAt: "2026-06-05T10:00:00.000Z",
@@ -40,11 +41,11 @@ describe("starter project loader", () => {
           }
         ]
       }),
-      "/projects/graph/relationships.json": JSON.stringify({
+      "/projects/The Crown Beneath Glass/graph/relationships.json": JSON.stringify({
         schemaVersion: 2,
         relationships: []
       }),
-      "/projects/entities/character/character-mara-vale.md": `---
+      "/projects/The Crown Beneath Glass/entities/character/character-mara-vale.md": `---
 {
   "id": "character-mara-vale",
   "type": "character",
@@ -83,9 +84,11 @@ describe("starter project loader", () => {
     expect(Object.keys(project.entities)).toContain("character-mara-vale");
     expect(project.entities["character-mara-vale"].privateInfo).toBe("Carries the royal bloodline without knowing it.");
     expect(project.relationships).toHaveLength(0);
-    expect(requestedUrls).toContain("/projects/storyteller.project.json");
-    expect(requestedUrls).toContain("/projects/graph/relationships.json");
-    expect(requestedUrls).toContain("/projects/entities/character/character-mara-vale.md");
+    expect(requestedUrls).toContain("/projects/The Crown Beneath Glass/storyteller.project.json");
+    expect(requestedUrls).toContain("/projects/The Crown Beneath Glass/graph/relationships.json");
+    expect(requestedUrls).toContain(
+      "/projects/The Crown Beneath Glass/entities/character/character-mara-vale.md"
+    );
   });
 
   it("bundles sample world rules with valid graph relationships", () => {
@@ -125,24 +128,64 @@ describe("starter project loader", () => {
       ])
     );
   });
+
+  it("registers the Black Hollow game story starter", () => {
+    const starters = getStarterProjects();
+    const blackHollow = starters.find((starter) => starter.id === "black-hollow-last-stop");
+
+    expect(blackHollow).toEqual(
+      expect.objectContaining({
+        title: "Black Hollow: Last Stop",
+        root: "/projects/Black Hollow Last Stop",
+        projectMode: "game_story"
+      })
+    );
+  });
+
+  it("bundles Black Hollow as a valid game story project", () => {
+    const files = readBundledStarterProjectFiles("Black Hollow Last Stop");
+    const project = projectFromFiles(files);
+
+    expect(project.title).toBe("Black Hollow: Last Stop");
+    expect(project.projectMode).toBe("game_story");
+    expect(project.gameStory?.startNodeId).toBe("scene-murder-victim-found");
+    expect(project.gameStory?.stateVariables.map((variable) => variable.id)).toEqual(
+      expect.arrayContaining(["recognized-body-dump", "found-locker-key", "read-signal-ledger"])
+    );
+    expect(project.relationships).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sourceId: "dialogue-confront-evelyn-park",
+          targetId: "ending-true-route",
+          type: "branches_to"
+        }),
+        expect.objectContaining({
+          sourceId: "dialogue-confront-evelyn-park",
+          targetId: "ending-false-frame",
+          type: "branches_to"
+        })
+      ])
+    );
+    expect(getGameContinuityIssues(project)).toEqual([]);
+  });
 });
 
-function readBundledStarterProjectFiles(): Record<string, string> {
-  const manifest = JSON.parse(readBundledStarterFile("storyteller.project.json")) as {
+function readBundledStarterProjectFiles(starterFolder = "The Crown Beneath Glass"): Record<string, string> {
+  const manifest = JSON.parse(readBundledStarterFile(starterFolder, "storyteller.project.json")) as {
     entityIndex: Array<{ path: string }>;
   };
   const files: Record<string, string> = {
-    "storyteller.project.json": readBundledStarterFile("storyteller.project.json"),
-    "graph/relationships.json": readBundledStarterFile("graph/relationships.json")
+    "storyteller.project.json": readBundledStarterFile(starterFolder, "storyteller.project.json"),
+    "graph/relationships.json": readBundledStarterFile(starterFolder, "graph/relationships.json")
   };
 
   for (const indexedEntity of manifest.entityIndex) {
-    files[indexedEntity.path] = readBundledStarterFile(indexedEntity.path);
+    files[indexedEntity.path] = readBundledStarterFile(starterFolder, indexedEntity.path);
   }
 
   return files;
 }
 
-function readBundledStarterFile(path: string): string {
-  return readFileSync(join(process.cwd(), "public", "projects", path), "utf8");
+function readBundledStarterFile(starterFolder: string, path: string): string {
+  return readFileSync(join(process.cwd(), "public", "projects", starterFolder, path), "utf8");
 }

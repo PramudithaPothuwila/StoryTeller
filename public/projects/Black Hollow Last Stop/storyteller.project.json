@@ -1,0 +1,567 @@
+{
+  "schemaVersion": 3,
+  "title": "Black Hollow: Last Stop",
+  "updatedAt": "2026-06-06T21:18:29.765Z",
+  "projectMode": "story",
+  "gameStory": {
+    "startNodeId": "scene-murder-victim-found",
+    "stateVariables": [
+      {
+        "id": "recognized-body-dump",
+        "label": "Recognized Body Dump",
+        "kind": "flag",
+        "defaultValue": false,
+        "enumOptions": [],
+        "notes": "True when the player treats the drag marks as evidence that Black Hollow Station was staged."
+      },
+      {
+        "id": "found-locker-key",
+        "label": "Found Locker 12 Key",
+        "kind": "flag",
+        "defaultValue": false,
+        "enumOptions": [],
+        "notes": "Silas gives or reveals this only if the player approaches him with the staging theory."
+      },
+      {
+        "id": "read-signal-ledger",
+        "label": "Read Signal Ledger",
+        "kind": "flag",
+        "defaultValue": false,
+        "enumOptions": [],
+        "notes": "True when the player opens Locker 12 and connects Rowan's knowledge to Platform 7."
+      },
+      {
+        "id": "trust-silas",
+        "label": "Trust Silas",
+        "kind": "enum",
+        "defaultValue": "Neutral",
+        "enumOptions": [
+          "Neutral",
+          "Trusted",
+          "Alienated"
+        ],
+        "notes": "Tracks whether the obvious station suspect becomes a witness or a convenient frame."
+      },
+      {
+        "id": "evidence-pressure",
+        "label": "Evidence Pressure",
+        "kind": "number",
+        "defaultValue": 0,
+        "enumOptions": [],
+        "notes": "A lightweight score for whether the player has enough concrete proof to challenge Evelyn."
+      },
+      {
+        "id": "accused-suspect",
+        "label": "Accused Suspect",
+        "kind": "enum",
+        "defaultValue": "None",
+        "enumOptions": [
+          "None",
+          "Evelyn Park",
+          "Silas Crowe"
+        ],
+        "notes": "Set by the ending choice."
+      }
+    ],
+    "validation": {
+      "checkUnreachableNodes": true,
+      "checkInvalidStateReferences": true,
+      "checkDialogueDeadEnds": true
+    }
+  },
+  "itemTypes": [
+    {
+      "id": "character",
+      "label": "Character",
+      "color": "#0f766e",
+      "icon": "users",
+      "builtIn": true
+    },
+    {
+      "id": "note",
+      "label": "Note",
+      "color": "#b45309",
+      "icon": "sticky-note",
+      "builtIn": true
+    },
+    {
+      "id": "location",
+      "label": "Location",
+      "color": "#2563eb",
+      "icon": "map-pin",
+      "builtIn": true
+    },
+    {
+      "id": "event",
+      "label": "Event",
+      "color": "#be123c",
+      "icon": "calendar-days",
+      "builtIn": true
+    },
+    {
+      "id": "item",
+      "label": "Item",
+      "color": "#7c3aed",
+      "icon": "box",
+      "builtIn": true
+    },
+    {
+      "id": "faction",
+      "label": "Faction",
+      "color": "#15803d",
+      "icon": "flag",
+      "builtIn": true
+    },
+    {
+      "id": "world_rule",
+      "label": "World Rule",
+      "color": "#0e7490",
+      "icon": "scroll-text",
+      "builtIn": true
+    },
+    {
+      "id": "scene",
+      "label": "Scene",
+      "color": "#dc2626",
+      "icon": "calendar-days",
+      "builtIn": true
+    },
+    {
+      "id": "quest",
+      "label": "Quest",
+      "color": "#0891b2",
+      "icon": "flag",
+      "builtIn": true
+    },
+    {
+      "id": "dialogue",
+      "label": "Dialogue",
+      "color": "#7c3aed",
+      "icon": "users",
+      "builtIn": true
+    },
+    {
+      "id": "ending",
+      "label": "Ending",
+      "color": "#d97706",
+      "icon": "sparkles",
+      "builtIn": true
+    },
+    {
+      "id": "clue",
+      "label": "Clue",
+      "color": "#0891b2",
+      "icon": "sparkles",
+      "builtIn": false
+    }
+  ],
+  "linkTypes": [
+    {
+      "id": "relates_to",
+      "label": "Relates to",
+      "color": "#46605a",
+      "icon": "link",
+      "direction": "directed",
+      "builtIn": true
+    },
+    {
+      "id": "knows",
+      "label": "Knows",
+      "color": "#0f766e",
+      "icon": "users",
+      "direction": "mutual",
+      "builtIn": true
+    },
+    {
+      "id": "hides",
+      "label": "Hides",
+      "color": "#be123c",
+      "icon": "eye-off",
+      "direction": "directed",
+      "builtIn": true
+    },
+    {
+      "id": "loves",
+      "label": "Loves",
+      "color": "#db2777",
+      "icon": "heart",
+      "direction": "mutual",
+      "builtIn": true
+    },
+    {
+      "id": "opposes",
+      "label": "Opposes",
+      "color": "#b91c1c",
+      "icon": "swords",
+      "direction": "directed",
+      "builtIn": true
+    },
+    {
+      "id": "owns",
+      "label": "Owns",
+      "color": "#7c3aed",
+      "icon": "key",
+      "direction": "directed",
+      "builtIn": true
+    },
+    {
+      "id": "located_in",
+      "label": "Located in",
+      "color": "#2563eb",
+      "icon": "map-pin",
+      "direction": "directed",
+      "builtIn": true
+    },
+    {
+      "id": "causes",
+      "label": "Causes",
+      "color": "#b45309",
+      "icon": "git-branch",
+      "direction": "directed",
+      "builtIn": true
+    },
+    {
+      "id": "member_of",
+      "label": "Member of",
+      "color": "#15803d",
+      "icon": "flag",
+      "direction": "directed",
+      "builtIn": true
+    },
+    {
+      "id": "governs",
+      "label": "Governs",
+      "color": "#0e7490",
+      "icon": "scroll-text",
+      "direction": "directed",
+      "builtIn": true
+    },
+    {
+      "id": "known_by",
+      "label": "Known by",
+      "color": "#0f766e",
+      "icon": "users",
+      "direction": "directed",
+      "builtIn": true
+    },
+    {
+      "id": "exception_to",
+      "label": "Exception to",
+      "color": "#b45309",
+      "icon": "git-branch",
+      "direction": "directed",
+      "builtIn": true
+    },
+    {
+      "id": "branches_to",
+      "label": "Branches to",
+      "color": "#dc2626",
+      "icon": "git-branch",
+      "direction": "directed",
+      "builtIn": true
+    },
+    {
+      "id": "requires",
+      "label": "Requires",
+      "color": "#7c3aed",
+      "icon": "key",
+      "direction": "directed",
+      "builtIn": true
+    },
+    {
+      "id": "unlocks",
+      "label": "Unlocks",
+      "color": "#0891b2",
+      "icon": "sparkles",
+      "direction": "directed",
+      "builtIn": true
+    },
+    {
+      "id": "implicates",
+      "label": "Implicates",
+      "color": "#be123c",
+      "icon": "swords",
+      "direction": "directed",
+      "builtIn": false
+    },
+    {
+      "id": "contradicts",
+      "label": "Contradicts",
+      "color": "#b45309",
+      "icon": "git-branch",
+      "direction": "directed",
+      "builtIn": false
+    }
+  ],
+  "timelineLaneNames": [
+    "Investigation Timeline"
+  ],
+  "graphLayout": {
+    "note-premise-investigation-map": {
+      "x": -720,
+      "y": -420
+    },
+    "character-detective-arden-pike": {
+      "x": -460,
+      "y": -180
+    },
+    "character-rowan-ellis": {
+      "x": -160,
+      "y": -180
+    },
+    "character-evelyn-park": {
+      "x": 200,
+      "y": -180
+    },
+    "character-silas-crowe": {
+      "x": 520,
+      "y": -180
+    },
+    "character-jessa-holt": {
+      "x": 820,
+      "y": -180
+    },
+    "faction-black-hollow-redevelopment-board": {
+      "x": 200,
+      "y": -420
+    },
+    "location-black-hollow-train-station": {
+      "x": 449.612654777077,
+      "y": 68.33181014145055
+    },
+    "location-signal-room-locker-12": {
+      "x": 769.1978921002639,
+      "y": 107.21968356908422
+    },
+    "location-service-road-culvert": {
+      "x": -203.2520206854688,
+      "y": 80.82952535362634
+    },
+    "item-locker-12-key": {
+      "x": 662,
+      "y": 448
+    },
+    "clue-fresh-footprints": {
+      "x": -644,
+      "y": 576
+    },
+    "clue-drag-marks": {
+      "x": -108,
+      "y": 398
+    },
+    "clue-signal-room-ledger": {
+      "x": 120,
+      "y": 560
+    },
+    "clue-platform-marker-seven": {
+      "x": -80,
+      "y": 380
+    },
+    "event-victim-was-arguing": {
+      "x": -1202,
+      "y": 544
+    },
+    "event-murder-victim-found": {
+      "x": -160,
+      "y": 660
+    },
+    "scene-murder-victim-found": {
+      "x": -973.5529002068022,
+      "y": 1105.8432340805714
+    },
+    "quest-prove-station-staged": {
+      "x": -566.5483306311538,
+      "y": 1392.1905095320806
+    },
+    "dialogue-interview-silas-crowe": {
+      "x": -343.6189809358388,
+      "y": 1054.5159935147692
+    },
+    "scene-search-signal-room": {
+      "x": 201.73427058758608,
+      "y": 754.8541298149815
+    },
+    "dialogue-confront-evelyn-park": {
+      "x": 579.2365553754103,
+      "y": 1071.5360284004764
+    },
+    "ending-true-route": {
+      "x": 1078.1335679543408,
+      "y": 774.7219683569085
+    },
+    "ending-false-frame": {
+      "x": 1079.453075865114,
+      "y": 1025.278031643092
+    }
+  },
+  "entityIndex": [
+    {
+      "id": "note-premise-investigation-map",
+      "type": "note",
+      "title": "Premise & Investigation Map",
+      "updatedAt": "2026-06-07T00:00:00.000Z",
+      "path": "entities/note/note-premise-investigation-map.md"
+    },
+    {
+      "id": "character-detective-arden-pike",
+      "type": "character",
+      "title": "Detective Arden Pike",
+      "updatedAt": "2026-06-07T00:00:00.000Z",
+      "path": "entities/character/character-detective-arden-pike.md"
+    },
+    {
+      "id": "character-rowan-ellis",
+      "type": "character",
+      "title": "Rowan Ellis",
+      "updatedAt": "2026-06-07T00:00:00.000Z",
+      "path": "entities/character/character-rowan-ellis.md"
+    },
+    {
+      "id": "character-evelyn-park",
+      "type": "character",
+      "title": "Evelyn Park",
+      "updatedAt": "2026-06-07T00:00:00.000Z",
+      "path": "entities/character/character-evelyn-park.md"
+    },
+    {
+      "id": "character-silas-crowe",
+      "type": "character",
+      "title": "Silas Crowe",
+      "updatedAt": "2026-06-07T00:00:00.000Z",
+      "path": "entities/character/character-silas-crowe.md"
+    },
+    {
+      "id": "character-jessa-holt",
+      "type": "character",
+      "title": "Jessa Holt",
+      "updatedAt": "2026-06-07T00:00:00.000Z",
+      "path": "entities/character/character-jessa-holt.md"
+    },
+    {
+      "id": "faction-black-hollow-redevelopment-board",
+      "type": "faction",
+      "title": "Black Hollow Redevelopment Board",
+      "updatedAt": "2026-06-07T00:00:00.000Z",
+      "path": "entities/faction/faction-black-hollow-redevelopment-board.md"
+    },
+    {
+      "id": "location-black-hollow-train-station",
+      "type": "location",
+      "title": "Black Hollow Train Station",
+      "updatedAt": "2026-06-07T00:00:00.000Z",
+      "path": "entities/location/location-black-hollow-train-station.md"
+    },
+    {
+      "id": "location-signal-room-locker-12",
+      "type": "location",
+      "title": "Signal Room Locker 12",
+      "updatedAt": "2026-06-07T00:00:00.000Z",
+      "path": "entities/location/location-signal-room-locker-12.md"
+    },
+    {
+      "id": "location-service-road-culvert",
+      "type": "location",
+      "title": "Service Road Culvert",
+      "updatedAt": "2026-06-07T00:00:00.000Z",
+      "path": "entities/location/location-service-road-culvert.md"
+    },
+    {
+      "id": "item-locker-12-key",
+      "type": "item",
+      "title": "Locker 12 Key",
+      "updatedAt": "2026-06-07T00:00:00.000Z",
+      "path": "entities/item/item-locker-12-key.md"
+    },
+    {
+      "id": "clue-fresh-footprints",
+      "type": "clue",
+      "title": "Fresh Footprints",
+      "updatedAt": "2026-06-07T00:00:00.000Z",
+      "path": "entities/clue/clue-fresh-footprints.md"
+    },
+    {
+      "id": "clue-drag-marks",
+      "type": "clue",
+      "title": "Drag Marks",
+      "updatedAt": "2026-06-07T00:00:00.000Z",
+      "path": "entities/clue/clue-drag-marks.md"
+    },
+    {
+      "id": "clue-signal-room-ledger",
+      "type": "clue",
+      "title": "Signal Room Ledger",
+      "updatedAt": "2026-06-07T00:00:00.000Z",
+      "path": "entities/clue/clue-signal-room-ledger.md"
+    },
+    {
+      "id": "clue-platform-marker-seven",
+      "type": "clue",
+      "title": "Platform Marker 7",
+      "updatedAt": "2026-06-07T00:00:00.000Z",
+      "path": "entities/clue/clue-platform-marker-seven.md"
+    },
+    {
+      "id": "event-victim-was-arguing",
+      "type": "event",
+      "title": "Victim Was Arguing",
+      "updatedAt": "2026-06-07T00:00:00.000Z",
+      "path": "entities/event/event-victim-was-arguing.md"
+    },
+    {
+      "id": "event-murder-victim-found",
+      "type": "event",
+      "title": "Murder Victim Found",
+      "updatedAt": "2026-06-07T00:00:00.000Z",
+      "path": "entities/event/event-murder-victim-found.md"
+    },
+    {
+      "id": "scene-murder-victim-found",
+      "type": "scene",
+      "title": "Scene: Murder Victim Found",
+      "updatedAt": "2026-06-07T00:00:00.000Z",
+      "path": "entities/scene/scene-murder-victim-found.md"
+    },
+    {
+      "id": "quest-prove-station-staged",
+      "type": "quest",
+      "title": "Quest: Prove the Station Was Staged",
+      "updatedAt": "2026-06-07T00:00:00.000Z",
+      "path": "entities/quest/quest-prove-station-staged.md"
+    },
+    {
+      "id": "dialogue-interview-silas-crowe",
+      "type": "dialogue",
+      "title": "Dialogue: Interview Silas Crowe",
+      "updatedAt": "2026-06-07T00:00:00.000Z",
+      "path": "entities/dialogue/dialogue-interview-silas-crowe.md"
+    },
+    {
+      "id": "scene-search-signal-room",
+      "type": "scene",
+      "title": "Scene: Search the Signal Room",
+      "updatedAt": "2026-06-07T00:00:00.000Z",
+      "path": "entities/scene/scene-search-signal-room.md"
+    },
+    {
+      "id": "dialogue-confront-evelyn-park",
+      "type": "dialogue",
+      "title": "Dialogue: Confront Evelyn Park",
+      "updatedAt": "2026-06-07T00:00:00.000Z",
+      "path": "entities/dialogue/dialogue-confront-evelyn-park.md"
+    },
+    {
+      "id": "ending-true-route",
+      "type": "ending",
+      "title": "Ending: The Body Was a Signpost",
+      "updatedAt": "2026-06-07T00:00:00.000Z",
+      "path": "entities/ending/ending-true-route.md"
+    },
+    {
+      "id": "ending-false-frame",
+      "type": "ending",
+      "title": "Ending: A Convenient Ghost",
+      "updatedAt": "2026-06-07T00:00:00.000Z",
+      "path": "entities/ending/ending-false-frame.md"
+    }
+  ]
+}
