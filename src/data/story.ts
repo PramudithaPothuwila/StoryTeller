@@ -295,6 +295,7 @@ export function deleteLinkTypeFromProject(project: StoryProject, typeId: LinkTyp
 export function ensureEventTimeline(entity: StoryEntity, order = 0): EventTimeline {
   return {
     order: Number.isFinite(entity.timeline?.order) ? entity.timeline!.order : order,
+    track: normalizeTimelineTrack(entity.timeline?.track),
     effects: entity.timeline?.effects ?? []
   };
 }
@@ -309,16 +310,150 @@ export function getTimelineEvents(project: StoryProject): StoryEntity[] {
     .sort((a, b) => {
       const aOrder = a.timeline?.order ?? 0;
       const bOrder = b.timeline?.order ?? 0;
-      return aOrder === bOrder ? a.title.localeCompare(b.title) : aOrder - bOrder;
+      const aTrack = a.timeline?.track ?? 0;
+      const bTrack = b.timeline?.track ?? 0;
+
+      if (aOrder !== bOrder) {
+        return aOrder - bOrder;
+      }
+
+      return aTrack === bTrack ? a.title.localeCompare(b.title) : aTrack - bTrack;
     });
 }
 
-export function nextTimelineOrder(project: StoryProject): number {
+export function nextTimelineOrder(project: StoryProject, track = 0): number {
+  const normalizedTrack = normalizeTimelineTrack(track);
   const orders = Object.values(project.entities)
     .filter((entity) => entity.type === BUILT_IN_EVENT_TYPE_ID)
+    .filter((entity) => normalizeTimelineTrack(entity.timeline?.track) === normalizedTrack)
     .map((entity) => entity.timeline?.order ?? 0);
 
   return orders.length ? Math.max(...orders) + 1 : 1;
+}
+
+export function moveTimelineEventInProject(
+  project: StoryProject,
+  eventId: string,
+  targetTrack: number,
+  targetIndex: number
+): StoryProject {
+  const movedEvent = project.entities[eventId];
+
+  if (!movedEvent || movedEvent.type !== BUILT_IN_EVENT_TYPE_ID) {
+    return project;
+  }
+
+  const normalizedTrack = normalizeTimelineTrack(targetTrack);
+  const events = getTimelineEvents(project);
+  const sourceTimeline = ensureEventTimeline(movedEvent);
+  const sourceTrack = sourceTimeline.track ?? 0;
+  const sourceTrackEvents = events.filter((event) => (event.timeline?.track ?? 0) === sourceTrack);
+  const sourceIndex = sourceTrackEvents.findIndex((event) => event.id === eventId);
+  const tracks = new Map<number, StoryEntity[]>();
+
+  for (const event of events) {
+    if (event.id === eventId) {
+      continue;
+    }
+
+    const track = event.timeline?.track ?? 0;
+    tracks.set(track, [...(tracks.get(track) ?? []), event]);
+  }
+
+  const destinationEvents = tracks.get(normalizedTrack) ?? [];
+  const adjustedIndex =
+    sourceTrack === normalizedTrack && sourceIndex >= 0 && targetIndex > sourceIndex ? targetIndex - 1 : targetIndex;
+  const insertIndex = Math.max(0, Math.min(adjustedIndex, destinationEvents.length));
+  destinationEvents.splice(insertIndex, 0, {
+    ...movedEvent,
+    timeline: {
+      ...sourceTimeline,
+      track: normalizedTrack
+    }
+  });
+  tracks.set(normalizedTrack, destinationEvents);
+
+  const nextEntities = { ...project.entities };
+  let changed = false;
+
+  for (const [track, trackEvents] of tracks) {
+    trackEvents.forEach((event, index) => {
+      const originalEvent = project.entities[event.id];
+
+      if (!originalEvent) {
+        return;
+      }
+
+      const originalTimeline = ensureEventTimeline(originalEvent);
+      const nextTimeline: EventTimeline = {
+        ...originalTimeline,
+        order: index + 1,
+        track
+      };
+
+      if (originalTimeline.order === nextTimeline.order && originalTimeline.track === nextTimeline.track) {
+        return;
+      }
+
+      nextEntities[event.id] = {
+        ...originalEvent,
+        timeline: nextTimeline,
+        updatedAt: nowIso()
+      };
+      changed = true;
+    });
+  }
+
+  return changed
+    ? touchProject({
+        ...project,
+        entities: nextEntities
+      })
+    : project;
+}
+
+export function deleteEmptyTimelineTrackFromProject(project: StoryProject, targetTrack: number): StoryProject {
+  const normalizedTrack = normalizeTimelineTrack(targetTrack);
+  const events = getTimelineEvents(project);
+
+  if (events.some((event) => (event.timeline?.track ?? 0) === normalizedTrack)) {
+    return project;
+  }
+
+  const maxTrack = events.reduce((track, event) => Math.max(track, event.timeline?.track ?? 0), 0);
+
+  if (normalizedTrack > maxTrack) {
+    return project;
+  }
+
+  const nextEntities = { ...project.entities };
+  let changed = false;
+
+  for (const event of events) {
+    const timeline = ensureEventTimeline(event);
+    const track = timeline.track ?? 0;
+
+    if (track <= normalizedTrack) {
+      continue;
+    }
+
+    nextEntities[event.id] = {
+      ...project.entities[event.id],
+      timeline: {
+        ...timeline,
+        track: track - 1
+      },
+      updatedAt: nowIso()
+    };
+    changed = true;
+  }
+
+  return changed
+    ? touchProject({
+        ...project,
+        entities: nextEntities
+      })
+    : project;
 }
 
 export function eventOrder(project: StoryProject, eventId: string): number | null {
@@ -640,4 +775,8 @@ function humanizeId(value: string): string {
   return value
     .replace(/[_-]+/g, " ")
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function normalizeTimelineTrack(track: number | undefined): number {
+  return typeof track === "number" && Number.isFinite(track) ? Math.max(0, Math.floor(track)) : 0;
 }

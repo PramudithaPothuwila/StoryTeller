@@ -28,6 +28,7 @@ export interface LinkTypeDefinition {
 
 export interface EventTimeline {
   order: number;
+  track?: number;
   effects: TimelineEffect[];
 }
 

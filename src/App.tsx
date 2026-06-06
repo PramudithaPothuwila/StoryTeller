@@ -29,12 +29,14 @@ import {
   createStoryEntity,
   createStoryRelationship,
   deleteEntityFromProject,
+  deleteEmptyTimelineTrackFromProject,
   deleteItemTypeFromProject,
   deleteLinkTypeFromProject,
   deleteRelationshipFromProject,
   findItemType,
   findLinkType,
   isRelationshipActiveAt,
+  moveTimelineEventInProject,
   nextEntityPosition,
   nextTimelineOrder,
   resolveRelationshipAt,
@@ -219,7 +221,7 @@ function StoryWorkspace() {
       const entity = createStoryEntity(type, project.itemTypes);
 
       if (entity.type === BUILT_IN_EVENT_TYPE_ID) {
-        entity.timeline = { order: nextTimelineOrder(project), effects: [] };
+        entity.timeline = { order: nextTimelineOrder(project), track: 0, effects: [] };
       }
 
       const nextProject = addEntityToProject(project, entity, nextEntityPosition(project));
@@ -377,6 +379,28 @@ function StoryWorkspace() {
       markProjectChanged(result.project);
       setSelectedTimelineEventId(eventId);
       setSelection({ kind: "relationship", id: result.relationshipId });
+    },
+    [markProjectChanged, project]
+  );
+
+  const handleMoveTimelineEvent = useCallback(
+    (eventId: string, track: number, index: number) => {
+      const nextProject = moveTimelineEventInProject(project, eventId, track, index);
+
+      if (nextProject !== project) {
+        markProjectChanged(nextProject);
+      }
+    },
+    [markProjectChanged, project]
+  );
+
+  const handleDeleteEmptyTimelineTrack = useCallback(
+    (track: number) => {
+      const nextProject = deleteEmptyTimelineTrackFromProject(project, track);
+
+      if (nextProject !== project) {
+        markProjectChanged(nextProject);
+      }
     },
     [markProjectChanged, project]
   );
@@ -623,6 +647,8 @@ function StoryWorkspace() {
             selectedEventId={selectedTimelineEventId}
             collapsed={timelineCollapsed}
             onToggleCollapsed={() => setTimelineCollapsed((collapsed) => !collapsed)}
+            onMoveEvent={handleMoveTimelineEvent}
+            onDeleteEmptyTrack={handleDeleteEmptyTimelineTrack}
             onSelectEvent={(eventId) => {
               setSelectedTimelineEventId(eventId);
               if (eventId) {

@@ -34,4 +34,31 @@ describe("DetailInspector", () => {
 
     expect(screen.getByLabelText("Private information")).toHaveValue(character.privateInfo);
   });
+
+  it("does not expose manual timeline order on event details", () => {
+    const project = createBlankProject("Inspector Test");
+    const event = createStoryEntity("event", project.itemTypes, "Market Fire");
+    event.timeline = { order: 1, effects: [] };
+    const projectWithEvent = {
+      ...project,
+      entities: {
+        [event.id]: event
+      }
+    };
+
+    render(
+      <DetailInspector
+        project={projectWithEvent}
+        selection={{ kind: "entity", id: event.id }}
+        onEntityChange={vi.fn()}
+        onRelationshipChange={vi.fn()}
+        onTimelineEffect={vi.fn()}
+        onDeleteEntity={vi.fn()}
+        onDeleteRelationship={vi.fn()}
+      />
+    );
+
+    expect(screen.queryByText("Timeline Order")).not.toBeInTheDocument();
+    expect(screen.getByText("Relationship Change")).toBeInTheDocument();
+  });
 });

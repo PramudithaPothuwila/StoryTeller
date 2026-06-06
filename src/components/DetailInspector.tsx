@@ -83,7 +83,6 @@ export function DetailInspector({
           <EventTimelineEditor
             project={project}
             eventEntity={selectedEntity}
-            onEntityChange={onEntityChange}
             onTimelineEffect={onTimelineEffect}
           />
         ) : null}
@@ -156,11 +155,10 @@ export function DetailInspector({
 interface EventTimelineEditorProps {
   project: StoryProject;
   eventEntity: StoryEntity;
-  onEntityChange: (id: string, patch: Partial<StoryEntity>) => void;
   onTimelineEffect: (eventId: string, draft: TimelineEffectDraft) => void;
 }
 
-function EventTimelineEditor({ project, eventEntity, onEntityChange, onTimelineEffect }: EventTimelineEditorProps) {
+function EventTimelineEditor({ project, eventEntity, onTimelineEffect }: EventTimelineEditorProps) {
   const timeline = ensureEventTimeline(eventEntity);
   const entities = Object.values(project.entities);
   const firstEntityId = entities[0]?.id ?? "";
@@ -231,23 +229,6 @@ function EventTimelineEditor({ project, eventEntity, onEntityChange, onTimelineE
 
   return (
     <section className="timeline-editor">
-      <label className="field-stack">
-        Timeline Order
-        <input
-          type="number"
-          min={1}
-          value={timeline.order}
-          onChange={(event) =>
-            onEntityChange(eventEntity.id, {
-              timeline: {
-                ...timeline,
-                order: Number(event.target.value) || 1
-              }
-            })
-          }
-        />
-      </label>
-
       <div className="timeline-effect-card">
         <div className="timeline-effect-card__header">
           <h2>Relationship Change</h2>
