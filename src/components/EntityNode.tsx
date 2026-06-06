@@ -8,6 +8,8 @@ export interface EntityNodeData extends Record<string, unknown> {
   entity: StoryEntity;
   itemType: ItemTypeDefinition;
   isSelected: boolean;
+  isConnectedToFocus: boolean;
+  isFaded: boolean;
 }
 
 export type EntityNodeType = Node<EntityNodeData, "storyEntity">;
@@ -17,7 +19,14 @@ export function EntityNode({ data }: NodeProps<EntityNodeType>) {
 
   return (
     <article
-      className={`entity-node ${data.isSelected ? "is-selected" : ""}`}
+      className={[
+        "entity-node",
+        data.isSelected ? "is-selected" : "",
+        data.isConnectedToFocus ? "is-connected" : "",
+        data.isFaded ? "is-faded" : ""
+      ]
+        .filter(Boolean)
+        .join(" ")}
       style={
         {
           "--node-accent": data.itemType.color,

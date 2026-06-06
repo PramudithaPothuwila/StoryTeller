@@ -10,7 +10,7 @@ import {
   writeProjectToDirectory
 } from "./data/projectFiles";
 import { loadStarterProject } from "./data/starterProject";
-import { createBlankProject, createStoryEntity } from "./data/story";
+import { createBlankProject, createStoryEntity, createStoryRelationship } from "./data/story";
 
 vi.mock("@xyflow/react", () => ({
   addEdge: (edge: unknown, edges: unknown[]) => [...edges, edge],
@@ -43,12 +43,30 @@ vi.mock("@xyflow/react", () => ({
   MiniMap: () => null,
   ReactFlow: ({
     children,
+    edges = [],
+    onEdgeClick,
+    onNodeClick,
     nodes = [],
     onNodesChange
   }: {
     children: ReactNode;
+    edges?: Array<{
+      id: string;
+      labelStyle?: { opacity?: number };
+      markerEnd?: { color?: string };
+      source: string;
+      style?: { opacity?: number; stroke?: string; strokeWidth?: number };
+      target: string;
+    }>;
+    onEdgeClick?: (event: unknown, edge: unknown) => void;
+    onNodeClick?: (event: unknown, node: unknown) => void;
     nodes?: Array<{
-      data: { entity: { title: string } };
+      data: {
+        entity: { title: string };
+        isConnectedToFocus?: boolean;
+        isFaded?: boolean;
+        isSelected?: boolean;
+      };
       id: string;
       measured?: { height: number; width: number };
       position: { x: number; y: number };
@@ -80,14 +98,36 @@ vi.mock("@xyflow/react", () => ({
         </>
       ) : null}
       {nodes.map((node) => (
-        <div
+        <button
+          type="button"
           key={node.id}
+          onClick={(event) => onNodeClick?.(event, node)}
+          data-connected={`${node.data.isConnectedToFocus ?? false}`}
+          data-faded={`${node.data.isFaded ?? false}`}
           data-measured={`${node.measured?.width ?? ""},${node.measured?.height ?? ""}`}
           data-position={`${node.position.x},${node.position.y}`}
+          data-selected={`${node.data.isSelected ?? false}`}
           data-testid={`flow-node-${node.id}`}
         >
           {node.data.entity.title}
-        </div>
+        </button>
+      ))}
+      {edges.map((edge) => (
+        <button
+          type="button"
+          key={edge.id}
+          onClick={(event) => onEdgeClick?.(event, edge)}
+          data-label-opacity={`${edge.labelStyle?.opacity ?? ""}`}
+          data-marker-color={edge.markerEnd?.color ?? ""}
+          data-opacity={`${edge.style?.opacity ?? ""}`}
+          data-source={edge.source}
+          data-stroke={edge.style?.stroke ?? ""}
+          data-stroke-width={`${edge.style?.strokeWidth ?? ""}`}
+          data-target={edge.target}
+          data-testid={`flow-edge-${edge.id}`}
+        >
+          {edge.id}
+        </button>
       ))}
       {children}
     </div>
@@ -334,6 +374,54 @@ describe("App project commands", () => {
     );
     expect(screen.getByTestId(`flow-node-${hero.id}`)).toHaveTextContent("Draggable Hero");
     expect(screen.getByText("Unsaved changes")).toBeInTheDocument();
+  });
+
+  it("highlights the selected graph item and fades unrelated neighborhoods", async () => {
+    const project = createBlankProject("Focus Project");
+    const hero = createStoryEntity("character", project.itemTypes, "Focused Hero");
+    const ally = createStoryEntity("character", project.itemTypes, "Connected Ally");
+    const outsider = createStoryEntity("character", project.itemTypes, "Outside Lead");
+    const clue = createStoryEntity("note", project.itemTypes, "Outside Clue");
+    const heroLink = createStoryRelationship(project, hero.id, ally.id, "relates_to");
+    const outsideLink = createStoryRelationship(project, outsider.id, clue.id, "relates_to");
+
+    vi.mocked(loadStarterProject).mockResolvedValue({
+      ...project,
+      entities: {
+        [hero.id]: hero,
+        [ally.id]: ally,
+        [outsider.id]: outsider,
+        [clue.id]: clue
+      },
+      relationships: [heroLink, outsideLink],
+      layout: {
+        [hero.id]: { x: 10, y: 20 },
+        [ally.id]: { x: 310, y: 20 },
+        [outsider.id]: { x: 10, y: 240 },
+        [clue.id]: { x: 310, y: 240 }
+      }
+    });
+
+    render(<App />);
+
+    await waitFor(() => expect(screen.getByDisplayValue("Focus Project")).toBeInTheDocument());
+
+    expect(screen.getByTestId(`flow-node-${hero.id}`)).toHaveAttribute("data-selected", "true");
+    expect(screen.getByTestId(`flow-node-${hero.id}`)).toHaveAttribute("data-connected", "true");
+    expect(screen.getByTestId(`flow-node-${ally.id}`)).toHaveAttribute("data-connected", "true");
+    expect(screen.getByTestId(`flow-node-${outsider.id}`)).toHaveAttribute("data-faded", "true");
+    expect(screen.getByTestId(`flow-edge-${heroLink.id}`)).toHaveAttribute("data-opacity", "1");
+    expect(screen.getByTestId(`flow-edge-${heroLink.id}`)).toHaveAttribute("data-stroke-width", "3");
+    expect(screen.getByTestId(`flow-edge-${outsideLink.id}`)).toHaveAttribute("data-opacity", "0.12");
+
+    fireEvent.click(screen.getByTestId(`flow-node-${outsider.id}`));
+
+    await waitFor(() => expect(screen.getByTestId(`flow-node-${outsider.id}`)).toHaveAttribute("data-selected", "true"));
+    expect(screen.getByTestId(`flow-node-${clue.id}`)).toHaveAttribute("data-connected", "true");
+    expect(screen.getByTestId(`flow-node-${hero.id}`)).toHaveAttribute("data-faded", "true");
+    expect(screen.getByTestId(`flow-edge-${heroLink.id}`)).toHaveAttribute("data-opacity", "0.12");
+    expect(screen.getByTestId(`flow-edge-${outsideLink.id}`)).toHaveAttribute("data-opacity", "1");
+    expect(screen.getByTestId(`flow-edge-${outsideLink.id}`)).toHaveAttribute("data-stroke-width", "3");
   });
 
   it("falls back to opening a backup file when folder access is unavailable", async () => {

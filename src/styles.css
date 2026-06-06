@@ -428,12 +428,28 @@ textarea:focus {
   border-radius: 8px;
   background: #ffffff;
   box-shadow: 0 14px 28px rgba(23, 32, 31, 0.12);
+  transition:
+    opacity 160ms ease,
+    filter 160ms ease,
+    box-shadow 160ms ease;
 }
 
 .entity-node.is-selected {
   box-shadow:
     0 0 0 4px rgba(15, 118, 110, 0.18),
     0 16px 32px rgba(23, 32, 31, 0.16);
+}
+
+.entity-node.is-connected:not(.is-selected) {
+  box-shadow:
+    0 0 0 3px var(--node-soft),
+    0 14px 28px rgba(23, 32, 31, 0.12);
+}
+
+.entity-node.is-faded {
+  opacity: 0.28;
+  filter: grayscale(0.35) saturate(0.55);
+  box-shadow: 0 8px 18px rgba(23, 32, 31, 0.06);
 }
 
 .entity-node__header {

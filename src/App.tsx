@@ -74,6 +74,11 @@ type ValidPositionNodeChange = PositionNodeChange & {
   position: Point;
 };
 
+interface EntityGraphFocus {
+  connectedEntityIds: Set<string>;
+  relationshipIds: Set<string>;
+}
+
 const nodeTypes = {
   storyEntity: EntityNode
 } satisfies NodeTypes;
@@ -92,10 +97,14 @@ export function App() {
 function StoryWorkspace() {
   const initialProject = useMemo(() => createLoadingProject(), []);
   const initialSelection = useMemo(() => firstProjectSelection(initialProject), [initialProject]);
+  const initialGraphFocus = useMemo(
+    () => createEntityGraphFocus(initialProject, initialSelection),
+    [initialProject, initialSelection]
+  );
   const [project, setProject] = useState<StoryProject>(() => initialProject);
   const [selection, setSelection] = useState<Selection | null>(() => initialSelection);
   const [flowNodes, setFlowNodes] = useState<Node<EntityNodeData, "storyEntity">[]>(() =>
-    projectNodes(initialProject, initialSelection)
+    projectNodes(initialProject, initialSelection, initialGraphFocus)
   );
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("Ready");
@@ -106,6 +115,7 @@ function StoryWorkspace() {
   const [selectedTimelineEventId, setSelectedTimelineEventId] = useState<string | null>(null);
   const [timelineCollapsed, setTimelineCollapsed] = useState(false);
   const backupInputRef = useRef<HTMLInputElement>(null);
+  const graphFocus = useMemo(() => createEntityGraphFocus(project, selection), [project, selection]);
 
   useEffect(() => {
     let cancelled = false;
@@ -119,9 +129,10 @@ function StoryWorkspace() {
         }
 
         const nextSelection = firstProjectSelection(starterProject);
+        const nextGraphFocus = createEntityGraphFocus(starterProject, nextSelection);
         setProject(starterProject);
         setSelection(nextSelection);
-        setFlowNodes(projectNodes(starterProject, nextSelection));
+        setFlowNodes(projectNodes(starterProject, nextSelection, nextGraphFocus));
         setSelectedTimelineEventId(null);
         setIsDirty(false);
         setStatus("Starter project loaded");
@@ -133,7 +144,7 @@ function StoryWorkspace() {
         const blankProject = createBlankProject();
         setProject(blankProject);
         setSelection(null);
-        setFlowNodes(projectNodes(blankProject, null));
+        setFlowNodes(projectNodes(blankProject, null, null));
         setStatus((error as Error).message);
       }
     }
@@ -146,8 +157,8 @@ function StoryWorkspace() {
   }, []);
 
   useEffect(() => {
-    setFlowNodes((currentNodes) => syncProjectNodes(currentNodes, project, selection));
-  }, [project, selection]);
+    setFlowNodes((currentNodes) => syncProjectNodes(currentNodes, project, selection, graphFocus));
+  }, [graphFocus, project, selection]);
 
   const edges = useMemo<Edge[]>(
     () =>
@@ -156,6 +167,10 @@ function StoryWorkspace() {
         const linkType = findLinkType(project, resolvedRelationship.type);
         const active = isRelationshipActiveAt(project, relationship, selectedTimelineEventId);
         const selected = selection?.kind === "relationship" && selection.id === relationship.id;
+        const connectedToFocus = graphFocus?.relationshipIds.has(relationship.id) ?? false;
+        const fadedByFocus = Boolean(graphFocus && !connectedToFocus);
+        const edgeOpacity = relationshipOpacity(active, fadedByFocus, connectedToFocus);
+        const markerColor = fadedByFocus ? "#9aa8a4" : selected ? "#be123c" : linkType.color;
 
         return {
           id: relationship.id,
@@ -169,28 +184,28 @@ function StoryWorkspace() {
                   type: MarkerType.ArrowClosed,
                   width: 18,
                   height: 18,
-                  color: selected ? "#be123c" : linkType.color
+                  color: markerColor
                 }
               : undefined,
           style: {
-            stroke: selected ? "#be123c" : linkType.color,
-            strokeWidth: selected ? 3 : 2,
-            opacity: active ? 1 : 0.28,
+            stroke: markerColor,
+            strokeWidth: selected || connectedToFocus ? 3 : 2,
+            opacity: edgeOpacity,
             strokeDasharray: active ? undefined : "7 7"
           },
           labelStyle: {
-            fill: "#17201f",
+            fill: fadedByFocus ? "#697a75" : "#17201f",
             fontWeight: 700,
             fontSize: 12,
-            opacity: active ? 1 : 0.42
+            opacity: relationshipLabelOpacity(active, fadedByFocus, connectedToFocus)
           },
           labelBgStyle: {
             fill: "#ffffff",
-            fillOpacity: active ? 0.9 : 0.55
+            fillOpacity: fadedByFocus ? 0.35 : active ? 0.9 : connectedToFocus ? 0.7 : 0.55
           }
         };
       }),
-    [project, selectedTimelineEventId, selection]
+    [graphFocus, project, selectedTimelineEventId, selection]
   );
 
   const markProjectChanged = useCallback((nextProject: StoryProject) => {
@@ -340,7 +355,7 @@ function StoryWorkspace() {
       setProject(nextProject);
       setFolderHandle(handle);
       setSelection(null);
-      setFlowNodes(projectNodes(nextProject, null));
+      setFlowNodes(projectNodes(nextProject, null, null));
       setSelectedTimelineEventId(null);
       setIsDirty(false);
       setStatus("Project saved");
@@ -502,10 +517,11 @@ function StoryWorkspace() {
 
       const loadedProject = await readProjectFromDirectory(handle);
       const nextSelection = firstProjectSelection(loadedProject);
+      const nextGraphFocus = createEntityGraphFocus(loadedProject, nextSelection);
       setProject(loadedProject);
       setFolderHandle(handle);
       setSelection(nextSelection);
-      setFlowNodes(projectNodes(loadedProject, nextSelection));
+      setFlowNodes(projectNodes(loadedProject, nextSelection, nextGraphFocus));
       setSelectedTimelineEventId(null);
       setIsDirty(false);
       setStatus("Project opened");
@@ -527,10 +543,11 @@ function StoryWorkspace() {
     try {
       const loadedProject = await projectFromBundleFile(file);
       const nextSelection = firstProjectSelection(loadedProject);
+      const nextGraphFocus = createEntityGraphFocus(loadedProject, nextSelection);
       setProject(loadedProject);
       setFolderHandle(null);
       setSelection(nextSelection);
-      setFlowNodes(projectNodes(loadedProject, nextSelection));
+      setFlowNodes(projectNodes(loadedProject, nextSelection, nextGraphFocus));
       setSelectedTimelineEventId(null);
       setIsDirty(false);
       setStatus("Project opened from backup");
@@ -648,7 +665,35 @@ function firstProjectSelection(project: StoryProject): Selection | null {
   return firstEntity ? { kind: "entity", id: firstEntity } : null;
 }
 
-function projectNodes(project: StoryProject, selection: Selection | null): Node<EntityNodeData, "storyEntity">[] {
+function createEntityGraphFocus(project: StoryProject, selection: Selection | null): EntityGraphFocus | null {
+  if (selection?.kind !== "entity" || !project.entities[selection.id]) {
+    return null;
+  }
+
+  const connectedEntityIds = new Set([selection.id]);
+  const relationshipIds = new Set<string>();
+
+  for (const relationship of project.relationships) {
+    if (relationship.sourceId !== selection.id && relationship.targetId !== selection.id) {
+      continue;
+    }
+
+    relationshipIds.add(relationship.id);
+    connectedEntityIds.add(relationship.sourceId);
+    connectedEntityIds.add(relationship.targetId);
+  }
+
+  return {
+    connectedEntityIds,
+    relationshipIds
+  };
+}
+
+function projectNodes(
+  project: StoryProject,
+  selection: Selection | null,
+  graphFocus: EntityGraphFocus | null
+): Node<EntityNodeData, "storyEntity">[] {
   return Object.values(project.entities).map((entity) => ({
     id: entity.id,
     type: "storyEntity",
@@ -656,7 +701,9 @@ function projectNodes(project: StoryProject, selection: Selection | null): Node<
     data: {
       entity,
       itemType: findItemType(project, entity.type),
-      isSelected: selection?.kind === "entity" && selection.id === entity.id
+      isSelected: selection?.kind === "entity" && selection.id === entity.id,
+      isConnectedToFocus: graphFocus?.connectedEntityIds.has(entity.id) ?? false,
+      isFaded: Boolean(graphFocus && !graphFocus.connectedEntityIds.has(entity.id))
     }
   }));
 }
@@ -664,7 +711,8 @@ function projectNodes(project: StoryProject, selection: Selection | null): Node<
 function syncProjectNodes(
   currentNodes: Node<EntityNodeData, "storyEntity">[],
   project: StoryProject,
-  selection: Selection | null
+  selection: Selection | null,
+  graphFocus: EntityGraphFocus | null
 ): Node<EntityNodeData, "storyEntity">[] {
   const currentNodeById = new Map(currentNodes.map((node) => [node.id, node]));
 
@@ -685,10 +733,36 @@ function syncProjectNodes(
       data: {
         entity,
         itemType: findItemType(project, entity.type),
-        isSelected: selection?.kind === "entity" && selection.id === entity.id
+        isSelected: selection?.kind === "entity" && selection.id === entity.id,
+        isConnectedToFocus: graphFocus?.connectedEntityIds.has(entity.id) ?? false,
+        isFaded: Boolean(graphFocus && !graphFocus.connectedEntityIds.has(entity.id))
       }
     };
   });
+}
+
+function relationshipOpacity(active: boolean, fadedByFocus: boolean, connectedToFocus: boolean): number {
+  if (fadedByFocus) {
+    return active ? 0.12 : 0.08;
+  }
+
+  if (!active) {
+    return connectedToFocus ? 0.42 : 0.28;
+  }
+
+  return 1;
+}
+
+function relationshipLabelOpacity(active: boolean, fadedByFocus: boolean, connectedToFocus: boolean): number {
+  if (fadedByFocus) {
+    return active ? 0.2 : 0.12;
+  }
+
+  if (!active) {
+    return connectedToFocus ? 0.58 : 0.42;
+  }
+
+  return 1;
 }
 
 function isPositionNodeChange(change: NodeChange): change is PositionNodeChange {
