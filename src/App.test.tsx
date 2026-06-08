@@ -60,12 +60,15 @@ vi.mock("@xyflow/react", () => ({
   }: {
     children: ReactNode;
     edges?: Array<{
+      data?: { labelOffset?: number };
       id: string;
+      label?: ReactNode;
       labelStyle?: { opacity?: number };
       markerEnd?: { color?: string };
       source: string;
       style?: { opacity?: number; stroke?: string; strokeWidth?: number };
       target: string;
+      type?: string;
     }>;
     onEdgeClick?: (event: unknown, edge: unknown) => void;
     onNodeClick?: (event: unknown, node: unknown) => void;
@@ -137,6 +140,8 @@ vi.mock("@xyflow/react", () => ({
           key={edge.id}
           onClick={(event) => onEdgeClick?.(event, edge)}
           data-label-opacity={`${edge.labelStyle?.opacity ?? ""}`}
+          data-label-offset={`${edge.data?.labelOffset ?? ""}`}
+          data-label={`${edge.label ?? ""}`}
           data-marker-color={edge.markerEnd?.color ?? ""}
           data-opacity={`${edge.style?.opacity ?? ""}`}
           data-source={edge.source}
@@ -144,6 +149,7 @@ vi.mock("@xyflow/react", () => ({
           data-stroke-width={`${edge.style?.strokeWidth ?? ""}`}
           data-target={edge.target}
           data-testid={`flow-edge-${edge.id}`}
+          data-type={edge.type ?? ""}
         >
           {edge.id}
         </button>
@@ -227,6 +233,7 @@ describe("App project commands", () => {
     expect(screen.getByRole("button", { name: "Select Folder" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Save Project" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Export Backup" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Guide" })).toHaveAttribute("title", "Guide");
     expect(screen.getByRole("button", { name: "Open Settings" })).toHaveAttribute("title", "Open Settings");
     expect(screen.getByRole("button", { name: "Save Project" })).toHaveAttribute("title", "Save Project");
     expect(screen.getByText("Not selected")).toBeInTheDocument();
@@ -234,6 +241,30 @@ describe("App project commands", () => {
     expect(screen.queryByRole("button", { name: "Open folder" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Import" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Export" })).not.toBeInTheDocument();
+  });
+
+  it("opens and closes the in-app guide from the topbar", async () => {
+    render(<App />);
+
+    await waitFor(() => expect(screen.getByText("Loaded Project")).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("button", { name: "Guide" }));
+
+    const guide = screen.getByRole("dialog", { name: "Guide" });
+    expect(within(guide).getByText("Create and Find Story Items")).toBeInTheDocument();
+    expect(within(guide).getByText("Use the Graph")).toBeInTheDocument();
+    expect(within(guide).getByText("Save and Configure")).toBeInTheDocument();
+
+    fireEvent.click(within(guide).getByRole("button", { name: "Close guide" }));
+
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Guide" })).not.toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("button", { name: "Guide" }));
+    expect(screen.getByRole("dialog", { name: "Guide" })).toBeInTheDocument();
+
+    fireEvent.keyDown(window, { key: "Escape" });
+
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Guide" })).not.toBeInTheDocument());
   });
 
   it("opens settings to edit project configuration and workspace defaults", async () => {
@@ -564,6 +595,43 @@ describe("App project commands", () => {
     expect(screen.getByText("Unsaved changes")).toBeInTheDocument();
   });
 
+  it("offsets relationship labels for multiple outgoing links from the same entity", async () => {
+    const project = createBlankProject("Relationship Labels Project");
+    const hero = createStoryEntity("character", project.itemTypes, "Label Source");
+    const ally = createStoryEntity("character", project.itemTypes, "First Target");
+    const clue = createStoryEntity("note", project.itemTypes, "Second Target");
+    const faction = createStoryEntity("faction", project.itemTypes, "Third Target");
+    const firstLink = createStoryRelationship(project, hero.id, ally.id, "relates_to");
+    const secondLink = createStoryRelationship(project, hero.id, clue.id, "knows");
+    const thirdLink = createStoryRelationship(project, hero.id, faction.id, "opposes");
+
+    vi.mocked(loadStarterProject).mockResolvedValue({
+      ...project,
+      entities: {
+        [hero.id]: hero,
+        [ally.id]: ally,
+        [clue.id]: clue,
+        [faction.id]: faction
+      },
+      relationships: [firstLink, secondLink, thirdLink],
+      layout: {
+        [hero.id]: { x: 10, y: 20 },
+        [ally.id]: { x: 310, y: 20 },
+        [clue.id]: { x: 310, y: 220 },
+        [faction.id]: { x: 310, y: 420 }
+      }
+    });
+
+    render(<App />);
+
+    await waitFor(() => expect(screen.getByText("Relationship Labels Project")).toBeInTheDocument());
+    expect(screen.getByTestId(`flow-edge-${firstLink.id}`)).toHaveAttribute("data-type", "relationship");
+    expect(screen.getByTestId(`flow-edge-${firstLink.id}`)).toHaveAttribute("data-label", "Relates to");
+    expect(screen.getByTestId(`flow-edge-${firstLink.id}`)).toHaveAttribute("data-label-offset", "-18");
+    expect(screen.getByTestId(`flow-edge-${secondLink.id}`)).toHaveAttribute("data-label-offset", "18");
+    expect(screen.getByTestId(`flow-edge-${thirdLink.id}`)).toHaveAttribute("data-label-offset", "-36");
+  });
+
   it("highlights the selected graph item and fades unrelated neighborhoods", async () => {
     const project = createBlankProject("Focus Project");
     const hero = createStoryEntity("character", project.itemTypes, "Focused Hero");
@@ -680,7 +748,10 @@ describe("App project commands", () => {
     fireEvent.click(screen.getByRole("button", { name: "Game Story" }));
     fireEvent.click(screen.getByRole("button", { name: "Back to Workspace" }));
 
-    await waitFor(() => expect(screen.getByRole("complementary", { name: "Game Story Tools" })).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole("button", { name: "Story Flow" })).toHaveClass("is-active"));
+    expect(screen.getByRole("button", { name: "Branching RPG" })).toBeInTheDocument();
+    expect(screen.queryByRole("complementary", { name: "Game Story Tools" })).not.toBeInTheDocument();
+    expect(document.querySelector(".workspace")).not.toHaveClass("has-game-tools");
     expect(screen.getByRole("button", { name: "Story Flow" })).toHaveClass("is-active");
     expect(screen.getByRole("button", { name: "Scene" })).toBeInTheDocument();
 
@@ -695,13 +766,24 @@ describe("App project commands", () => {
     expect(sceneNode).toHaveAttribute("data-game-start", "true");
     expect(screen.getByLabelText("Game node role")).toHaveValue("scene");
 
+    fireEvent.click(screen.getByRole("button", { name: "Branching RPG" }));
+
+    await waitFor(() => expect(screen.getByRole("complementary", { name: "Game Story Tools" })).toBeInTheDocument());
+    expect(screen.getByRole("button", { name: "Branching RPG" })).toHaveClass("is-active");
+    expect(document.querySelector(".workspace")).toHaveClass("has-game-tools");
+
     fireEvent.click(screen.getByRole("button", { name: "Variable" }));
 
     await waitFor(() => expect(screen.getByText("State Variables")).toBeInTheDocument());
     expect(document.querySelector(".state-variable-card")).not.toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Branching RPG" }));
+
+    await waitFor(() => expect(screen.queryByRole("complementary", { name: "Game Story Tools" })).not.toBeInTheDocument());
+    expect(document.querySelector(".workspace")).not.toHaveClass("has-game-tools");
   });
 
-  it("filters Story Flow to game nodes and previews branches", async () => {
+  it("filters Story Flow to game nodes and opens the optional preview tools", async () => {
     const fixture = createGameStoryFixture();
     vi.mocked(loadStarterProject).mockResolvedValue(fixture.project);
 
@@ -718,7 +800,16 @@ describe("App project commands", () => {
     await waitFor(() => expect(screen.getByTestId(`flow-node-${fixture.character.id}`)).toBeInTheDocument());
 
     fireEvent.click(screen.getByRole("button", { name: "Story Flow" }));
-    fireEvent.click(screen.getByRole("button", { name: /Preview/ }));
+    expect(screen.queryByRole("complementary", { name: "Game Story Tools" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Preview/ })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId(`flow-edge-${fixture.branch.id}`));
+
+    await waitFor(() => expect(screen.getByText("Branch Fields")).toBeInTheDocument());
+    expect(screen.getByDisplayValue("Open the gate")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Branching RPG" }));
+    fireEvent.click(screen.getByRole("button", { name: "Preview" }));
 
     await waitFor(() => expect(screen.getByText("Open the gate")).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: /Open the gate/ }));
@@ -726,13 +817,19 @@ describe("App project commands", () => {
     await waitFor(() => expect(document.querySelector(".play-current-node h3")).toHaveTextContent("Bright Ending"));
   });
 
-  it("selects the related game node from continuity issues", async () => {
+  it("opens the optional RPG sidebar to inspect continuity issues", async () => {
     const fixture = createGameStoryFixture({ includeLonelyScene: true });
     vi.mocked(loadStarterProject).mockResolvedValue(fixture.project);
 
     render(<App />);
 
     await waitFor(() => expect(screen.getByText("Game Flow Project")).toBeInTheDocument());
+    expect(screen.getByText(/\d+ issues/)).toBeInTheDocument();
+    expect(screen.queryByRole("complementary", { name: "Game Story Tools" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Continuity/ })).not.toBeInTheDocument();
+    expect(screen.queryByText("Unreachable node")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Branching RPG" }));
     fireEvent.click(screen.getByRole("button", { name: /Continuity/ }));
 
     await waitFor(() => expect(screen.getByText("Unreachable node")).toBeInTheDocument());

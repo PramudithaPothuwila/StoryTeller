@@ -5,7 +5,7 @@ import {
   BackgroundVariant,
   Connection,
   Controls,
-  Edge,
+  type EdgeTypes,
   MarkerType,
   MiniMap,
   Node,
@@ -16,10 +16,12 @@ import {
 } from "@xyflow/react";
 import {
   ArrowLeft,
+  CircleHelp,
   Download,
   FilePlus2,
   FolderOpen,
   FolderPlus,
+  Gamepad2,
   Save,
   ScrollText,
   Settings2
@@ -28,6 +30,8 @@ import { ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "re
 import { DetailInspector } from "./components/DetailInspector";
 import { EntityNode, EntityNodeData } from "./components/EntityNode";
 import { GameStoryPanel, type GameToolTab } from "./components/GameStoryPanel";
+import { InAppGuide } from "./components/InAppGuide";
+import { RelationshipEdge, type RelationshipEdgeType } from "./components/RelationshipEdge";
 import { RulebookSidebar } from "./components/RulebookSidebar";
 import { SettingsPage } from "./components/SettingsPage";
 import { Sidebar } from "./components/Sidebar";
@@ -113,9 +117,14 @@ const nodeTypes = {
   storyEntity: EntityNode
 } satisfies NodeTypes;
 
+const edgeTypes = {
+  relationship: RelationshipEdge
+} satisfies EdgeTypes;
+
 const FOLDER_ACCESS_UNAVAILABLE_MESSAGE =
   "Folder selection is unavailable in this browser. Use a browser with folder access to save folder projects.";
 const GRAPH_FOCUS_DEPTH_STORAGE_KEY = "storyteller.graphFocusDepth";
+const RELATIONSHIP_LABEL_OFFSET_STEP = 18;
 const graphFocusDepthOptions: Array<{ label: string; value: GraphFocusDepth }> = [
   { label: "1", value: 1 },
   { label: "2", value: 2 },
@@ -152,6 +161,8 @@ function StoryWorkspace() {
   const [folderHandle, setFolderHandle] = useState<FileSystemDirectoryHandle | null>(null);
   const [defaultRelationshipType, setDefaultRelationshipType] = useState<LinkTypeId>("relates_to");
   const [activePage, setActivePage] = useState<ActivePage>("workspace");
+  const [guideOpen, setGuideOpen] = useState(false);
+  const [gameToolsOpen, setGameToolsOpen] = useState(false);
   const [rulebookOpen, setRulebookOpen] = useState(false);
   const [selectedTimelineEventId, setSelectedTimelineEventId] = useState<string | null>(null);
   const [timelineCollapsed, setTimelineCollapsed] = useState(false);
@@ -218,9 +229,17 @@ function StoryWorkspace() {
     setFlowNodes((currentNodes) => syncProjectNodes(currentNodes, project, selection, graphFocus, graphView));
   }, [graphFocus, graphView, project, selection]);
 
-  const edges = useMemo<Edge[]>(
-    () =>
-      graphRelationships.map((relationship) => {
+  useEffect(() => {
+    if (project.projectMode !== "game_story") {
+      setGameToolsOpen(false);
+    }
+  }, [project.projectMode]);
+
+  const edges = useMemo<RelationshipEdgeType[]>(
+    () => {
+      const labelOffsetByRelationshipId = relationshipLabelOffsetById(graphRelationships);
+
+      return graphRelationships.map((relationship) => {
         const resolvedRelationship = resolveRelationshipAt(project, relationship, selectedTimelineEventId);
         const linkType = findLinkType(project, resolvedRelationship.type);
         const active = isRelationshipActiveAt(project, relationship, selectedTimelineEventId);
@@ -237,7 +256,10 @@ function StoryWorkspace() {
           source: relationship.sourceId,
           target: relationship.targetId,
           label: gameRelationship?.choiceText || resolvedRelationship.label || linkType.label,
-          type: "default",
+          type: "relationship",
+          data: {
+            labelOffset: labelOffsetByRelationshipId.get(relationship.id) ?? 0
+          },
           markerEnd:
             linkType.direction === "directed"
               ? {
@@ -264,11 +286,13 @@ function StoryWorkspace() {
             fillOpacity: fadedByFocus ? 0.35 : active ? 0.9 : connectedToFocus ? 0.7 : 0.55
           }
         };
-      }),
+      });
+    },
     [graphFocus, graphRelationships, graphView, project, selectedTimelineEventId, selection]
   );
   const inspectorVisible = hasVisibleInspector(project, selection);
-  const gameToolsVisible = project.projectMode === "game_story";
+  const gameToolsAvailable = project.projectMode === "game_story";
+  const gameToolsVisible = gameToolsAvailable && gameToolsOpen;
   const workspaceClassName = [
     "workspace",
     inspectorVisible ? "has-inspector" : "",
@@ -783,6 +807,21 @@ function StoryWorkspace() {
           <HeaderIconButton label="Rulebook" onClick={handleOpenRulebook}>
             <ScrollText aria-hidden="true" />
           </HeaderIconButton>
+          {gameToolsAvailable ? (
+            <HeaderIconButton
+              label="Branching RPG"
+              active={gameToolsVisible}
+              onClick={() => {
+                setActivePage("workspace");
+                setGameToolsOpen((open) => !open);
+              }}
+            >
+              <Gamepad2 aria-hidden="true" />
+            </HeaderIconButton>
+          ) : null}
+          <HeaderIconButton label="Guide" active={guideOpen} onClick={() => setGuideOpen(true)}>
+            <CircleHelp aria-hidden="true" />
+          </HeaderIconButton>
           <HeaderIconButton
             label={activePage === "settings" ? "Back to Workspace" : "Open Settings"}
             active={activePage === "settings"}
@@ -792,6 +831,8 @@ function StoryWorkspace() {
           </HeaderIconButton>
         </nav>
       </header>
+
+      {guideOpen ? <InAppGuide onClose={() => setGuideOpen(false)} /> : null}
 
       {activePage === "settings" ? (
         <SettingsPage
@@ -845,6 +886,7 @@ function StoryWorkspace() {
                 nodes={flowNodes}
                 edges={edges}
                 nodeTypes={nodeTypes}
+                edgeTypes={edgeTypes}
                 fitView
                 fitViewOptions={{ padding: 0.25 }}
                 onNodesChange={handleNodesChange}
@@ -1114,6 +1156,39 @@ function graphViewRelationships(project: StoryProject, graphView: GraphView): St
 
     return graphView === "story_flow" ? isGameStoryLinkType(relationship.type) || Boolean(relationship.gameStory) : true;
   });
+}
+
+function relationshipLabelOffsetById(relationships: StoryRelationship[]): Map<string, number> {
+  const relationshipsBySourceId = new Map<string, StoryRelationship[]>();
+
+  for (const relationship of relationships) {
+    relationshipsBySourceId.set(relationship.sourceId, [
+      ...(relationshipsBySourceId.get(relationship.sourceId) ?? []),
+      relationship
+    ]);
+  }
+
+  const offsetByRelationshipId = new Map<string, number>();
+
+  for (const sourceRelationships of relationshipsBySourceId.values()) {
+    if (sourceRelationships.length === 1) {
+      offsetByRelationshipId.set(sourceRelationships[0].id, 0);
+      continue;
+    }
+
+    sourceRelationships.forEach((relationship, index) => {
+      offsetByRelationshipId.set(relationship.id, relationshipLabelOffset(index));
+    });
+  }
+
+  return offsetByRelationshipId;
+}
+
+function relationshipLabelOffset(index: number): number {
+  const lane = Math.floor(index / 2) + 1;
+  const direction = index % 2 === 0 ? -1 : 1;
+
+  return lane * direction * RELATIONSHIP_LABEL_OFFSET_STEP;
 }
 
 function outgoingGraphViewTargets(project: StoryProject, entityId: string): string[] {

@@ -1658,6 +1658,118 @@ textarea:focus {
   background: rgba(23, 32, 31, 0.42);
 }
 
+.guide-dialog {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  width: min(920px, 100%);
+  max-height: min(760px, calc(100vh - 40px));
+  overflow: hidden;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 24px 80px rgba(23, 32, 31, 0.26);
+}
+
+.guide-dialog__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 18px;
+  border-bottom: 1px solid var(--line);
+}
+
+.guide-dialog__header p {
+  margin: 0 0 4px;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.guide-dialog__header h2 {
+  margin: 0;
+  font-size: 1.25rem;
+}
+
+.guide-dialog__body {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  min-height: 0;
+  overflow: auto;
+  padding: 16px;
+}
+
+.guide-section,
+.guide-note {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.guide-section {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  padding: 14px;
+}
+
+.guide-section__heading {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+}
+
+.guide-section__heading svg,
+.guide-note svg {
+  width: 19px;
+  height: 19px;
+  flex: 0 0 auto;
+  color: var(--teal);
+}
+
+.guide-section__heading h3 {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-size: 0.96rem;
+}
+
+.guide-section ul {
+  display: grid;
+  gap: 7px;
+  margin: 0;
+  padding-left: 18px;
+  color: var(--muted);
+  font-size: 0.88rem;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.guide-section li {
+  padding-left: 2px;
+}
+
+.guide-note {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+  padding: 14px;
+  background: #f7f9f8;
+}
+
+.guide-note p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+  font-weight: 800;
+  line-height: 1.45;
+}
+
 .type-manager {
   display: grid;
   grid-template-rows: auto auto minmax(0, 1fr);
@@ -2064,6 +2176,19 @@ textarea:focus {
   .settings-section-heading {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .guide-dialog {
+    max-height: calc(100vh - 28px);
+  }
+
+  .guide-dialog__body {
+    grid-template-columns: 1fr;
+    padding: 12px;
+  }
+
+  .guide-note {
+    grid-column: auto;
   }
 
   .sidebar,
