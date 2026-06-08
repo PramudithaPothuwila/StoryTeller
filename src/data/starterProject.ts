@@ -36,7 +36,7 @@ interface StarterProjectManifest {
 
 export async function loadStarterProject(
   fetchProject = fetch,
-  starterProjectId = DEFAULT_STARTER_PROJECT_ID
+  starterProjectId = "black-hollow-last-stop"
 ): Promise<StoryProject> {
   const starterProject = findStarterProject(starterProjectId);
   const manifestText = await fetchStarterFile(fetchProject, starterProject.root, STARTER_PROJECT_MANIFEST);

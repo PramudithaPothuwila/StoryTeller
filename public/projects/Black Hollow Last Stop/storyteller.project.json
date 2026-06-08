@@ -1,8 +1,8 @@
 {
   "schemaVersion": 3,
   "title": "Black Hollow: Last Stop",
-  "updatedAt": "2026-06-06T21:18:29.765Z",
-  "projectMode": "story",
+  "updatedAt": "2026-06-08T05:25:29.833Z",
+  "projectMode": "game_story",
   "gameStory": {
     "startNodeId": "scene-murder-victim-found",
     "stateVariables": [
@@ -366,16 +366,16 @@
       "y": 660
     },
     "scene-murder-victim-found": {
-      "x": -973.5529002068022,
-      "y": 1105.8432340805714
+      "x": -1103.5529002068022,
+      "y": 1079.8432340805714
     },
     "quest-prove-station-staged": {
-      "x": -566.5483306311538,
-      "y": 1392.1905095320806
+      "x": -698.5483306311538,
+      "y": 1280.1905095320806
     },
     "dialogue-interview-silas-crowe": {
-      "x": -343.6189809358388,
-      "y": 1054.5159935147692
+      "x": -409.6189809358388,
+      "y": 884.5159935147691
     },
     "scene-search-signal-room": {
       "x": 201.73427058758608,

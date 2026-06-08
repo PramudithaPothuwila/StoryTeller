@@ -14,15 +14,24 @@ import {
   ReactFlow,
   ReactFlowProvider
 } from "@xyflow/react";
-import { BookOpen, Gamepad2, ScrollText } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  ArrowLeft,
+  Download,
+  FilePlus2,
+  FolderOpen,
+  FolderPlus,
+  Save,
+  ScrollText,
+  Settings2
+} from "lucide-react";
+import { ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { DetailInspector } from "./components/DetailInspector";
 import { EntityNode, EntityNodeData } from "./components/EntityNode";
 import { GameStoryPanel, type GameToolTab } from "./components/GameStoryPanel";
 import { RulebookSidebar } from "./components/RulebookSidebar";
+import { SettingsPage } from "./components/SettingsPage";
 import { Sidebar } from "./components/Sidebar";
 import { TimelinePanel } from "./components/TimelinePanel";
-import { TypeManager } from "./components/TypeManager";
 import {
   addTimelineLaneToProject,
   addEntityToProject,
@@ -98,6 +107,7 @@ interface EntityGraphFocus {
 
 type GraphFocusDepth = 1 | 2 | 3 | 4 | "all";
 type GraphView = "world" | "story_flow";
+type ActivePage = "workspace" | "settings";
 
 const nodeTypes = {
   storyEntity: EntityNode
@@ -141,7 +151,7 @@ function StoryWorkspace() {
   const [isDirty, setIsDirty] = useState(false);
   const [folderHandle, setFolderHandle] = useState<FileSystemDirectoryHandle | null>(null);
   const [defaultRelationshipType, setDefaultRelationshipType] = useState<LinkTypeId>("relates_to");
-  const [typeManagerOpen, setTypeManagerOpen] = useState(false);
+  const [activePage, setActivePage] = useState<ActivePage>("workspace");
   const [rulebookOpen, setRulebookOpen] = useState(false);
   const [selectedTimelineEventId, setSelectedTimelineEventId] = useState<string | null>(null);
   const [timelineCollapsed, setTimelineCollapsed] = useState(false);
@@ -300,6 +310,11 @@ function StoryWorkspace() {
     if (nextGraphView === "story_flow") {
       setDefaultRelationshipType("branches_to");
     }
+  }, []);
+
+  const handleOpenRulebook = useCallback(() => {
+    setActivePage("workspace");
+    setRulebookOpen(true);
   }, []);
 
   const handleCreateEntity = useCallback(
@@ -737,180 +752,189 @@ function StoryWorkspace() {
       />
 
       <header className="topbar">
-        <div>
+        <div className="topbar-project">
           <strong>{project.title}</strong>
-          <span>{Object.keys(project.entities).length} items</span>
-          <span>{project.relationships.length} links</span>
-          {project.projectMode === "game_story" ? <span>{continuityIssueCount} issues</span> : null}
-        </div>
-        <div className="topbar-actions">
-          <div className="mode-toggle" role="group" aria-label="Project mode">
-            <button
-              type="button"
-              className={project.projectMode === "story" ? "is-active" : ""}
-              aria-pressed={project.projectMode === "story"}
-              onClick={() => handleProjectModeChange("story")}
-            >
-              <BookOpen aria-hidden="true" />
-              Story
-            </button>
-            <button
-              type="button"
-              className={project.projectMode === "game_story" ? "is-active" : ""}
-              aria-pressed={project.projectMode === "game_story"}
-              onClick={() => handleProjectModeChange("game_story")}
-            >
-              <Gamepad2 aria-hidden="true" />
-              Game Story
-            </button>
+          <div className="topbar-meta">
+            <span>{Object.keys(project.entities).length} items</span>
+            <span>{project.relationships.length} links</span>
+            {project.projectMode === "game_story" ? <span>{continuityIssueCount} issues</span> : null}
+            <span className={isDirty ? "topbar-status is-dirty" : "topbar-status"}>{status}</span>
+            <span>
+              Folder: <strong>{folderHandle?.name ?? "Not selected"}</strong>
+            </span>
           </div>
-          <button type="button" onClick={() => setRulebookOpen(true)}>
-            <ScrollText aria-hidden="true" />
-            Rulebook
-          </button>
         </div>
+        <nav className="topbar-actions" aria-label="Project commands">
+          <HeaderIconButton label="New Project" onClick={() => void handleNewProject()}>
+            <FilePlus2 aria-hidden="true" />
+          </HeaderIconButton>
+          <HeaderIconButton label="Open Project" onClick={() => void handleOpenProject()}>
+            <FolderOpen aria-hidden="true" />
+          </HeaderIconButton>
+          <HeaderIconButton label="Select Folder" onClick={() => void handleSelectProjectFolder()}>
+            <FolderPlus aria-hidden="true" />
+          </HeaderIconButton>
+          <HeaderIconButton label="Save Project" onClick={() => void handleSaveProject()}>
+            <Save aria-hidden="true" />
+          </HeaderIconButton>
+          <HeaderIconButton label="Export Backup" onClick={handleExportBackup}>
+            <Download aria-hidden="true" />
+          </HeaderIconButton>
+          <HeaderIconButton label="Rulebook" onClick={handleOpenRulebook}>
+            <ScrollText aria-hidden="true" />
+          </HeaderIconButton>
+          <HeaderIconButton
+            label={activePage === "settings" ? "Back to Workspace" : "Open Settings"}
+            active={activePage === "settings"}
+            onClick={() => setActivePage((page) => (page === "settings" ? "workspace" : "settings"))}
+          >
+            {activePage === "settings" ? <ArrowLeft aria-hidden="true" /> : <Settings2 aria-hidden="true" />}
+          </HeaderIconButton>
+        </nav>
       </header>
 
-      <main className={workspaceClassName}>
-        <Sidebar
+      {activePage === "settings" ? (
+        <SettingsPage
           project={project}
-          search={search}
-          status={status}
-          isDirty={isDirty}
-          projectFolderName={folderHandle?.name ?? null}
           defaultRelationshipType={defaultRelationshipType}
-          onCreateEntity={handleCreateEntity}
-          onNewProject={handleNewProject}
-          onOpenTypeManager={() => setTypeManagerOpen(true)}
-          onOpenProject={handleOpenProject}
-          onSelectProjectFolder={handleSelectProjectFolder}
-          onSaveProject={handleSaveProject}
-          onExportBackup={handleExportBackup}
-          onSelectEntity={(id) => setSelection({ kind: "entity", id })}
-          onSearchChange={setSearch}
-          onProjectTitleChange={handleProjectTitleChange}
-          onDefaultRelationshipTypeChange={setDefaultRelationshipType}
-        />
-
-        <section className="graph-column">
-          <section className="graph-shell" aria-label="Story graph">
-            {project.projectMode === "game_story" ? (
-              <div className="graph-view-control" role="group" aria-label="Graph view">
-                <button
-                  type="button"
-                  className={graphView === "world" ? "is-active" : ""}
-                  onClick={() => handleGraphViewChange("world")}
-                >
-                  World
-                </button>
-                <button
-                  type="button"
-                  className={graphView === "story_flow" ? "is-active" : ""}
-                  onClick={() => handleGraphViewChange("story_flow")}
-                >
-                  Story Flow
-                </button>
-              </div>
-            ) : null}
-            <div className="graph-focus-control" role="group" aria-label="Graph focus depth">
-              {graphFocusDepthOptions.map((option) => (
-                <button
-                  key={option.label}
-                  type="button"
-                  className={graphFocusDepth === option.value ? "is-active" : ""}
-                  aria-label={`Graph focus depth ${option.label}`}
-                  title={`Graph focus depth ${option.label}`}
-                  onClick={() => handleGraphFocusDepthChange(option.value)}
-                >
-                  {option.label}
-                </button>
-              ))}
-            </div>
-            <ReactFlow
-              nodes={flowNodes}
-              edges={edges}
-              nodeTypes={nodeTypes}
-              fitView
-              fitViewOptions={{ padding: 0.25 }}
-              onNodesChange={handleNodesChange}
-              onConnect={handleConnect}
-              onNodeClick={(_, node) => setSelection({ kind: "entity", id: node.id })}
-              onEdgeClick={(_, edge) => setSelection({ kind: "relationship", id: edge.id })}
-              onPaneClick={() => setSelection(null)}
-            >
-              <Background color="#c8d1cd" gap={22} size={1.2} variant={BackgroundVariant.Dots} />
-              <MiniMap pannable zoomable nodeStrokeWidth={3} />
-              <Controls />
-            </ReactFlow>
-          </section>
-          <TimelinePanel
-            project={project}
-            selectedEventId={selectedTimelineEventId}
-            collapsed={timelineCollapsed}
-            onToggleCollapsed={() => setTimelineCollapsed((collapsed) => !collapsed)}
-            onAddTrack={handleAddTimelineTrack}
-            onMoveEvent={handleMoveTimelineEvent}
-            onDeleteEmptyTrack={handleDeleteEmptyTimelineTrack}
-            onRenameTrack={handleRenameTimelineTrack}
-            onScrubTimelineOrder={handleTimelineScrub}
-            onSelectEvent={(eventId) => {
-              setSelectedTimelineEventId(eventId);
-              if (eventId) {
-                setSelection({ kind: "entity", id: eventId });
-              }
-            }}
-          />
-        </section>
-
-        {inspectorVisible ? (
-          <DetailInspector
-            project={project}
-            selection={selection}
-            onEntityChange={handleEntityChange}
-            onRelationshipChange={handleRelationshipChange}
-            onTimelineEffect={handleTimelineEffect}
-            onDeleteEntity={handleDeleteEntity}
-            onDeleteRelationship={handleDeleteRelationship}
-          />
-        ) : null}
-
-        {gameToolsVisible ? (
-          <GameStoryPanel
-            project={project}
-            activeTab={activeGameTool}
-            onActiveTabChange={setActiveGameTool}
-            onProjectChange={markProjectChanged}
-            onSelectEntity={(id) => setSelection({ kind: "entity", id })}
-            onSelectRelationship={(id) => setSelection({ kind: "relationship", id })}
-          />
-        ) : null}
-
-        {rulebookOpen ? (
-          <RulebookSidebar
-            project={project}
-            onClose={() => setRulebookOpen(false)}
-            onCreateRule={handleCreateWorldRule}
-            onDeleteRule={handleDeleteEntity}
-            onFocusRule={handleFocusWorldRule}
-            onRuleChange={handleEntityChange}
-          />
-        ) : null}
-      </main>
-
-      {typeManagerOpen ? (
-        <TypeManager
-          project={project}
-          onClose={() => setTypeManagerOpen(false)}
+          graphFocusDepth={graphFocusDepth}
+          graphFocusDepthOptions={graphFocusDepthOptions}
           onAddItemType={handleAddItemType}
           onAddLinkType={handleAddLinkType}
-          onUpdateItemType={handleUpdateItemType}
-          onUpdateLinkType={handleUpdateLinkType}
+          onBackToWorkspace={() => setActivePage("workspace")}
+          onDefaultRelationshipTypeChange={setDefaultRelationshipType}
           onDeleteItemType={handleDeleteItemType}
           onDeleteLinkType={handleDeleteLinkType}
+          onGraphFocusDepthChange={handleGraphFocusDepthChange}
+          onProjectModeChange={handleProjectModeChange}
+          onProjectTitleChange={handleProjectTitleChange}
+          onUpdateItemType={handleUpdateItemType}
+          onUpdateLinkType={handleUpdateLinkType}
         />
-      ) : null}
+      ) : (
+        <main className={workspaceClassName}>
+          <Sidebar
+            project={project}
+            search={search}
+            onCreateEntity={handleCreateEntity}
+            onSelectEntity={(id) => setSelection({ kind: "entity", id })}
+            onSearchChange={setSearch}
+          />
 
+          <section className="graph-column">
+            <section className="graph-shell" aria-label="Story graph">
+              {project.projectMode === "game_story" ? (
+                <div className="graph-view-control" role="group" aria-label="Graph view">
+                  <button
+                    type="button"
+                    className={graphView === "world" ? "is-active" : ""}
+                    onClick={() => handleGraphViewChange("world")}
+                  >
+                    World
+                  </button>
+                  <button
+                    type="button"
+                    className={graphView === "story_flow" ? "is-active" : ""}
+                    onClick={() => handleGraphViewChange("story_flow")}
+                  >
+                    Story Flow
+                  </button>
+                </div>
+              ) : null}
+              <ReactFlow
+                nodes={flowNodes}
+                edges={edges}
+                nodeTypes={nodeTypes}
+                fitView
+                fitViewOptions={{ padding: 0.25 }}
+                onNodesChange={handleNodesChange}
+                onConnect={handleConnect}
+                onNodeClick={(_, node) => setSelection({ kind: "entity", id: node.id })}
+                onEdgeClick={(_, edge) => setSelection({ kind: "relationship", id: edge.id })}
+                onPaneClick={() => setSelection(null)}
+              >
+                <Background color="#c8d1cd" gap={22} size={1.2} variant={BackgroundVariant.Dots} />
+                <MiniMap pannable zoomable nodeStrokeWidth={3} />
+                <Controls />
+              </ReactFlow>
+            </section>
+            <TimelinePanel
+              project={project}
+              selectedEventId={selectedTimelineEventId}
+              collapsed={timelineCollapsed}
+              onToggleCollapsed={() => setTimelineCollapsed((collapsed) => !collapsed)}
+              onAddTrack={handleAddTimelineTrack}
+              onMoveEvent={handleMoveTimelineEvent}
+              onDeleteEmptyTrack={handleDeleteEmptyTimelineTrack}
+              onRenameTrack={handleRenameTimelineTrack}
+              onScrubTimelineOrder={handleTimelineScrub}
+              onSelectEvent={(eventId) => {
+                setSelectedTimelineEventId(eventId);
+                if (eventId) {
+                  setSelection({ kind: "entity", id: eventId });
+                }
+              }}
+            />
+          </section>
+
+          {inspectorVisible ? (
+            <DetailInspector
+              project={project}
+              selection={selection}
+              onEntityChange={handleEntityChange}
+              onRelationshipChange={handleRelationshipChange}
+              onTimelineEffect={handleTimelineEffect}
+              onDeleteEntity={handleDeleteEntity}
+              onDeleteRelationship={handleDeleteRelationship}
+            />
+          ) : null}
+
+          {gameToolsVisible ? (
+            <GameStoryPanel
+              project={project}
+              activeTab={activeGameTool}
+              onActiveTabChange={setActiveGameTool}
+              onProjectChange={markProjectChanged}
+              onSelectEntity={(id) => setSelection({ kind: "entity", id })}
+              onSelectRelationship={(id) => setSelection({ kind: "relationship", id })}
+            />
+          ) : null}
+
+          {rulebookOpen ? (
+            <RulebookSidebar
+              project={project}
+              onClose={() => setRulebookOpen(false)}
+              onCreateRule={handleCreateWorldRule}
+              onDeleteRule={handleDeleteEntity}
+              onFocusRule={handleFocusWorldRule}
+              onRuleChange={handleEntityChange}
+            />
+          ) : null}
+        </main>
+      )}
     </div>
+  );
+}
+
+interface HeaderIconButtonProps {
+  active?: boolean;
+  children: ReactNode;
+  label: string;
+  onClick: () => void;
+}
+
+function HeaderIconButton({ active = false, children, label, onClick }: HeaderIconButtonProps) {
+  return (
+    <button
+      type="button"
+      className={active ? "toolbar-button is-active" : "toolbar-button"}
+      aria-label={label}
+      title={label}
+      data-tooltip={label}
+      onClick={onClick}
+    >
+      {children}
+    </button>
   );
 }
 

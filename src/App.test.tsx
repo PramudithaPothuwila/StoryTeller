@@ -213,10 +213,10 @@ describe("App project commands", () => {
     vi.clearAllMocks();
   });
 
-  it("renders project verbs and removes storage-demo labels", async () => {
+  it("renders icon project commands with tooltips and removes storage-demo labels", async () => {
     render(<App />);
 
-    await waitFor(() => expect(screen.getByDisplayValue("Loaded Project")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("Loaded Project")).toBeInTheDocument());
 
     expect(document.querySelector(".workspace")).not.toHaveClass("has-inspector");
     expect(document.querySelector(".inspector")).toBeNull();
@@ -227,11 +227,43 @@ describe("App project commands", () => {
     expect(screen.getByRole("button", { name: "Select Folder" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Save Project" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Export Backup" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Open Settings" })).toHaveAttribute("title", "Open Settings");
+    expect(screen.getByRole("button", { name: "Save Project" })).toHaveAttribute("title", "Save Project");
     expect(screen.getByText("Not selected")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Save folder" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Open folder" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Import" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Export" })).not.toBeInTheDocument();
+  });
+
+  it("opens settings to edit project configuration and workspace defaults", async () => {
+    render(<App />);
+
+    await waitFor(() => expect(screen.getByText("Loaded Project")).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("button", { name: "Open Settings" }));
+
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Settings" })).toBeInTheDocument());
+    expect(document.querySelector(".workspace")).toBeNull();
+    expect(screen.getByLabelText("Project title")).toHaveValue("Loaded Project");
+    expect(screen.getByRole("button", { name: "Graph focus depth 1" })).toHaveClass("is-active");
+    expect(screen.getByRole("button", { name: "Add item type" })).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("Project title"), { target: { value: "Settings Project" } });
+    expect(screen.getByText("Settings Project")).toBeInTheDocument();
+    expect(screen.getByText("Unsaved changes")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Game Story" }));
+    expect(screen.getByLabelText("Default Link")).toHaveValue("branches_to");
+
+    fireEvent.change(screen.getByLabelText("Default Link"), { target: { value: "knows" } });
+    expect(screen.getByLabelText("Default Link")).toHaveValue("knows");
+
+    fireEvent.click(screen.getByRole("button", { name: "Back to Workspace" }));
+
+    await waitFor(() => expect(document.querySelector(".workspace")).not.toBeNull());
+    expect(screen.queryByLabelText("Project title")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Story Flow" })).toHaveClass("is-active");
   });
 
   it("hides the detail inspector when the graph pane clears an entity selection", async () => {
@@ -247,7 +279,7 @@ describe("App project commands", () => {
 
     render(<App />);
 
-    await waitFor(() => expect(screen.getByDisplayValue("Selection Project")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("Selection Project")).toBeInTheDocument());
     expect(document.querySelector(".workspace")).toHaveClass("has-inspector");
     expect(screen.getByRole("button", { name: "Delete selected item" })).toBeInTheDocument();
 
@@ -277,7 +309,7 @@ describe("App project commands", () => {
 
     render(<App />);
 
-    await waitFor(() => expect(screen.getByDisplayValue("Delete Entity Project")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("Delete Entity Project")).toBeInTheDocument());
     expect(document.querySelector(".workspace")).toHaveClass("has-inspector");
 
     fireEvent.click(screen.getByRole("button", { name: "Delete selected item" }));
@@ -304,7 +336,7 @@ describe("App project commands", () => {
 
     render(<App />);
 
-    await waitFor(() => expect(screen.getByDisplayValue("Relationship Inspector Project")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("Relationship Inspector Project")).toBeInTheDocument());
 
     fireEvent.click(screen.getByTestId(`flow-edge-${relationship.id}`));
 
@@ -321,7 +353,7 @@ describe("App project commands", () => {
 
   it("opens the rulebook sidebar to create, filter, focus, and delete world rules", async () => {
     render(<App />);
-    await waitFor(() => expect(screen.getByDisplayValue("Loaded Project")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("Loaded Project")).toBeInTheDocument());
 
     fireEvent.click(screen.getByRole("button", { name: "Rulebook" }));
 
@@ -367,7 +399,7 @@ describe("App project commands", () => {
 
   it("asks for a project folder and saves immediately when creating a new project", async () => {
     render(<App />);
-    await waitFor(() => expect(screen.getByDisplayValue("Loaded Project")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("Loaded Project")).toBeInTheDocument());
 
     fireEvent.click(screen.getByRole("button", { name: "New Project" }));
 
@@ -377,7 +409,7 @@ describe("App project commands", () => {
       expect.objectContaining({ title: "Untitled Story" }),
       folderHandle
     );
-    expect(screen.getByDisplayValue("Untitled Story")).toBeInTheDocument();
+    expect(screen.getByText("Untitled Story")).toBeInTheDocument();
     expect(screen.getByText("Project saved")).toBeInTheDocument();
     expect(screen.getByText("Story Folder")).toBeInTheDocument();
 
@@ -390,14 +422,14 @@ describe("App project commands", () => {
   it("does not create a new project when folder access is unavailable", async () => {
     vi.mocked(hasFolderProjectSupport).mockReturnValue(false);
     render(<App />);
-    await waitFor(() => expect(screen.getByDisplayValue("Loaded Project")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("Loaded Project")).toBeInTheDocument());
 
     fireEvent.click(screen.getByRole("button", { name: "New Project" }));
 
     expect(writeProjectToDirectory).not.toHaveBeenCalled();
     expect(createProjectBundle).not.toHaveBeenCalled();
     expect(anchorClickSpy).not.toHaveBeenCalled();
-    expect(screen.getByDisplayValue("Loaded Project")).toBeInTheDocument();
+    expect(screen.getByText("Loaded Project")).toBeInTheDocument();
     expect(
       screen.getByText(
         "Folder selection is unavailable in this browser. Use a browser with folder access to save folder projects."
@@ -408,18 +440,18 @@ describe("App project commands", () => {
   it("keeps the current project if new project folder selection is cancelled", async () => {
     window.showDirectoryPicker = vi.fn(async () => undefined as unknown as FileSystemDirectoryHandle);
     render(<App />);
-    await waitFor(() => expect(screen.getByDisplayValue("Loaded Project")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("Loaded Project")).toBeInTheDocument());
 
     fireEvent.click(screen.getByRole("button", { name: "New Project" }));
 
     await waitFor(() => expect(screen.getByText("Choose a project folder to create a new project")).toBeInTheDocument());
     expect(writeProjectToDirectory).not.toHaveBeenCalled();
-    expect(screen.getByDisplayValue("Loaded Project")).toBeInTheDocument();
+    expect(screen.getByText("Loaded Project")).toBeInTheDocument();
   });
 
   it("selects a project folder and saves the current project into it", async () => {
     render(<App />);
-    await waitFor(() => expect(screen.getByDisplayValue("Loaded Project")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("Loaded Project")).toBeInTheDocument());
 
     fireEvent.click(screen.getByRole("button", { name: "Select Folder" }));
 
@@ -440,7 +472,7 @@ describe("App project commands", () => {
       throw new Error("Failed to execute 'showDirectoryPicker' on 'Window': Must be handling a user gesture.");
     });
     render(<App />);
-    await waitFor(() => expect(screen.getByDisplayValue("Loaded Project")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("Loaded Project")).toBeInTheDocument());
 
     fireEvent.click(screen.getByRole("button", { name: "Select Folder" }));
 
@@ -456,7 +488,7 @@ describe("App project commands", () => {
 
   it("saves to the chosen project folder and reuses that folder on later saves", async () => {
     render(<App />);
-    await waitFor(() => expect(screen.getByDisplayValue("Loaded Project")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("Loaded Project")).toBeInTheDocument());
 
     fireEvent.click(screen.getByRole("button", { name: "Save Project" }));
 
@@ -474,7 +506,7 @@ describe("App project commands", () => {
   it("does not auto-export a backup when saving without folder support", async () => {
     vi.mocked(hasFolderProjectSupport).mockReturnValue(false);
     render(<App />);
-    await waitFor(() => expect(screen.getByDisplayValue("Loaded Project")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("Loaded Project")).toBeInTheDocument());
 
     fireEvent.click(screen.getByRole("button", { name: "Save Project" }));
 
@@ -489,12 +521,12 @@ describe("App project commands", () => {
 
   it("opens a folder project when folder access is supported", async () => {
     render(<App />);
-    await waitFor(() => expect(screen.getByDisplayValue("Loaded Project")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("Loaded Project")).toBeInTheDocument());
 
     fireEvent.click(screen.getByRole("button", { name: "Open Project" }));
 
     await waitFor(() => expect(readProjectFromDirectory).toHaveBeenCalledWith(folderHandle));
-    expect(screen.getByDisplayValue("Opened Project")).toBeInTheDocument();
+    expect(screen.getByText("Opened Project")).toBeInTheDocument();
     expect(screen.getByText("Project opened")).toBeInTheDocument();
   });
 
@@ -513,7 +545,7 @@ describe("App project commands", () => {
 
     render(<App />);
 
-    await waitFor(() => expect(screen.getByDisplayValue("Graph Project")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("Graph Project")).toBeInTheDocument());
     expect(screen.getByTestId(`flow-node-${hero.id}`)).toHaveAttribute("data-position", "10,20");
 
     fireEvent.click(screen.getByRole("button", { name: "Initialize first graph node" }));
@@ -560,7 +592,7 @@ describe("App project commands", () => {
 
     render(<App />);
 
-    await waitFor(() => expect(screen.getByDisplayValue("Focus Project")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("Focus Project")).toBeInTheDocument());
 
     expect(screen.getByTestId(`flow-node-${hero.id}`)).toHaveAttribute("data-selected", "true");
     expect(screen.getByTestId(`flow-node-${hero.id}`)).toHaveAttribute("data-connected", "true");
@@ -586,33 +618,42 @@ describe("App project commands", () => {
 
     render(<App />);
 
-    await waitFor(() => expect(screen.getByDisplayValue("Focus Depth Project")).toBeInTheDocument());
-    expect(screen.queryByRole("button", { name: "Graph focus depth 0" })).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText("Focus Depth Project")).toBeInTheDocument());
     expect(screen.getByTestId(`flow-node-${fixture.ally.id}`)).toHaveAttribute("data-connected", "true");
     expect(screen.getByTestId(`flow-node-${fixture.clue.id}`)).toHaveAttribute("data-faded", "true");
     expect(screen.getByTestId(`flow-edge-${fixture.allyLink.id}`)).toHaveAttribute("data-opacity", "0.12");
 
+    fireEvent.click(screen.getByRole("button", { name: "Open Settings" }));
+
+    expect(screen.queryByRole("button", { name: "Graph focus depth 0" })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Graph focus depth 2" }));
+    expect(window.localStorage.getItem("storyteller.graphFocusDepth")).toBe("2");
+    fireEvent.click(screen.getByRole("button", { name: "Back to Workspace" }));
 
     await waitFor(() => expect(screen.getByTestId(`flow-node-${fixture.clue.id}`)).toHaveAttribute("data-connected", "true"));
     expect(screen.getByTestId(`flow-node-${fixture.faction.id}`)).toHaveAttribute("data-faded", "true");
-    expect(window.localStorage.getItem("storyteller.graphFocusDepth")).toBe("2");
 
+    fireEvent.click(screen.getByRole("button", { name: "Open Settings" }));
     fireEvent.click(screen.getByRole("button", { name: "Graph focus depth 3" }));
+    fireEvent.click(screen.getByRole("button", { name: "Back to Workspace" }));
 
     await waitFor(() => expect(screen.getByTestId(`flow-node-${fixture.faction.id}`)).toHaveAttribute("data-connected", "true"));
     expect(screen.getByTestId(`flow-node-${fixture.relic.id}`)).toHaveAttribute("data-faded", "true");
 
+    fireEvent.click(screen.getByRole("button", { name: "Open Settings" }));
     fireEvent.click(screen.getByRole("button", { name: "Graph focus depth 4" }));
+    expect(window.localStorage.getItem("storyteller.graphFocusDepth")).toBe("4");
+    fireEvent.click(screen.getByRole("button", { name: "Back to Workspace" }));
 
     await waitFor(() => expect(screen.getByTestId(`flow-node-${fixture.relic.id}`)).toHaveAttribute("data-connected", "true"));
-    expect(window.localStorage.getItem("storyteller.graphFocusDepth")).toBe("4");
 
+    fireEvent.click(screen.getByRole("button", { name: "Open Settings" }));
     fireEvent.click(screen.getByRole("button", { name: "Graph focus depth All" }));
+    expect(window.localStorage.getItem("storyteller.graphFocusDepth")).toBe("all");
+    fireEvent.click(screen.getByRole("button", { name: "Back to Workspace" }));
 
     await waitFor(() => expect(screen.getByTestId(`flow-node-${fixture.relic.id}`)).toHaveAttribute("data-faded", "false"));
     expect(screen.getByTestId(`flow-node-${fixture.hero.id}`)).toHaveAttribute("data-connected", "false");
-    expect(window.localStorage.getItem("storyteller.graphFocusDepth")).toBe("all");
   });
 
   it("restores graph focus depth from browser storage", async () => {
@@ -622,8 +663,10 @@ describe("App project commands", () => {
 
     render(<App />);
 
-    await waitFor(() => expect(screen.getByDisplayValue("Focus Depth Project")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("Focus Depth Project")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "Open Settings" }));
     expect(screen.getByRole("button", { name: "Graph focus depth 3" })).toHaveClass("is-active");
+    fireEvent.click(screen.getByRole("button", { name: "Back to Workspace" }));
     expect(screen.getByTestId(`flow-node-${fixture.faction.id}`)).toHaveAttribute("data-connected", "true");
     expect(screen.getByTestId(`flow-node-${fixture.relic.id}`)).toHaveAttribute("data-faded", "true");
   });
@@ -631,9 +674,11 @@ describe("App project commands", () => {
   it("switches to Game Story Mode and creates state-backed game nodes", async () => {
     render(<App />);
 
-    await waitFor(() => expect(screen.getByDisplayValue("Loaded Project")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("Loaded Project")).toBeInTheDocument());
 
+    fireEvent.click(screen.getByRole("button", { name: "Open Settings" }));
     fireEvent.click(screen.getByRole("button", { name: "Game Story" }));
+    fireEvent.click(screen.getByRole("button", { name: "Back to Workspace" }));
 
     await waitFor(() => expect(screen.getByRole("complementary", { name: "Game Story Tools" })).toBeInTheDocument());
     expect(screen.getByRole("button", { name: "Story Flow" })).toHaveClass("is-active");
@@ -662,7 +707,7 @@ describe("App project commands", () => {
 
     render(<App />);
 
-    await waitFor(() => expect(screen.getByDisplayValue("Game Flow Project")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("Game Flow Project")).toBeInTheDocument());
     expect(screen.getByRole("button", { name: "Story Flow" })).toHaveClass("is-active");
     expect(screen.getByTestId(`flow-node-${fixture.start.id}`)).toHaveAttribute("data-game-start", "true");
     expect(screen.getByTestId(`flow-node-${fixture.ending.id}`)).toHaveAttribute("data-game-ending", "true");
@@ -687,7 +732,7 @@ describe("App project commands", () => {
 
     render(<App />);
 
-    await waitFor(() => expect(screen.getByDisplayValue("Game Flow Project")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("Game Flow Project")).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: /Continuity/ }));
 
     await waitFor(() => expect(screen.getByText("Unreachable node")).toBeInTheDocument());
@@ -728,7 +773,7 @@ describe("App project commands", () => {
 
     render(<App />);
 
-    await waitFor(() => expect(screen.getByDisplayValue("Timeline Scrub Project")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("Timeline Scrub Project")).toBeInTheDocument());
     expect(screen.getByTestId(`flow-node-${source.id}`)).toHaveAttribute("data-selected", "true");
     expect(screen.getByTestId(`flow-edge-${relationship.id}`)).toHaveAttribute("data-opacity", "1");
 
@@ -747,7 +792,7 @@ describe("App project commands", () => {
   it("falls back to opening a backup file when folder access is unavailable", async () => {
     vi.mocked(hasFolderProjectSupport).mockReturnValue(false);
     const { container } = render(<App />);
-    await waitFor(() => expect(screen.getByDisplayValue("Loaded Project")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("Loaded Project")).toBeInTheDocument());
 
     fireEvent.click(screen.getByRole("button", { name: "Open Project" }));
 
@@ -763,7 +808,7 @@ describe("App project commands", () => {
     });
 
     await waitFor(() => expect(projectFromBundleFile).toHaveBeenCalledTimes(1));
-    expect(screen.getByDisplayValue("Backup Project")).toBeInTheDocument();
+    expect(screen.getByText("Backup Project")).toBeInTheDocument();
     expect(screen.getByText("Project opened from backup")).toBeInTheDocument();
   });
 });

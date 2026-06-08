@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { BUILT_IN_WORLD_RULE_TYPE_ID } from "../types";
 import { projectFromFiles } from "./projectFiles";
 import { getGameContinuityIssues } from "./story";
-import { getStarterProjects, loadStarterProject } from "./starterProject";
+import { DEFAULT_STARTER_PROJECT_ID, getStarterProjects, loadStarterProject } from "./starterProject";
 
 describe("starter project loader", () => {
   it("loads a starter from public folder project files", async () => {
@@ -78,7 +78,7 @@ describe("starter project loader", () => {
         status: 200,
         text: async () => text
       } as Response;
-    });
+    }, DEFAULT_STARTER_PROJECT_ID);
 
     expect(project.title).toBe("The Hidden Crown");
     expect(Object.keys(project.entities)).toContain("character-mara-vale");
