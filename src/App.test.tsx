@@ -3,6 +3,21 @@ import { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "./App";
 import {
+  CloudProjectConflictError,
+  createCloudProject,
+  deleteCloudProject,
+  getCurrentCloudUser,
+  listCloudProjects,
+  openCloudProject,
+  readCloudUserSettings,
+  saveCloudProject,
+  sendMagicLink,
+  signInWithPassword,
+  signOutCloudUser,
+  subscribeToCloudAuth,
+  writeCloudUserSettings
+} from "./data/cloudProjects";
+import {
   createProjectBundle,
   hasFolderProjectSupport,
   projectFromBundleFile,
@@ -196,6 +211,60 @@ vi.mock("./data/projectFiles", async () => {
   };
 });
 
+vi.mock("./data/cloudProjects", async () => {
+  const story = await vi.importActual<typeof import("./data/story")>("./data/story");
+
+  class CloudProjectConflictError extends Error {
+    constructor() {
+      super("The cloud project changed since you opened it.");
+      this.name = "CloudProjectConflictError";
+    }
+  }
+
+  return {
+    CloudProjectConflictError,
+    createCloudProject: vi.fn(async (project) => ({
+      id: "cloud-created",
+      title: project.title,
+      schemaVersion: project.schemaVersion,
+      projectMode: project.projectMode,
+      project,
+      version: 1,
+      createdAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-01T00:00:00.000Z"
+    })),
+    deleteCloudProject: vi.fn(async () => undefined),
+    getCurrentCloudUser: vi.fn(async () => null),
+    listCloudProjects: vi.fn(async () => []),
+    openCloudProject: vi.fn(async () => ({
+      id: "cloud-opened",
+      title: "Cloud Project",
+      schemaVersion: 5,
+      projectMode: "story",
+      project: story.createBlankProject("Cloud Project"),
+      version: 3,
+      createdAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-01T00:00:00.000Z"
+    })),
+    readCloudUserSettings: vi.fn(async () => null),
+    saveCloudProject: vi.fn(async (id, version, project) => ({
+      id,
+      title: project.title,
+      schemaVersion: project.schemaVersion,
+      projectMode: project.projectMode,
+      project,
+      version: version + 1,
+      createdAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-02T00:00:00.000Z"
+    })),
+    sendMagicLink: vi.fn(async () => undefined),
+    signInWithPassword: vi.fn(async (email) => ({ id: "user-a", email })),
+    signOutCloudUser: vi.fn(async () => undefined),
+    subscribeToCloudAuth: vi.fn(() => () => undefined),
+    writeCloudUserSettings: vi.fn(async () => undefined)
+  };
+});
+
 describe("App project commands", () => {
   const folderHandle = {
     kind: "directory",
@@ -210,6 +279,45 @@ describe("App project commands", () => {
     vi.mocked(readProjectFromDirectory).mockResolvedValue(createBlankProject("Opened Project"));
     vi.mocked(projectFromBundleFile).mockResolvedValue(createBlankProject("Backup Project"));
     vi.mocked(createProjectBundle).mockReturnValue(new Blob(["{}"], { type: "application/json" }));
+    vi.mocked(getCurrentCloudUser).mockResolvedValue(null);
+    vi.mocked(subscribeToCloudAuth).mockReturnValue(() => undefined);
+    vi.mocked(readCloudUserSettings).mockResolvedValue(null);
+    vi.mocked(writeCloudUserSettings).mockResolvedValue(undefined);
+    vi.mocked(signInWithPassword).mockResolvedValue({ id: "user-a", email: "ada@example.com" });
+    vi.mocked(sendMagicLink).mockResolvedValue(undefined);
+    vi.mocked(signOutCloudUser).mockResolvedValue(undefined);
+    vi.mocked(listCloudProjects).mockResolvedValue([]);
+    vi.mocked(openCloudProject).mockResolvedValue({
+      id: "cloud-opened",
+      title: "Cloud Project",
+      schemaVersion: 5,
+      projectMode: "story",
+      project: createBlankProject("Cloud Project"),
+      version: 3,
+      createdAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-01T00:00:00.000Z"
+    });
+    vi.mocked(createCloudProject).mockImplementation(async (project) => ({
+      id: "cloud-created",
+      title: project.title,
+      schemaVersion: project.schemaVersion,
+      projectMode: project.projectMode,
+      project,
+      version: 1,
+      createdAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-01T00:00:00.000Z"
+    }));
+    vi.mocked(saveCloudProject).mockImplementation(async (id, version, project) => ({
+      id,
+      title: project.title,
+      schemaVersion: project.schemaVersion,
+      projectMode: project.projectMode,
+      project,
+      version: version + 1,
+      createdAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-02T00:00:00.000Z"
+    }));
+    vi.mocked(deleteCloudProject).mockResolvedValue(undefined);
     window.showDirectoryPicker = vi.fn(async () => folderHandle);
     Object.defineProperty(URL, "createObjectURL", {
       configurable: true,
@@ -1198,6 +1306,122 @@ describe("App project commands", () => {
     await waitFor(() => expect(projectFromBundleFile).toHaveBeenCalledTimes(1));
     expect(screen.getByText("Backup Project")).toBeInTheDocument();
     expect(screen.getByText("Project opened from backup")).toBeInTheDocument();
+  });
+
+  it("signs in, creates, saves, and deletes a cloud project without changing local folder support", async () => {
+    render(<App />);
+    await waitFor(() => expect(screen.getByText("Loaded Project")).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("button", { name: "Sign In" }));
+    const authDialog = screen.getByRole("dialog", { name: "Sign In" });
+    fireEvent.change(within(authDialog).getByLabelText("Cloud email"), { target: { value: "ada@example.com" } });
+    fireEvent.change(within(authDialog).getByLabelText("Cloud password"), { target: { value: "secret-password" } });
+    fireEvent.click(within(authDialog).getByRole("button", { name: "Sign In" }));
+
+    await waitFor(() => expect(signInWithPassword).toHaveBeenCalledWith("ada@example.com", "secret-password"));
+    fireEvent.click(screen.getByRole("button", { name: "Save to Cloud" }));
+
+    await waitFor(() => expect(createCloudProject).toHaveBeenCalledTimes(1));
+    expect(screen.getByText("Cloud project saved")).toBeInTheDocument();
+    expect(screen.getByText("Cloud")).toBeInTheDocument();
+    expect(screen.getByText(/Version:/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Add Character" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save to Cloud" }));
+
+    await waitFor(() => expect(saveCloudProject).toHaveBeenCalledWith("cloud-created", 1, expect.any(Object)));
+    expect(screen.getByText("Cloud project saved")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Delete Cloud Project" }));
+
+    await waitFor(() => expect(deleteCloudProject).toHaveBeenCalledWith("cloud-created"));
+    expect(screen.getByText("Cloud project deleted")).toBeInTheDocument();
+    expect(screen.getByText("Local")).toBeInTheDocument();
+  });
+
+  it("lists and opens cloud projects for a signed-in user", async () => {
+    vi.mocked(getCurrentCloudUser).mockResolvedValue({ id: "user-a", email: "ada@example.com" });
+    vi.mocked(listCloudProjects).mockResolvedValue([
+      {
+        id: "cloud-opened",
+        title: "Cloud Project",
+        schemaVersion: 5,
+        projectMode: "story",
+        version: 3,
+        createdAt: "2026-01-01T00:00:00.000Z",
+        updatedAt: "2026-01-02T00:00:00.000Z"
+      }
+    ]);
+
+    render(<App />);
+
+    await waitFor(() => expect(screen.getByRole("button", { name: "Sign Out" })).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "Cloud Projects" }));
+
+    const projectsDialog = await screen.findByRole("dialog", { name: "Cloud Projects" });
+    expect(within(projectsDialog).getByText("Cloud Project")).toBeInTheDocument();
+
+    fireEvent.click(within(projectsDialog).getByRole("button", { name: "Open" }));
+
+    await waitFor(() => expect(openCloudProject).toHaveBeenCalledWith("cloud-opened"));
+    expect(screen.getByText("Cloud Project")).toBeInTheDocument();
+    expect(screen.getByText("Cloud project opened")).toBeInTheDocument();
+    expect(screen.getByText(/Version:/)).toBeInTheDocument();
+  });
+
+  it("imports a backup as a new cloud project", async () => {
+    vi.mocked(getCurrentCloudUser).mockResolvedValue({ id: "user-a", email: "ada@example.com" });
+    const { container } = render(<App />);
+
+    await waitFor(() => expect(screen.getByRole("button", { name: "Sign Out" })).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "Cloud Projects" }));
+
+    const projectsDialog = await screen.findByRole("dialog", { name: "Cloud Projects" });
+    fireEvent.click(within(projectsDialog).getByRole("button", { name: "Import Backup to Cloud" }));
+
+    expect(fileClickSpy).toHaveBeenCalledTimes(1);
+    const inputs = container.querySelectorAll('input[type="file"]');
+
+    fireEvent.change(inputs[1], {
+      target: {
+        files: [new File(["{}"], "backup.storyteller.json", { type: "application/json" })]
+      }
+    });
+
+    await waitFor(() => expect(projectFromBundleFile).toHaveBeenCalledTimes(1));
+    expect(createCloudProject).toHaveBeenCalledWith(expect.objectContaining({ title: "Backup Project" }));
+    expect(screen.getByText("Backup imported to cloud")).toBeInTheDocument();
+  });
+
+  it("shows cloud conflict recovery choices and can save a copy", async () => {
+    render(<App />);
+    await waitFor(() => expect(screen.getByText("Loaded Project")).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("button", { name: "Sign In" }));
+    const authDialog = screen.getByRole("dialog", { name: "Sign In" });
+    fireEvent.change(within(authDialog).getByLabelText("Cloud email"), { target: { value: "ada@example.com" } });
+    fireEvent.change(within(authDialog).getByLabelText("Cloud password"), { target: { value: "secret-password" } });
+    fireEvent.click(within(authDialog).getByRole("button", { name: "Sign In" }));
+
+    await waitFor(() => expect(signInWithPassword).toHaveBeenCalledTimes(1));
+    fireEvent.click(screen.getByRole("button", { name: "Save to Cloud" }));
+    await waitFor(() => expect(createCloudProject).toHaveBeenCalledTimes(1));
+
+    vi.mocked(saveCloudProject).mockRejectedValueOnce(new CloudProjectConflictError());
+    fireEvent.click(screen.getByRole("button", { name: "Add Character" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save to Cloud" }));
+
+    const conflictDialog = await screen.findByRole("dialog", { name: "Version Conflict" });
+    expect(within(conflictDialog).getByRole("button", { name: "Reload Remote" })).toBeInTheDocument();
+    expect(within(conflictDialog).getByRole("button", { name: "Save Copy" })).toBeInTheDocument();
+    expect(within(conflictDialog).getByRole("button", { name: "Export Backup" })).toBeInTheDocument();
+
+    fireEvent.click(within(conflictDialog).getByRole("button", { name: "Save Copy" }));
+
+    await waitFor(() =>
+      expect(createCloudProject).toHaveBeenLastCalledWith(expect.objectContaining({ title: "Loaded Project Copy" }))
+    );
+    expect(screen.getByText("Cloud copy saved")).toBeInTheDocument();
   });
 });
 

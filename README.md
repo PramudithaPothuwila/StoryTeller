@@ -41,6 +41,22 @@ Install dependencies:
 npm install
 ```
 
+Configure Supabase for cloud projects:
+
+```sh
+cp .env.example .env.local
+```
+
+Then set these values in `.env.local`:
+
+```text
+VITE_SUPABASE_URL=https://your-project-ref.supabase.co
+VITE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_your-key
+```
+
+Use the Supabase publishable key for Vite/browser env files. Do not add a
+secret or service-role key to the frontend.
+
 Start the development server:
 
 ```sh
@@ -132,7 +148,7 @@ public/
   frontmatter.
 - Selecting a timeline event dims inactive relationships and resolves any
   relationship versions active at that point in the story.
-- Project files currently use schema version `2`; older project shapes are
+- Project files currently use schema version `5`; older project shapes are
   migrated on load.
 
 ## Documentation

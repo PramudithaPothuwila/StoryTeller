@@ -18,17 +18,23 @@ import {
   ArrowLeft,
   Bot,
   CircleHelp,
+  CloudUpload,
+  Database,
   Download,
   FilePlus2,
   FolderOpen,
   FolderPlus,
   Gamepad2,
+  LogIn,
+  LogOut,
   Save,
   ScrollText,
-  Settings2
+  Settings2,
+  Trash2
 } from "lucide-react";
 import { ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AgentPanel } from "./components/AgentPanel";
+import { CloudAuthDialog, CloudConflictDialog, CloudProjectsDialog } from "./components/CloudDialogs";
 import { DetailInspector } from "./components/DetailInspector";
 import { EntityNode, EntityNodeData } from "./components/EntityNode";
 import { GameStoryPanel, type GameToolTab } from "./components/GameStoryPanel";
@@ -85,6 +91,25 @@ import {
 } from "./data/projectFiles";
 import { AgentSettings, readStoredAgentSettings, writeStoredAgentSettings } from "./data/agent";
 import {
+  CloudProjectConflictError,
+  CloudProjectSummary,
+  CloudSyncStatus,
+  CloudUser,
+  StorageMode,
+  createCloudProject,
+  deleteCloudProject,
+  getCurrentCloudUser,
+  listCloudProjects,
+  openCloudProject,
+  readCloudUserSettings,
+  saveCloudProject,
+  sendMagicLink,
+  signInWithPassword,
+  signOutCloudUser,
+  subscribeToCloudAuth,
+  writeCloudUserSettings
+} from "./data/cloudProjects";
+import {
   BUILT_IN_EVENT_TYPE_ID,
   BUILT_IN_WORLD_RULE_TYPE_ID,
   ItemTypeDefinition,
@@ -117,6 +142,11 @@ interface EntityGraphFocus {
 type GraphFocusDepth = 1 | 2 | 3 | 4 | "all";
 type GraphView = "world" | "story_flow";
 type ActivePage = "workspace" | "settings";
+
+interface CloudStoredSettings {
+  agentSettings?: AgentSettings;
+  graphFocusDepth?: GraphFocusDepth;
+}
 
 const nodeTypes = {
   storyEntity: EntityNode
@@ -164,6 +194,16 @@ function StoryWorkspace() {
   const [status, setStatus] = useState("Ready");
   const [isDirty, setIsDirty] = useState(false);
   const [folderHandle, setFolderHandle] = useState<FileSystemDirectoryHandle | null>(null);
+  const [cloudUser, setCloudUser] = useState<CloudUser | null>(null);
+  const [cloudProjectId, setCloudProjectId] = useState<string | null>(null);
+  const [storageMode, setStorageMode] = useState<StorageMode>("local");
+  const [cloudSyncStatus, setCloudSyncStatus] = useState<CloudSyncStatus>("signed_out");
+  const [cloudVersion, setCloudVersion] = useState<number | null>(null);
+  const [cloudProjects, setCloudProjects] = useState<CloudProjectSummary[]>([]);
+  const [cloudProjectsLoading, setCloudProjectsLoading] = useState(false);
+  const [cloudAuthOpen, setCloudAuthOpen] = useState(false);
+  const [cloudProjectsOpen, setCloudProjectsOpen] = useState(false);
+  const [cloudConflictOpen, setCloudConflictOpen] = useState(false);
   const [agentSettings, setAgentSettings] = useState<AgentSettings>(() => readStoredAgentSettings());
   const [defaultRelationshipType, setDefaultRelationshipType] = useState<LinkTypeId>("relates_to");
   const [activePage, setActivePage] = useState<ActivePage>("workspace");
@@ -176,6 +216,8 @@ function StoryWorkspace() {
   const [graphView, setGraphView] = useState<GraphView>("world");
   const [activeGameTool, setActiveGameTool] = useState<GameToolTab>("state");
   const backupInputRef = useRef<HTMLInputElement>(null);
+  const cloudImportInputRef = useRef<HTMLInputElement>(null);
+  const cloudSettingsUserRef = useRef<string | null>(null);
   const graphFocus = useMemo(
     () => createEntityGraphFocus(project, selection, graphFocusDepth, graphView),
     [graphFocusDepth, graphView, project, selection]
@@ -193,6 +235,105 @@ function StoryWorkspace() {
   useEffect(() => {
     writeStoredAgentSettings(agentSettings);
   }, [agentSettings]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadCloudUser() {
+      try {
+        const user = await getCurrentCloudUser();
+
+        if (!cancelled) {
+          setCloudUser(user);
+          setCloudSyncStatus(user ? "idle" : "signed_out");
+        }
+      } catch {
+        if (!cancelled) {
+          setCloudUser(null);
+          setCloudSyncStatus("signed_out");
+        }
+      }
+    }
+
+    void loadCloudUser();
+
+    const unsubscribe = subscribeToCloudAuth((user) => {
+      if (cancelled) {
+        return;
+      }
+
+      setCloudUser(user);
+      setCloudSyncStatus(user ? "idle" : "signed_out");
+
+      if (!user) {
+        setCloudProjectId(null);
+        setCloudVersion(null);
+        setStorageMode("local");
+        cloudSettingsUserRef.current = null;
+      }
+    });
+
+    return () => {
+      cancelled = true;
+      unsubscribe();
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadSettings() {
+      if (!cloudUser || cloudSettingsUserRef.current === cloudUser.id) {
+        return;
+      }
+
+      try {
+        const settings = parseCloudStoredSettings(await readCloudUserSettings());
+
+        if (cancelled) {
+          return;
+        }
+
+        cloudSettingsUserRef.current = cloudUser.id;
+
+        if (settings.agentSettings) {
+          setAgentSettings(settings.agentSettings);
+        }
+
+        if (settings.graphFocusDepth) {
+          setGraphFocusDepth(settings.graphFocusDepth);
+          writeStoredGraphFocusDepth(settings.graphFocusDepth);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setStatus((error as Error).message);
+        }
+      }
+    }
+
+    void loadSettings();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [cloudUser]);
+
+  useEffect(() => {
+    if (!cloudUser || cloudSettingsUserRef.current !== cloudUser.id) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      const settings: CloudStoredSettings = {
+        agentSettings,
+        graphFocusDepth
+      };
+
+      void writeCloudUserSettings(settings).catch((error) => setStatus((error as Error).message));
+    }, 500);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [agentSettings, cloudUser, graphFocusDepth]);
 
   useEffect(() => {
     let cancelled = false;
@@ -323,8 +464,40 @@ function StoryWorkspace() {
   const markProjectChanged = useCallback((nextProject: StoryProject) => {
     setProject(nextProject);
     setIsDirty(true);
+    setCloudSyncStatus((currentStatus) => (currentStatus === "signed_out" ? currentStatus : "idle"));
     setStatus("Unsaved changes");
   }, []);
+
+  const loadProjectIntoWorkspace = useCallback(
+    (
+      loadedProject: StoryProject,
+      nextStatus: string,
+      options: {
+        cloudProjectId?: string | null;
+        cloudVersion?: number | null;
+        folderHandle?: FileSystemDirectoryHandle | null;
+        storageMode: StorageMode;
+      }
+    ) => {
+      const nextSelection = firstProjectSelection(loadedProject);
+      const nextGraphView = loadedProject.projectMode === "game_story" ? "story_flow" : "world";
+      const nextGraphFocus = createEntityGraphFocus(loadedProject, nextSelection, graphFocusDepthRef.current, nextGraphView);
+
+      setProject(loadedProject);
+      setFolderHandle(options.folderHandle ?? null);
+      setCloudProjectId(options.cloudProjectId ?? null);
+      setCloudVersion(options.cloudVersion ?? null);
+      setStorageMode(options.storageMode);
+      setCloudSyncStatus(options.storageMode === "cloud" ? "saved" : cloudUser ? "idle" : "signed_out");
+      setSelection(nextSelection);
+      setGraphView(nextGraphView);
+      setFlowNodes(projectNodes(loadedProject, nextSelection, nextGraphFocus, nextGraphView));
+      setSelectedTimelineEventId(null);
+      setIsDirty(false);
+      setStatus(nextStatus);
+    },
+    [cloudUser]
+  );
 
   const handleProjectModeChange = useCallback(
     (projectMode: ProjectMode) => {
@@ -507,19 +680,15 @@ function StoryWorkspace() {
       }
 
       await writeProjectToDirectory(nextProject, handle);
-      setProject(nextProject);
-      setFolderHandle(handle);
-      setSelection(null);
-      setGraphView("world");
-      setFlowNodes(projectNodes(nextProject, null, null, "world"));
-      setSelectedTimelineEventId(null);
-      setIsDirty(false);
-      setStatus("Project saved");
+      loadProjectIntoWorkspace(nextProject, "Project saved", {
+        folderHandle: handle,
+        storageMode: "local"
+      });
     } catch (error) {
       setStatus(projectFolderErrorMessage(error, "Choose a project folder to create a new project"));
       return;
     }
-  }, []);
+  }, [loadProjectIntoWorkspace]);
 
   const handleTimelineEffect = useCallback(
     (eventId: string, draft: TimelineEffectDraft) => {
@@ -686,12 +855,16 @@ function StoryWorkspace() {
 
       await writeProjectToDirectory(project, handle);
       setFolderHandle(handle);
+      setCloudProjectId(null);
+      setCloudVersion(null);
+      setStorageMode("local");
+      setCloudSyncStatus(cloudUser ? "idle" : "signed_out");
       setIsDirty(false);
       setStatus("Project folder selected and saved");
     } catch (error) {
       setStatus(projectFolderErrorMessage(error, "Choose a project folder to save"));
     }
-  }, [project]);
+  }, [cloudUser, project]);
 
   const handleSaveProject = useCallback(async () => {
     try {
@@ -714,12 +887,16 @@ function StoryWorkspace() {
 
       await writeProjectToDirectory(project, handle);
       setFolderHandle(handle);
+      setCloudProjectId(null);
+      setCloudVersion(null);
+      setStorageMode("local");
+      setCloudSyncStatus(cloudUser ? "idle" : "signed_out");
       setIsDirty(false);
       setStatus("Project saved");
     } catch (error) {
       setStatus(projectFolderErrorMessage(error, "Choose a project folder to save"));
     }
-  }, [folderHandle, project]);
+  }, [cloudUser, folderHandle, project]);
 
   const handleOpenProject = useCallback(async () => {
     if (!hasFolderProjectSupport()) {
@@ -739,21 +916,14 @@ function StoryWorkspace() {
       }
 
       const loadedProject = await readProjectFromDirectory(handle);
-      const nextSelection = firstProjectSelection(loadedProject);
-      const nextGraphView = loadedProject.projectMode === "game_story" ? "story_flow" : "world";
-      const nextGraphFocus = createEntityGraphFocus(loadedProject, nextSelection, graphFocusDepthRef.current, nextGraphView);
-      setProject(loadedProject);
-      setFolderHandle(handle);
-      setSelection(nextSelection);
-      setGraphView(nextGraphView);
-      setFlowNodes(projectNodes(loadedProject, nextSelection, nextGraphFocus, nextGraphView));
-      setSelectedTimelineEventId(null);
-      setIsDirty(false);
-      setStatus("Project opened");
+      loadProjectIntoWorkspace(loadedProject, "Project opened", {
+        folderHandle: handle,
+        storageMode: "local"
+      });
     } catch (error) {
       setStatus(projectFolderErrorMessage(error, "Choose a project folder to open"));
     }
-  }, []);
+  }, [loadProjectIntoWorkspace]);
 
   const handleExportBackup = useCallback(() => {
     downloadProjectBackup();
@@ -767,17 +937,9 @@ function StoryWorkspace() {
 
     try {
       const loadedProject = await projectFromBundleFile(file);
-      const nextSelection = firstProjectSelection(loadedProject);
-      const nextGraphView = loadedProject.projectMode === "game_story" ? "story_flow" : "world";
-      const nextGraphFocus = createEntityGraphFocus(loadedProject, nextSelection, graphFocusDepthRef.current, nextGraphView);
-      setProject(loadedProject);
-      setFolderHandle(null);
-      setSelection(nextSelection);
-      setGraphView(nextGraphView);
-      setFlowNodes(projectNodes(loadedProject, nextSelection, nextGraphFocus, nextGraphView));
-      setSelectedTimelineEventId(null);
-      setIsDirty(false);
-      setStatus("Project opened from backup");
+      loadProjectIntoWorkspace(loadedProject, "Project opened from backup", {
+        storageMode: "local"
+      });
     } catch (error) {
       setStatus((error as Error).message);
     } finally {
@@ -785,7 +947,194 @@ function StoryWorkspace() {
         backupInputRef.current.value = "";
       }
     }
+  }, [loadProjectIntoWorkspace]);
+
+  const refreshCloudProjects = useCallback(async () => {
+    if (!cloudUser) {
+      setCloudAuthOpen(true);
+      setStatus("Sign in to use cloud projects");
+      return;
+    }
+
+    setCloudProjectsLoading(true);
+
+    try {
+      setCloudProjects(await listCloudProjects());
+    } catch (error) {
+      setStatus((error as Error).message);
+      setCloudSyncStatus("error");
+    } finally {
+      setCloudProjectsLoading(false);
+    }
+  }, [cloudUser]);
+
+  const handleOpenCloudProjects = useCallback(async () => {
+    if (!cloudUser) {
+      setCloudAuthOpen(true);
+      setStatus("Sign in to use cloud projects");
+      return;
+    }
+
+    setCloudProjectsOpen(true);
+    await refreshCloudProjects();
+  }, [cloudUser, refreshCloudProjects]);
+
+  const handlePasswordSignIn = useCallback(async (email: string, password: string) => {
+    const user = await signInWithPassword(email, password);
+    setCloudUser(user);
+    setCloudSyncStatus("idle");
+    setStatus("Signed in");
   }, []);
+
+  const handleMagicLink = useCallback(async (email: string) => {
+    await sendMagicLink(email);
+    setStatus("Magic link sent");
+  }, []);
+
+  const handleSignOut = useCallback(async () => {
+    await signOutCloudUser();
+    setCloudUser(null);
+    setCloudProjectId(null);
+    setCloudVersion(null);
+    setStorageMode("local");
+    setCloudSyncStatus("signed_out");
+    setStatus("Signed out");
+  }, []);
+
+  const handleOpenCloudProject = useCallback(
+    async (id: string) => {
+      const loadedProject = await openCloudProject(id);
+
+      loadProjectIntoWorkspace(loadedProject.project, "Cloud project opened", {
+        cloudProjectId: loadedProject.id,
+        cloudVersion: loadedProject.version,
+        storageMode: "cloud"
+      });
+      setCloudProjectsOpen(false);
+    },
+    [loadProjectIntoWorkspace]
+  );
+
+  const handleDeleteCloudProject = useCallback(
+    async (id: string) => {
+      await deleteCloudProject(id);
+
+      if (cloudProjectId === id) {
+        setCloudProjectId(null);
+        setCloudVersion(null);
+        setStorageMode("local");
+        setCloudSyncStatus(cloudUser ? "idle" : "signed_out");
+      }
+
+      setStatus("Cloud project deleted");
+      await refreshCloudProjects();
+    },
+    [cloudProjectId, cloudUser, refreshCloudProjects]
+  );
+
+  const handleSaveToCloud = useCallback(async () => {
+    if (!cloudUser) {
+      setCloudAuthOpen(true);
+      setStatus("Sign in before saving to cloud");
+      return;
+    }
+
+    setCloudSyncStatus("saving");
+
+    try {
+      const savedProject =
+        cloudProjectId && cloudVersion !== null
+          ? await saveCloudProject(cloudProjectId, cloudVersion, project)
+          : await createCloudProject(project);
+
+      setCloudProjectId(savedProject.id);
+      setCloudVersion(savedProject.version);
+      setFolderHandle(null);
+      setStorageMode("cloud");
+      setCloudSyncStatus("saved");
+      setIsDirty(false);
+      setStatus("Cloud project saved");
+      setCloudProjects((projects) => upsertCloudProjectSummary(projects, savedProject));
+    } catch (error) {
+      if (error instanceof CloudProjectConflictError) {
+        setCloudSyncStatus("conflict");
+        setCloudConflictOpen(true);
+        setStatus("Cloud version conflict");
+        return;
+      }
+
+      setCloudSyncStatus("error");
+      setStatus((error as Error).message);
+    }
+  }, [cloudProjectId, cloudUser, cloudVersion, project]);
+
+  const handleReloadRemoteProject = useCallback(async () => {
+    if (!cloudProjectId) {
+      throw new Error("No cloud project is open.");
+    }
+
+    const loadedProject = await openCloudProject(cloudProjectId);
+
+    loadProjectIntoWorkspace(loadedProject.project, "Remote project reloaded", {
+      cloudProjectId: loadedProject.id,
+      cloudVersion: loadedProject.version,
+      storageMode: "cloud"
+    });
+  }, [cloudProjectId, loadProjectIntoWorkspace]);
+
+  const handleSaveCloudCopy = useCallback(async () => {
+    if (!cloudUser) {
+      throw new Error("Sign in before saving to cloud.");
+    }
+
+    const copyProject = {
+      ...project,
+      title: `${project.title} Copy`
+    };
+    const savedProject = await createCloudProject(copyProject);
+
+    loadProjectIntoWorkspace(savedProject.project, "Cloud copy saved", {
+      cloudProjectId: savedProject.id,
+      cloudVersion: savedProject.version,
+      storageMode: "cloud"
+    });
+    setCloudProjects((projects) => upsertCloudProjectSummary(projects, savedProject));
+  }, [cloudUser, loadProjectIntoWorkspace, project]);
+
+  const handleImportBackupToCloudSelected = useCallback(
+    async (file: File | null) => {
+      if (!file) {
+        return;
+      }
+
+      if (!cloudUser) {
+        setCloudAuthOpen(true);
+        setStatus("Sign in before importing to cloud");
+        return;
+      }
+
+      try {
+        const importedProject = await projectFromBundleFile(file);
+        const savedProject = await createCloudProject(importedProject);
+
+        loadProjectIntoWorkspace(savedProject.project, "Backup imported to cloud", {
+          cloudProjectId: savedProject.id,
+          cloudVersion: savedProject.version,
+          storageMode: "cloud"
+        });
+        setCloudProjects((projects) => upsertCloudProjectSummary(projects, savedProject));
+        setCloudProjectsOpen(false);
+      } catch (error) {
+        setCloudSyncStatus("error");
+        setStatus((error as Error).message);
+      } finally {
+        if (cloudImportInputRef.current) {
+          cloudImportInputRef.current.value = "";
+        }
+      }
+    },
+    [cloudUser, loadProjectIntoWorkspace]
+  );
 
   return (
     <div className="app-shell">
@@ -795,6 +1144,13 @@ function StoryWorkspace() {
         type="file"
         accept=".storyteller.json,application/json"
         onChange={(event) => void handleImportFileSelected(event.target.files?.[0] ?? null)}
+      />
+      <input
+        ref={cloudImportInputRef}
+        className="visually-hidden"
+        type="file"
+        accept=".storyteller.json,application/json"
+        onChange={(event) => void handleImportBackupToCloudSelected(event.target.files?.[0] ?? null)}
       />
 
       <header className="topbar">
@@ -808,9 +1164,38 @@ function StoryWorkspace() {
             <span>
               Folder: <strong>{folderHandle?.name ?? "Not selected"}</strong>
             </span>
+            <span>
+              Storage: <strong>{storageMode === "cloud" ? "Cloud" : "Local"}</strong>
+            </span>
+            <span>
+              Cloud: <strong>{cloudStatusLabel(cloudSyncStatus)}</strong>
+            </span>
+            {cloudVersion !== null ? (
+              <span>
+                Version: <strong>{cloudVersion}</strong>
+              </span>
+            ) : null}
           </div>
         </div>
         <nav className="topbar-actions" aria-label="Project commands">
+          <HeaderIconButton
+            label={cloudUser ? "Sign Out" : "Sign In"}
+            active={Boolean(cloudUser)}
+            onClick={() => setCloudAuthOpen(true)}
+          >
+            {cloudUser ? <LogOut aria-hidden="true" /> : <LogIn aria-hidden="true" />}
+          </HeaderIconButton>
+          <HeaderIconButton label="Cloud Projects" onClick={() => void handleOpenCloudProjects()}>
+            <Database aria-hidden="true" />
+          </HeaderIconButton>
+          <HeaderIconButton label="Save to Cloud" active={cloudSyncStatus === "saving"} onClick={() => void handleSaveToCloud()}>
+            <CloudUpload aria-hidden="true" />
+          </HeaderIconButton>
+          {cloudProjectId ? (
+            <HeaderIconButton label="Delete Cloud Project" onClick={() => void handleDeleteCloudProject(cloudProjectId)}>
+              <Trash2 aria-hidden="true" />
+            </HeaderIconButton>
+          ) : null}
           <HeaderIconButton label="New Project" onClick={() => void handleNewProject()}>
             <FilePlus2 aria-hidden="true" />
           </HeaderIconButton>
@@ -865,6 +1250,34 @@ function StoryWorkspace() {
       </header>
 
       {guideOpen ? <InAppGuide onClose={() => setGuideOpen(false)} /> : null}
+      {cloudAuthOpen ? (
+        <CloudAuthDialog
+          user={cloudUser}
+          onClose={() => setCloudAuthOpen(false)}
+          onMagicLink={handleMagicLink}
+          onPasswordSignIn={handlePasswordSignIn}
+          onSignOut={handleSignOut}
+        />
+      ) : null}
+      {cloudProjectsOpen ? (
+        <CloudProjectsDialog
+          projects={cloudProjects}
+          loading={cloudProjectsLoading}
+          onClose={() => setCloudProjectsOpen(false)}
+          onDelete={handleDeleteCloudProject}
+          onImportBackupToCloud={() => cloudImportInputRef.current?.click()}
+          onOpen={handleOpenCloudProject}
+          onRefresh={refreshCloudProjects}
+        />
+      ) : null}
+      {cloudConflictOpen ? (
+        <CloudConflictDialog
+          onClose={() => setCloudConflictOpen(false)}
+          onExportBackup={handleExportBackup}
+          onReloadRemote={handleReloadRemoteProject}
+          onSaveCopy={handleSaveCloudCopy}
+        />
+      ) : null}
 
       {activePage === "settings" ? (
         <SettingsPage
@@ -1315,6 +1728,63 @@ function parseGraphFocusDepth(value: string | null): GraphFocusDepth | null {
   }
 
   return value === "all" ? "all" : null;
+}
+
+function cloudStatusLabel(status: CloudSyncStatus): string {
+  switch (status) {
+    case "signed_out":
+      return "Signed out";
+    case "idle":
+      return "Ready";
+    case "saving":
+      return "Saving";
+    case "saved":
+      return "Saved";
+    case "conflict":
+      return "Conflict";
+    case "error":
+      return "Error";
+  }
+}
+
+function upsertCloudProjectSummary(
+  projects: CloudProjectSummary[],
+  project: CloudProjectSummary
+): CloudProjectSummary[] {
+  return [project, ...projects.filter((currentProject) => currentProject.id !== project.id)].sort((left, right) =>
+    right.updatedAt.localeCompare(left.updatedAt)
+  );
+}
+
+function parseCloudStoredSettings(value: unknown): CloudStoredSettings {
+  if (!value || typeof value !== "object") {
+    return {};
+  }
+
+  const candidate = value as Partial<CloudStoredSettings>;
+  const settings: CloudStoredSettings = {};
+
+  if (isAgentSettings(candidate.agentSettings)) {
+    settings.agentSettings = candidate.agentSettings;
+  }
+
+  const graphFocusDepth = parseGraphFocusDepth(String(candidate.graphFocusDepth ?? ""));
+
+  if (graphFocusDepth) {
+    settings.graphFocusDepth = graphFocusDepth;
+  }
+
+  return settings;
+}
+
+function isAgentSettings(value: unknown): value is AgentSettings {
+  return (
+    Boolean(value) &&
+    typeof value === "object" &&
+    typeof (value as Partial<AgentSettings>).apiKey === "string" &&
+    typeof (value as Partial<AgentSettings>).baseUrl === "string" &&
+    typeof (value as Partial<AgentSettings>).model === "string"
+  );
 }
 
 function projectFolderErrorMessage(error: unknown, abortMessage: string): string {
