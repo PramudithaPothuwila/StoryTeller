@@ -14,6 +14,7 @@ import {
 interface SettingsPageProps {
   project: StoryProject;
   agentSettings: AgentSettings;
+  agentSettingsEditable: boolean;
   defaultRelationshipType: LinkTypeId;
   onAddItemType: () => void;
   onAddLinkType: () => void;
@@ -31,6 +32,7 @@ interface SettingsPageProps {
 export function SettingsPage({
   project,
   agentSettings,
+  agentSettingsEditable,
   defaultRelationshipType,
   onAddItemType,
   onAddLinkType,
@@ -115,57 +117,13 @@ export function SettingsPage({
           </select>
         </section>
 
-        <section className="settings-panel" aria-labelledby="agent-settings-title">
-          <div className="settings-panel-heading">
-            <Bot aria-hidden="true" />
-            <h2 id="agent-settings-title">AI Agent</h2>
-          </div>
-          <p className="agent-warning">
-            Browser-side API keys can be inspected by anyone using this browser session. Use a limited, personal key.
-          </p>
-          <p className="agent-compat-note">
-            The Agent API must support OpenAPI-compatible Responses API behavior, including the /responses endpoint and
-            structured outputs.
-          </p>
-          <label className="field-label" htmlFor="settings-agent-api-key">
-            API Key
-          </label>
-          <input
-            id="settings-agent-api-key"
-            aria-label="Agent API key"
-            type="password"
-            autoComplete="off"
-            placeholder="sk-..."
-            value={agentSettings.apiKey}
-            onChange={(event) => onAgentSettingsChange({ ...agentSettings, apiKey: event.target.value })}
+        {agentSettingsEditable ? (
+          <AgentSettingsPanel
+            agentSettings={agentSettings}
+            headingId="agent-settings-title"
+            onAgentSettingsChange={onAgentSettingsChange}
           />
-          <div className="agent-settings-grid">
-            <label className="field-stack">
-              Model
-              <input
-                aria-label="Agent model"
-                value={agentSettings.model}
-                onChange={(event) => onAgentSettingsChange({ ...agentSettings, model: event.target.value })}
-              />
-            </label>
-            <label className="field-stack">
-              Base URL
-              <input
-                aria-label="Agent base URL"
-                value={agentSettings.baseUrl}
-                onChange={(event) => onAgentSettingsChange({ ...agentSettings, baseUrl: event.target.value })}
-              />
-            </label>
-          </div>
-          <button
-            type="button"
-            className="text-tool-button"
-            onClick={() => onAgentSettingsChange({ ...DEFAULT_AGENT_SETTINGS })}
-          >
-            <Trash2 aria-hidden="true" />
-            Clear Agent Settings
-          </button>
-        </section>
+        ) : null}
 
         <section className="settings-panel settings-panel--wide" aria-labelledby="type-settings-title">
           <div className="settings-section-heading">
@@ -303,6 +261,72 @@ export function SettingsPage({
         </section>
       </div>
     </main>
+  );
+}
+
+interface AgentSettingsPanelProps {
+  agentSettings: AgentSettings;
+  headingId: string;
+  onAgentSettingsChange: (settings: AgentSettings) => void;
+}
+
+export function AgentSettingsPanel({
+  agentSettings,
+  headingId,
+  onAgentSettingsChange
+}: AgentSettingsPanelProps) {
+  return (
+    <section className="settings-panel" aria-labelledby={headingId}>
+      <div className="settings-panel-heading">
+        <Bot aria-hidden="true" />
+        <h2 id={headingId}>AI Agent</h2>
+      </div>
+      <p className="agent-warning">
+        Browser-side API keys can be inspected by anyone using this browser session. Use a limited, personal key.
+      </p>
+      <p className="agent-compat-note">
+        The Agent API must support OpenAPI-compatible Responses API behavior, including the /responses endpoint and
+        structured outputs.
+      </p>
+      <label className="field-label" htmlFor={`${headingId}-api-key`}>
+        API Key
+      </label>
+      <input
+        id={`${headingId}-api-key`}
+        aria-label="Agent API key"
+        type="password"
+        autoComplete="off"
+        placeholder="sk-..."
+        value={agentSettings.apiKey}
+        onChange={(event) => onAgentSettingsChange({ ...agentSettings, apiKey: event.target.value })}
+      />
+      <div className="agent-settings-grid">
+        <label className="field-stack">
+          Model
+          <input
+            aria-label="Agent model"
+            value={agentSettings.model}
+            onChange={(event) => onAgentSettingsChange({ ...agentSettings, model: event.target.value })}
+          />
+        </label>
+        <label className="field-stack">
+          Base URL
+          <input
+            aria-label="Agent base URL"
+            value={agentSettings.baseUrl}
+            onChange={(event) => onAgentSettingsChange({ ...agentSettings, baseUrl: event.target.value })}
+          />
+        </label>
+      </div>
+      <button
+        type="button"
+        className="text-tool-button"
+        onClick={() => onAgentSettingsChange({ ...DEFAULT_AGENT_SETTINGS })}
+      >
+        <Trash2 aria-hidden="true" />
+        Clear Agent Settings
+      </button>
+    </section>
   );
 }
 

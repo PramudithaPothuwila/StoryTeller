@@ -375,11 +375,21 @@ a.toolbar-button {
 .auth-panel {
   display: grid;
   gap: 14px;
-  max-width: 560px;
+  max-width: 760px;
   padding: 16px;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: #ffffff;
+}
+
+.auth-account-layout {
+  display: grid;
+  gap: 14px;
+}
+
+.auth-account-layout .settings-panel {
+  padding: 0;
+  border: 0;
 }
 
 .new-project-choice-grid {

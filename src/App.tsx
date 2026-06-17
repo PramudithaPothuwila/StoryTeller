@@ -47,7 +47,7 @@ import { GraphToolbar } from "./components/GraphToolbar";
 import { InAppGuide } from "./components/InAppGuide";
 import { RelationshipEdge, type RelationshipEdgeType } from "./components/RelationshipEdge";
 import { RulebookSidebar } from "./components/RulebookSidebar";
-import { SettingsPage } from "./components/SettingsPage";
+import { AgentSettingsPanel, SettingsPage } from "./components/SettingsPage";
 import { Sidebar } from "./components/Sidebar";
 import { TimelinePanel } from "./components/TimelinePanel";
 import {
@@ -94,7 +94,7 @@ import {
   readProjectFromDirectory,
   writeProjectToDirectory
 } from "./data/projectFiles";
-import { AgentSettings, readStoredAgentSettings, writeStoredAgentSettings } from "./data/agent";
+import { AgentSettings, DEFAULT_AGENT_SETTINGS, readStoredAgentSettings, writeStoredAgentSettings } from "./data/agent";
 import {
   CloudProjectConflictError,
   CloudProjectSummary,
@@ -207,12 +207,15 @@ export function App() {
 function StoryAppRoutes() {
   const navigate = useNavigate();
   const [cloudUser, setCloudUser] = useState<CloudUser | null>(null);
+  const [cloudAgentSettings, setCloudAgentSettings] = useState<AgentSettings>(() => ({ ...DEFAULT_AGENT_SETTINGS }));
   const [cloudProjects, setCloudProjects] = useState<CloudProjectSummary[]>([]);
   const [cloudProjectsLoading, setCloudProjectsLoading] = useState(false);
   const [recentProjects, setRecentProjects] = useState<RecentProjectCard[]>(() => readStoredRecentProjects());
   const [workspaceSeeds, setWorkspaceSeeds] = useState<Record<string, WorkspaceProjectSeed>>({});
   const [routeStatus, setRouteStatus] = useState("Ready");
   const backupInputRef = useRef<HTMLInputElement>(null);
+  const cloudAgentSettingsUserRef = useRef<string | null>(null);
+  const cloudAgentSettingsDirtyRef = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -243,6 +246,69 @@ function StoryAppRoutes() {
       cancelled = true;
       unsubscribe();
     };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadCloudAgentSettings() {
+      if (!cloudUser) {
+        cloudAgentSettingsUserRef.current = null;
+        cloudAgentSettingsDirtyRef.current = false;
+        setCloudAgentSettings({ ...DEFAULT_AGENT_SETTINGS });
+        return;
+      }
+
+      try {
+        const settings = parseCloudStoredSettings(await readCloudUserSettings());
+
+        if (cancelled) {
+          return;
+        }
+
+        cloudAgentSettingsUserRef.current = cloudUser.id;
+
+        if (settings.agentSettings) {
+          setCloudAgentSettings(settings.agentSettings);
+        } else {
+          setCloudAgentSettings({ ...DEFAULT_AGENT_SETTINGS });
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setRouteStatus((error as Error).message);
+        }
+      }
+    }
+
+    void loadCloudAgentSettings();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [cloudUser]);
+
+  useEffect(() => {
+    if (!cloudUser || cloudAgentSettingsUserRef.current !== cloudUser.id || !cloudAgentSettingsDirtyRef.current) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      void (async () => {
+        const currentSettings = parseCloudStoredSettings(await readCloudUserSettings());
+        await writeCloudUserSettings({
+          ...currentSettings,
+          agentSettings: cloudAgentSettings
+        });
+        cloudAgentSettingsDirtyRef.current = false;
+      })().catch((error) => setRouteStatus((error as Error).message));
+    }, 500);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [cloudAgentSettings, cloudUser]);
+
+  const handleCloudAgentSettingsChange = useCallback((settings: AgentSettings) => {
+    cloudAgentSettingsDirtyRef.current = true;
+    setCloudAgentSettings(settings);
   }, []);
 
   const rememberRecentProject = useCallback((recentProject: RecentProjectCard) => {
@@ -557,8 +623,10 @@ function StoryAppRoutes() {
           element={
             <AuthPage
               user={cloudUser}
+              agentSettings={cloudAgentSettings}
               status={routeStatus}
               onMagicLink={handleMagicLink}
+              onAgentSettingsChange={handleCloudAgentSettingsChange}
               onPasswordSignIn={handlePasswordSignIn}
               onPasswordSignUp={handlePasswordSignUp}
               onSignOut={handleSignOut}
@@ -570,6 +638,7 @@ function StoryAppRoutes() {
           element={
             <WorkspaceRoute
               cloudUser={cloudUser}
+              cloudAgentSettings={cloudAgentSettings}
               workspaceSeeds={workspaceSeeds}
               onCloudProjectSaved={handleCloudProjectSaved}
               onRecentProjectChanged={rememberRecentProject}
@@ -584,6 +653,7 @@ function StoryAppRoutes() {
 
 interface WorkspaceRouteProps {
   cloudUser: CloudUser | null;
+  cloudAgentSettings: AgentSettings;
   workspaceSeeds: Record<string, WorkspaceProjectSeed>;
   onCloudProjectSaved: (project: CloudProjectSummary) => void;
   onRecentProjectChanged: (project: RecentProjectCard) => void;
@@ -591,6 +661,7 @@ interface WorkspaceRouteProps {
 
 function WorkspaceRoute({
   cloudUser,
+  cloudAgentSettings,
   workspaceSeeds,
   onCloudProjectSaved,
   onRecentProjectChanged
@@ -602,6 +673,7 @@ function WorkspaceRoute({
     <ReactFlowProvider>
       <StoryWorkspace
         cloudUser={cloudUser}
+        cloudAgentSettings={cloudAgentSettings}
         routeProjectId={projectId}
         seed={seed}
         onCloudProjectSaved={onCloudProjectSaved}
@@ -801,14 +873,25 @@ function HomePage({
 
 interface AuthPageProps {
   user: CloudUser | null;
+  agentSettings: AgentSettings;
   status: string;
+  onAgentSettingsChange: (settings: AgentSettings) => void;
   onMagicLink: (email: string) => Promise<void>;
   onPasswordSignIn: (email: string, password: string) => Promise<void>;
   onPasswordSignUp: (email: string, password: string) => Promise<void>;
   onSignOut: () => Promise<void>;
 }
 
-function AuthPage({ user, status, onMagicLink, onPasswordSignIn, onPasswordSignUp, onSignOut }: AuthPageProps) {
+function AuthPage({
+  user,
+  agentSettings,
+  status,
+  onAgentSettingsChange,
+  onMagicLink,
+  onPasswordSignIn,
+  onPasswordSignUp,
+  onSignOut
+}: AuthPageProps) {
   const navigate = useNavigate();
   const [mode, setMode] = useState<"sign-in" | "sign-up">("sign-in");
   const [email, setEmail] = useState(user?.email ?? "");
@@ -859,18 +942,25 @@ function AuthPage({ user, status, onMagicLink, onPasswordSignIn, onPasswordSignU
 
       <section className="auth-panel">
         {user ? (
-          <div className="cloud-stack">
-            <div className="cloud-account">
-              <Database aria-hidden="true" />
-              <div>
-                <strong>{user.email ?? "Signed in"}</strong>
-                <span>{user.id}</span>
+          <div className="auth-account-layout">
+            <div className="cloud-stack">
+              <div className="cloud-account">
+                <Database aria-hidden="true" />
+                <div>
+                  <strong>{user.email ?? "Signed in"}</strong>
+                  <span>{user.id}</span>
+                </div>
               </div>
+              <button type="button" className="text-tool-button danger" disabled={busy} onClick={() => void run(onSignOut, "Signed out")}>
+                <LogOut aria-hidden="true" />
+                Sign Out
+              </button>
             </div>
-            <button type="button" className="text-tool-button danger" disabled={busy} onClick={() => void run(onSignOut, "Signed out")}>
-              <LogOut aria-hidden="true" />
-              Sign Out
-            </button>
+            <AgentSettingsPanel
+              agentSettings={agentSettings}
+              headingId="account-agent-settings-title"
+              onAgentSettingsChange={onAgentSettingsChange}
+            />
           </div>
         ) : (
           <form className="cloud-stack" onSubmit={(event) => void handlePasswordSubmit(event)}>
@@ -929,6 +1019,7 @@ function AuthPage({ user, status, onMagicLink, onPasswordSignIn, onPasswordSignU
 
 interface StoryWorkspaceProps {
   cloudUser: CloudUser | null;
+  cloudAgentSettings: AgentSettings;
   routeProjectId?: string;
   seed?: WorkspaceProjectSeed;
   onCloudProjectSaved: (project: CloudProjectSummary) => void;
@@ -937,6 +1028,7 @@ interface StoryWorkspaceProps {
 
 function StoryWorkspace({
   cloudUser,
+  cloudAgentSettings,
   routeProjectId,
   seed,
   onCloudProjectSaved,
@@ -985,6 +1077,7 @@ function StoryWorkspace({
     () => (project.projectMode === "game_story" ? getGameContinuityIssues(project).length : 0),
     [project]
   );
+  const activeAgentSettings = storageMode === "cloud" ? cloudAgentSettings : agentSettings;
 
   useEffect(() => {
     graphFocusDepthRef.current = graphFocusDepth;
@@ -1025,10 +1118,6 @@ function StoryWorkspace({
 
         cloudSettingsUserRef.current = cloudUser.id;
 
-        if (settings.agentSettings) {
-          setAgentSettings(settings.agentSettings);
-        }
-
         if (settings.graphFocusDepth) {
           setGraphFocusDepth(settings.graphFocusDepth);
           writeStoredGraphFocusDepth(settings.graphFocusDepth);
@@ -1053,16 +1142,17 @@ function StoryWorkspace({
     }
 
     const timeoutId = window.setTimeout(() => {
-      const settings: CloudStoredSettings = {
-        agentSettings,
-        graphFocusDepth
-      };
-
-      void writeCloudUserSettings(settings).catch((error) => setStatus((error as Error).message));
+      void (async () => {
+        const currentSettings = parseCloudStoredSettings(await readCloudUserSettings());
+        await writeCloudUserSettings({
+          ...currentSettings,
+          graphFocusDepth
+        });
+      })().catch((error) => setStatus((error as Error).message));
     }, 500);
 
     return () => window.clearTimeout(timeoutId);
-  }, [agentSettings, cloudUser, graphFocusDepth]);
+  }, [cloudUser, graphFocusDepth]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1873,7 +1963,8 @@ function StoryWorkspace({
       {activePage === "settings" ? (
         <SettingsPage
           project={project}
-          agentSettings={agentSettings}
+          agentSettings={activeAgentSettings}
+          agentSettingsEditable={storageMode === "local"}
           defaultRelationshipType={defaultRelationshipType}
           onAddItemType={handleAddItemType}
           onAddLinkType={handleAddLinkType}
@@ -1969,7 +2060,7 @@ function StoryWorkspace({
 
           {agentOpen ? (
             <AgentPanel
-              agentSettings={agentSettings}
+              agentSettings={activeAgentSettings}
               project={project}
               onClose={() => setAgentOpen(false)}
               onProjectChange={markProjectChanged}
