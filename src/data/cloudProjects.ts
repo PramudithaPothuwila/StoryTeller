@@ -101,6 +101,21 @@ export async function signInWithPassword(email: string, password: string): Promi
   return cloudUserFromSupabaseUser(data.user);
 }
 
+export async function signUpWithPassword(email: string, password: string): Promise<CloudUser> {
+  const client = requireSupabaseClient();
+  const { data, error } = await client.auth.signUp({ email, password });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  if (!data.user) {
+    throw new Error("Sign up did not return a user.");
+  }
+
+  return cloudUserFromSupabaseUser(data.user);
+}
+
 export async function sendMagicLink(email: string): Promise<void> {
   const client = requireSupabaseClient();
   const { error } = await client.auth.signInWithOtp({
