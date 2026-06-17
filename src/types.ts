@@ -1,11 +1,12 @@
 export const BUILT_IN_EVENT_TYPE_ID = "event";
 export const BUILT_IN_WORLD_RULE_TYPE_ID = "world_rule";
-export const STORY_PROJECT_SCHEMA_VERSION = 3;
+export const STORY_PROJECT_SCHEMA_VERSION = 5;
 
 export type ItemTypeId = string;
 export type LinkTypeId = string;
 export type LinkDirection = "directed" | "mutual";
 export type ProjectMode = "story" | "game_story";
+export type GraphPresence = "world" | "story_flow" | "both";
 
 export interface Point {
   x: number;
@@ -226,6 +227,7 @@ export interface GameStoryRelationshipMetadata {
 export interface StoryEntity {
   id: string;
   type: ItemTypeId;
+  graphPresence: GraphPresence;
   title: string;
   summary: string;
   tags: string[];
@@ -267,6 +269,7 @@ export interface StoryProject {
   entities: Record<string, StoryEntity>;
   relationships: StoryRelationship[];
   layout: Record<string, Point>;
+  storyFlowLayout: Record<string, Point>;
 }
 
 export type Selection =

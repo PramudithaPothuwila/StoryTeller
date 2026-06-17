@@ -1,5 +1,6 @@
-import { ArrowLeft, BookOpen, Gamepad2, Plus, Trash2 } from "lucide-react";
+import { ArrowLeft, Bot, BookOpen, Gamepad2, Plus, Trash2 } from "lucide-react";
 import { ReactNode, useState } from "react";
+import { AgentSettings, DEFAULT_AGENT_SETTINGS } from "../data/agent";
 import { iconForName, iconOptions } from "../data/icons";
 import { isItemTypeInUse, isLinkTypeInUse } from "../data/story";
 import {
@@ -10,20 +11,17 @@ import {
   StoryProject
 } from "../types";
 
-type GraphFocusDepth = 1 | 2 | 3 | 4 | "all";
-
 interface SettingsPageProps {
   project: StoryProject;
+  agentSettings: AgentSettings;
   defaultRelationshipType: LinkTypeId;
-  graphFocusDepth: GraphFocusDepth;
-  graphFocusDepthOptions: Array<{ label: string; value: GraphFocusDepth }>;
   onAddItemType: () => void;
   onAddLinkType: () => void;
+  onAgentSettingsChange: (settings: AgentSettings) => void;
   onBackToWorkspace: () => void;
   onDefaultRelationshipTypeChange: (type: LinkTypeId) => void;
   onDeleteItemType: (typeId: string) => void;
   onDeleteLinkType: (typeId: string) => void;
-  onGraphFocusDepthChange: (depth: GraphFocusDepth) => void;
   onProjectModeChange: (projectMode: ProjectMode) => void;
   onProjectTitleChange: (title: string) => void;
   onUpdateItemType: (typeId: string, patch: Partial<ItemTypeDefinition>) => void;
@@ -32,16 +30,15 @@ interface SettingsPageProps {
 
 export function SettingsPage({
   project,
+  agentSettings,
   defaultRelationshipType,
-  graphFocusDepth,
-  graphFocusDepthOptions,
   onAddItemType,
   onAddLinkType,
+  onAgentSettingsChange,
   onBackToWorkspace,
   onDefaultRelationshipTypeChange,
   onDeleteItemType,
   onDeleteLinkType,
-  onGraphFocusDepthChange,
   onProjectModeChange,
   onProjectTitleChange,
   onUpdateItemType,
@@ -116,24 +113,58 @@ export function SettingsPage({
               </option>
             ))}
           </select>
+        </section>
 
-          <div className="settings-control-group">
-            <span>Graph Focus Depth</span>
-            <div className="depth-toggle" role="group" aria-label="Graph focus depth">
-              {graphFocusDepthOptions.map((option) => (
-                <button
-                  key={option.label}
-                  type="button"
-                  className={graphFocusDepth === option.value ? "is-active" : ""}
-                  aria-label={`Graph focus depth ${option.label}`}
-                  title={`Graph focus depth ${option.label}`}
-                  onClick={() => onGraphFocusDepthChange(option.value)}
-                >
-                  {option.label}
-                </button>
-              ))}
-            </div>
+        <section className="settings-panel" aria-labelledby="agent-settings-title">
+          <div className="settings-panel-heading">
+            <Bot aria-hidden="true" />
+            <h2 id="agent-settings-title">AI Agent</h2>
           </div>
+          <p className="agent-warning">
+            Browser-side API keys can be inspected by anyone using this browser session. Use a limited, personal key.
+          </p>
+          <p className="agent-compat-note">
+            The Agent API must support OpenAPI-compatible Responses API behavior, including the /responses endpoint and
+            structured outputs.
+          </p>
+          <label className="field-label" htmlFor="settings-agent-api-key">
+            API Key
+          </label>
+          <input
+            id="settings-agent-api-key"
+            aria-label="Agent API key"
+            type="password"
+            autoComplete="off"
+            placeholder="sk-..."
+            value={agentSettings.apiKey}
+            onChange={(event) => onAgentSettingsChange({ ...agentSettings, apiKey: event.target.value })}
+          />
+          <div className="agent-settings-grid">
+            <label className="field-stack">
+              Model
+              <input
+                aria-label="Agent model"
+                value={agentSettings.model}
+                onChange={(event) => onAgentSettingsChange({ ...agentSettings, model: event.target.value })}
+              />
+            </label>
+            <label className="field-stack">
+              Base URL
+              <input
+                aria-label="Agent base URL"
+                value={agentSettings.baseUrl}
+                onChange={(event) => onAgentSettingsChange({ ...agentSettings, baseUrl: event.target.value })}
+              />
+            </label>
+          </div>
+          <button
+            type="button"
+            className="text-tool-button"
+            onClick={() => onAgentSettingsChange({ ...DEFAULT_AGENT_SETTINGS })}
+          >
+            <Trash2 aria-hidden="true" />
+            Clear Agent Settings
+          </button>
         </section>
 
         <section className="settings-panel settings-panel--wide" aria-labelledby="type-settings-title">

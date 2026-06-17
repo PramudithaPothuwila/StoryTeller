@@ -16,6 +16,7 @@ import {
 } from "@xyflow/react";
 import {
   ArrowLeft,
+  Bot,
   CircleHelp,
   Download,
   FilePlus2,
@@ -27,9 +28,11 @@ import {
   Settings2
 } from "lucide-react";
 import { ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { AgentPanel } from "./components/AgentPanel";
 import { DetailInspector } from "./components/DetailInspector";
 import { EntityNode, EntityNodeData } from "./components/EntityNode";
 import { GameStoryPanel, type GameToolTab } from "./components/GameStoryPanel";
+import { GraphToolbar } from "./components/GraphToolbar";
 import { InAppGuide } from "./components/InAppGuide";
 import { RelationshipEdge, type RelationshipEdgeType } from "./components/RelationshipEdge";
 import { RulebookSidebar } from "./components/RulebookSidebar";
@@ -50,10 +53,10 @@ import {
   deleteItemTypeFromProject,
   deleteLinkTypeFromProject,
   deleteRelationshipFromProject,
+  entityVisibleInGraph,
   findItemType,
   findLinkType,
   getGameContinuityIssues,
-  getGameStoryNodes,
   getTimelineEvents,
   isRelationshipActiveAt,
   isGameStoryLinkType,
@@ -62,6 +65,7 @@ import {
   nextTimelineOrder,
   normalizeGameStoryEntityMetadata,
   normalizeGameStoryRelationshipMetadata,
+  projectLayoutForView,
   renameTimelineLaneInProject,
   resolveRelationshipAt,
   setProjectLayout,
@@ -79,6 +83,7 @@ import {
   readProjectFromDirectory,
   writeProjectToDirectory
 } from "./data/projectFiles";
+import { AgentSettings, readStoredAgentSettings, writeStoredAgentSettings } from "./data/agent";
 import {
   BUILT_IN_EVENT_TYPE_ID,
   BUILT_IN_WORLD_RULE_TYPE_ID,
@@ -159,9 +164,11 @@ function StoryWorkspace() {
   const [status, setStatus] = useState("Ready");
   const [isDirty, setIsDirty] = useState(false);
   const [folderHandle, setFolderHandle] = useState<FileSystemDirectoryHandle | null>(null);
+  const [agentSettings, setAgentSettings] = useState<AgentSettings>(() => readStoredAgentSettings());
   const [defaultRelationshipType, setDefaultRelationshipType] = useState<LinkTypeId>("relates_to");
   const [activePage, setActivePage] = useState<ActivePage>("workspace");
   const [guideOpen, setGuideOpen] = useState(false);
+  const [agentOpen, setAgentOpen] = useState(false);
   const [gameToolsOpen, setGameToolsOpen] = useState(false);
   const [rulebookOpen, setRulebookOpen] = useState(false);
   const [selectedTimelineEventId, setSelectedTimelineEventId] = useState<string | null>(null);
@@ -182,6 +189,10 @@ function StoryWorkspace() {
   useEffect(() => {
     graphFocusDepthRef.current = graphFocusDepth;
   }, [graphFocusDepth]);
+
+  useEffect(() => {
+    writeStoredAgentSettings(agentSettings);
+  }, [agentSettings]);
 
   useEffect(() => {
     let cancelled = false;
@@ -228,6 +239,12 @@ function StoryWorkspace() {
   useEffect(() => {
     setFlowNodes((currentNodes) => syncProjectNodes(currentNodes, project, selection, graphFocus, graphView));
   }, [graphFocus, graphView, project, selection]);
+
+  useEffect(() => {
+    if (selection?.kind === "entity" && !graphViewEntities(project, graphView).some((entity) => entity.id === selection.id)) {
+      setSelection(null);
+    }
+  }, [graphView, project, selection]);
 
   useEffect(() => {
     if (project.projectMode !== "game_story") {
@@ -297,7 +314,8 @@ function StoryWorkspace() {
     "workspace",
     inspectorVisible ? "has-inspector" : "",
     rulebookOpen ? "has-rulebook" : "",
-    gameToolsVisible ? "has-game-tools" : ""
+    gameToolsVisible ? "has-game-tools" : "",
+    agentOpen ? "has-agent" : ""
   ]
     .filter(Boolean)
     .join(" ");
@@ -333,6 +351,8 @@ function StoryWorkspace() {
 
     if (nextGraphView === "story_flow") {
       setDefaultRelationshipType("branches_to");
+    } else {
+      setDefaultRelationshipType((currentType) => (isGameStoryLinkType(currentType) ? "relates_to" : currentType));
     }
   }, []);
 
@@ -343,7 +363,9 @@ function StoryWorkspace() {
 
   const handleCreateEntity = useCallback(
     (type: ItemTypeId) => {
-      const entity = createStoryEntity(type, project.itemTypes);
+      const graphPresence =
+        project.projectMode === "game_story" && graphView === "story_flow" ? "story_flow" : "world";
+      const entity = createStoryEntity(type, project.itemTypes, undefined, graphPresence);
 
       if (entity.type === BUILT_IN_EVENT_TYPE_ID) {
         entity.timeline = { order: nextTimelineOrder(project), track: 0, effects: [] };
@@ -358,7 +380,7 @@ function StoryWorkspace() {
       markProjectChanged(nextProject);
       setSelection({ kind: "entity", id: entity.id });
     },
-    [markProjectChanged, project]
+    [graphView, markProjectChanged, project]
   );
 
   const handleNodesChange = useCallback(
@@ -374,7 +396,7 @@ function StoryWorkspace() {
       }
 
       setProject((currentProject) => {
-        const nextLayout = { ...currentProject.layout };
+        const nextLayout = { ...projectLayoutForView(currentProject, graphView) };
         let moved = false;
 
         for (const change of positionChanges) {
@@ -382,7 +404,7 @@ function StoryWorkspace() {
             continue;
           }
 
-          const currentPosition = currentProject.layout[change.id] ?? { x: 80, y: 80 };
+          const currentPosition = nextLayout[change.id] ?? { x: 80, y: 80 };
 
           if (currentPosition.x !== change.position.x || currentPosition.y !== change.position.y) {
             nextLayout[change.id] = {
@@ -393,13 +415,13 @@ function StoryWorkspace() {
           }
         }
 
-        return moved ? setProjectLayout(currentProject, nextLayout) : currentProject;
+        return moved ? setProjectLayout(currentProject, nextLayout, graphView) : currentProject;
       });
 
       setIsDirty(true);
       setStatus("Unsaved changes");
     },
-    []
+    [graphView]
   );
 
   const handleConnect = useCallback(
@@ -807,6 +829,16 @@ function StoryWorkspace() {
           <HeaderIconButton label="Rulebook" onClick={handleOpenRulebook}>
             <ScrollText aria-hidden="true" />
           </HeaderIconButton>
+          <HeaderIconButton
+            label="AI Agent"
+            active={agentOpen}
+            onClick={() => {
+              setActivePage("workspace");
+              setAgentOpen((open) => !open);
+            }}
+          >
+            <Bot aria-hidden="true" />
+          </HeaderIconButton>
           {gameToolsAvailable ? (
             <HeaderIconButton
               label="Branching RPG"
@@ -837,16 +869,15 @@ function StoryWorkspace() {
       {activePage === "settings" ? (
         <SettingsPage
           project={project}
+          agentSettings={agentSettings}
           defaultRelationshipType={defaultRelationshipType}
-          graphFocusDepth={graphFocusDepth}
-          graphFocusDepthOptions={graphFocusDepthOptions}
           onAddItemType={handleAddItemType}
           onAddLinkType={handleAddLinkType}
+          onAgentSettingsChange={setAgentSettings}
           onBackToWorkspace={() => setActivePage("workspace")}
           onDefaultRelationshipTypeChange={setDefaultRelationshipType}
           onDeleteItemType={handleDeleteItemType}
           onDeleteLinkType={handleDeleteLinkType}
-          onGraphFocusDepthChange={handleGraphFocusDepthChange}
           onProjectModeChange={handleProjectModeChange}
           onProjectTitleChange={handleProjectTitleChange}
           onUpdateItemType={handleUpdateItemType}
@@ -857,31 +888,21 @@ function StoryWorkspace() {
           <Sidebar
             project={project}
             search={search}
-            onCreateEntity={handleCreateEntity}
             onSelectEntity={(id) => setSelection({ kind: "entity", id })}
             onSearchChange={setSearch}
           />
 
           <section className="graph-column">
             <section className="graph-shell" aria-label="Story graph">
-              {project.projectMode === "game_story" ? (
-                <div className="graph-view-control" role="group" aria-label="Graph view">
-                  <button
-                    type="button"
-                    className={graphView === "world" ? "is-active" : ""}
-                    onClick={() => handleGraphViewChange("world")}
-                  >
-                    World
-                  </button>
-                  <button
-                    type="button"
-                    className={graphView === "story_flow" ? "is-active" : ""}
-                    onClick={() => handleGraphViewChange("story_flow")}
-                  >
-                    Story Flow
-                  </button>
-                </div>
-              ) : null}
+              <GraphToolbar
+                project={project}
+                graphView={graphView}
+                graphFocusDepth={graphFocusDepth}
+                graphFocusDepthOptions={graphFocusDepthOptions}
+                onCreateEntity={handleCreateEntity}
+                onGraphFocusDepthChange={handleGraphFocusDepthChange}
+                onGraphViewChange={handleGraphViewChange}
+              />
               <ReactFlow
                 nodes={flowNodes}
                 edges={edges}
@@ -939,6 +960,18 @@ function StoryWorkspace() {
               onProjectChange={markProjectChanged}
               onSelectEntity={(id) => setSelection({ kind: "entity", id })}
               onSelectRelationship={(id) => setSelection({ kind: "relationship", id })}
+            />
+          ) : null}
+
+          {agentOpen ? (
+            <AgentPanel
+              agentSettings={agentSettings}
+              project={project}
+              onClose={() => setAgentOpen(false)}
+              onProjectChange={markProjectChanged}
+              onSelectEntity={(id) => setSelection({ kind: "entity", id })}
+              onSelectRelationship={(id) => setSelection({ kind: "relationship", id })}
+              onStatusChange={setStatus}
             />
           ) : null}
 
@@ -1061,30 +1094,32 @@ function projectNodes(
   graphFocus: EntityGraphFocus | null,
   graphView: GraphView
 ): Node<EntityNodeData, "storyEntity">[] {
+  const layout = projectLayoutForView(project, graphView);
+
   return graphViewEntities(project, graphView).map((entity) => {
     const gameMetadata = entity.gameStory ? normalizeGameStoryEntityMetadata(entity.gameStory, entity.type) : null;
     const outgoingTargets = outgoingGraphViewTargets(project, entity.id);
 
     return {
-    id: entity.id,
-    type: "storyEntity",
-    position: project.layout[entity.id] ?? { x: 80, y: 80 },
-    data: {
-      entity,
-      itemType: findItemType(project, entity.type),
-      isSelected: selection?.kind === "entity" && selection.id === entity.id,
-      isConnectedToFocus: graphFocus?.connectedEntityIds.has(entity.id) ?? false,
-      isFaded: Boolean(graphFocus && !graphFocus.connectedEntityIds.has(entity.id)),
-      isGameStart: graphView === "story_flow" && project.gameStory?.startNodeId === entity.id,
-      isGameEnding: graphView === "story_flow" && gameMetadata?.role === "ending",
-      isGameCriticalPath: graphView === "story_flow" && Boolean(gameMetadata?.criticalPath),
-      isGameGated: graphView === "story_flow" && Boolean(gameMetadata?.entryConditions.length),
-      isGameDeadEnd:
-        graphView === "story_flow" &&
-        Boolean(gameMetadata) &&
-        gameMetadata?.role !== "ending" &&
-        outgoingTargets.length === 0
-    }
+      id: entity.id,
+      type: "storyEntity",
+      position: layout[entity.id] ?? { x: 80, y: 80 },
+      data: {
+        entity,
+        itemType: findItemType(project, entity.type),
+        isSelected: selection?.kind === "entity" && selection.id === entity.id,
+        isConnectedToFocus: graphFocus?.connectedEntityIds.has(entity.id) ?? false,
+        isFaded: Boolean(graphFocus && !graphFocus.connectedEntityIds.has(entity.id)),
+        isGameStart: graphView === "story_flow" && project.gameStory?.startNodeId === entity.id,
+        isGameEnding: graphView === "story_flow" && gameMetadata?.role === "ending",
+        isGameCriticalPath: graphView === "story_flow" && Boolean(gameMetadata?.criticalPath),
+        isGameGated: graphView === "story_flow" && Boolean(gameMetadata?.entryConditions.length),
+        isGameDeadEnd:
+          graphView === "story_flow" &&
+          Boolean(gameMetadata) &&
+          gameMetadata?.role !== "ending" &&
+          outgoingTargets.length === 0
+      }
     };
   });
 }
@@ -1097,10 +1132,11 @@ function syncProjectNodes(
   graphView: GraphView
 ): Node<EntityNodeData, "storyEntity">[] {
   const currentNodeById = new Map(currentNodes.map((node) => [node.id, node]));
+  const layout = projectLayoutForView(project, graphView);
 
   return graphViewEntities(project, graphView).map((entity) => {
     const currentNode = currentNodeById.get(entity.id);
-    const savedPosition = project.layout[entity.id];
+    const savedPosition = layout[entity.id];
     const gameMetadata = entity.gameStory ? normalizeGameStoryEntityMetadata(entity.gameStory, entity.type) : null;
     const outgoingTargets = outgoingGraphViewTargets(project, entity.id);
     const position = isFinitePoint(savedPosition)
@@ -1135,11 +1171,7 @@ function syncProjectNodes(
 }
 
 function graphViewEntities(project: StoryProject, graphView: GraphView): StoryEntity[] {
-  if (graphView === "story_flow") {
-    return getGameStoryNodes(project);
-  }
-
-  return Object.values(project.entities);
+  return Object.values(project.entities).filter((entity) => entityVisibleInGraph(entity, graphView));
 }
 
 function graphViewEntityIds(project: StoryProject, graphView: GraphView): Set<string> {
@@ -1154,7 +1186,9 @@ function graphViewRelationships(project: StoryProject, graphView: GraphView): St
       return false;
     }
 
-    return graphView === "story_flow" ? isGameStoryLinkType(relationship.type) || Boolean(relationship.gameStory) : true;
+    return graphView === "story_flow"
+      ? isGameStoryLinkType(relationship.type) || Boolean(relationship.gameStory)
+      : !isGameStoryLinkType(relationship.type) && !relationship.gameStory;
   });
 }
 

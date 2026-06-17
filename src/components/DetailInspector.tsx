@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   BUILT_IN_EVENT_TYPE_ID,
   BUILT_IN_WORLD_RULE_TYPE_ID,
+  GraphPresence,
   LinkTypeId,
   Selection,
   StoryEntity,
@@ -97,6 +98,23 @@ export function DetailInspector({
             }
           />
         </label>
+
+        {project.projectMode === "game_story" && isGameStoryItemType(selectedEntity.type) ? (
+          <label className="field-stack">
+            Graph Visibility
+            <select
+              aria-label="Graph visibility"
+              value={selectedEntity.graphPresence}
+              onChange={(event) =>
+                onEntityChange(selectedEntity.id, { graphPresence: event.target.value as GraphPresence })
+              }
+            >
+              <option value="story_flow">Story Flow</option>
+              <option value="both">World + Story Flow</option>
+              <option value="world">World</option>
+            </select>
+          </label>
+        ) : null}
 
         {selectedEntity.type === BUILT_IN_EVENT_TYPE_ID ? (
           <EventTimelineEditor

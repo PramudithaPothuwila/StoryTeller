@@ -52,6 +52,7 @@ vi.mock("@xyflow/react", () => ({
   ReactFlow: ({
     children,
     edges = [],
+    onConnect,
     onEdgeClick,
     onNodeClick,
     onPaneClick,
@@ -70,6 +71,7 @@ vi.mock("@xyflow/react", () => ({
       target: string;
       type?: string;
     }>;
+    onConnect?: (connection: { source: string; target: string }) => void;
     onEdgeClick?: (event: unknown, edge: unknown) => void;
     onNodeClick?: (event: unknown, node: unknown) => void;
     onPaneClick?: () => void;
@@ -114,6 +116,17 @@ vi.mock("@xyflow/react", () => ({
           >
             Move first graph node
           </button>
+          <button
+            type="button"
+            onClick={() => onNodesChange?.([{ id: nodes[0].id, type: "position", position: { x: 123, y: 456 } }])}
+          >
+            Move first graph node alternate
+          </button>
+          {nodes.length > 1 ? (
+            <button type="button" onClick={() => onConnect?.({ source: nodes[0].id, target: nodes[1].id })}>
+              Connect first graph nodes
+            </button>
+          ) : null}
         </>
       ) : null}
       {nodes.map((node) => (
@@ -214,6 +227,7 @@ describe("App project commands", () => {
   afterEach(() => {
     cleanup();
     window.localStorage.clear();
+    vi.unstubAllGlobals();
     anchorClickSpy.mockRestore();
     fileClickSpy.mockRestore();
     vi.clearAllMocks();
@@ -237,6 +251,12 @@ describe("App project commands", () => {
     expect(screen.getByRole("button", { name: "Open Settings" })).toHaveAttribute("title", "Open Settings");
     expect(screen.getByRole("button", { name: "Save Project" })).toHaveAttribute("title", "Save Project");
     expect(screen.getByText("Not selected")).toBeInTheDocument();
+    expect(screen.getByRole("toolbar", { name: "Graph tools" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Add Character" })).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: "Graph focus depth" })).toBeInTheDocument();
+    expect(document.querySelector(".graph-depth-select__single-value")).toHaveTextContent("1");
+    expect(screen.queryByRole("button", { name: "Switch to Story Flow" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Add Item" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Save folder" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Open folder" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Import" })).not.toBeInTheDocument();
@@ -253,6 +273,7 @@ describe("App project commands", () => {
     const guide = screen.getByRole("dialog", { name: "Guide" });
     expect(within(guide).getByText("Create and Find Story Items")).toBeInTheDocument();
     expect(within(guide).getByText("Use the Graph")).toBeInTheDocument();
+    expect(within(guide).getByText(/graph depth dropdown/)).toBeInTheDocument();
     expect(within(guide).getByText("Save and Configure")).toBeInTheDocument();
 
     fireEvent.click(within(guide).getByRole("button", { name: "Close guide" }));
@@ -267,6 +288,135 @@ describe("App project commands", () => {
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "Guide" })).not.toBeInTheDocument());
   });
 
+  it("opens and closes the AI agent panel from the topbar", async () => {
+    render(<App />);
+
+    await waitFor(() => expect(screen.getByText("Loaded Project")).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("button", { name: "AI Agent" }));
+
+    expect(screen.getByRole("complementary", { name: "AI Agent" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Story Agent" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Close AI Agent" }));
+
+    await waitFor(() => expect(screen.queryByRole("complementary", { name: "AI Agent" })).not.toBeInTheDocument());
+  });
+
+  it("blocks AI agent requests until an API key is provided", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    render(<App />);
+
+    await waitFor(() => expect(screen.getByText("Loaded Project")).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("button", { name: "AI Agent" }));
+    fireEvent.change(screen.getByPlaceholderText(/Ask for focused story structure changes/), {
+      target: { value: "Add a rival." }
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Ask Agent" }));
+
+    expect(await screen.findByText("Add an API key in Settings before asking the agent.")).toBeInTheDocument();
+    expect(screen.getByText("Agent needs an API key")).toBeInTheDocument();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("previews and applies a mocked AI agent change plan", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({
+        ok: true,
+        json: async () => ({
+          output_text: JSON.stringify({
+            summary: "Add a rival character.",
+            assumptions: ["The rival should remain tentative."],
+            followUpQuestions: [],
+            changes: [
+              {
+                operation: "create_entity",
+                summary: "Create rival",
+                entity: {
+                  id: "character-rival",
+                  type: "character",
+                  title: "Rival",
+                  summary: "A pressure point for the protagonist."
+                }
+              }
+            ]
+          })
+        })
+      }))
+    );
+    render(<App />);
+
+    await waitFor(() => expect(screen.getByText("Loaded Project")).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("button", { name: "Open Settings" }));
+    fireEvent.change(screen.getByLabelText("Agent API key"), { target: { value: "sk-test" } });
+    expect(screen.getByText(/The Agent API must support OpenAPI-compatible Responses API behavior/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Workspace" }));
+
+    await waitFor(() => expect(document.querySelector(".workspace")).not.toBeNull());
+    fireEvent.click(screen.getByRole("button", { name: "AI Agent" }));
+    fireEvent.change(screen.getByPlaceholderText(/Ask for focused story structure changes/), {
+      target: { value: "Add a rival." }
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Ask Agent" }));
+
+    expect(await screen.findByText("Create rival")).toBeInTheDocument();
+    expect(screen.getByText("The rival should remain tentative.")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Apply 1 Change" }));
+
+    expect(await screen.findByTestId("flow-node-character-rival")).toHaveTextContent("Rival");
+    expect(screen.getByText("Agent changes applied")).toBeInTheDocument();
+  });
+
+  it("disables applying invalid AI agent plans", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({
+        ok: true,
+        json: async () => ({
+          output_text: JSON.stringify({
+            summary: "Connect missing people.",
+            assumptions: [],
+            followUpQuestions: [],
+            changes: [
+              {
+                operation: "create_relationship",
+                summary: "Create impossible link",
+                relationship: {
+                  id: "link-missing",
+                  sourceId: "character-a",
+                  targetId: "character-b",
+                  type: "knows"
+                }
+              }
+            ]
+          })
+        })
+      }))
+    );
+    render(<App />);
+
+    await waitFor(() => expect(screen.getByText("Loaded Project")).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("button", { name: "Open Settings" }));
+    fireEvent.change(screen.getByLabelText("Agent API key"), { target: { value: "sk-test" } });
+    fireEvent.click(screen.getByRole("button", { name: "Workspace" }));
+
+    await waitFor(() => expect(document.querySelector(".workspace")).not.toBeNull());
+    fireEvent.click(screen.getByRole("button", { name: "AI Agent" }));
+    fireEvent.change(screen.getByPlaceholderText(/Ask for focused story structure changes/), {
+      target: { value: "Connect two missing characters." }
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Ask Agent" }));
+
+    expect(await screen.findByText("Relationship source does not exist: character-a")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Apply 1 Change" })).toBeDisabled();
+  });
+
   it("opens settings to edit project configuration and workspace defaults", async () => {
     render(<App />);
 
@@ -277,8 +427,12 @@ describe("App project commands", () => {
     await waitFor(() => expect(screen.getByRole("heading", { name: "Settings" })).toBeInTheDocument());
     expect(document.querySelector(".workspace")).toBeNull();
     expect(screen.getByLabelText("Project title")).toHaveValue("Loaded Project");
-    expect(screen.getByRole("button", { name: "Graph focus depth 1" })).toHaveClass("is-active");
+    expect(screen.queryByRole("button", { name: "Graph focus depth 1" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Add item type" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "AI Agent" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Agent model")).toHaveValue("gpt-5.5");
+    expect(screen.getByLabelText("Agent base URL")).toHaveValue("https://api.openai.com/v1");
+    expect(screen.getByText(/The Agent API must support OpenAPI-compatible Responses API behavior/)).toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText("Project title"), { target: { value: "Settings Project" } });
     expect(screen.getByText("Settings Project")).toBeInTheDocument();
@@ -294,7 +448,7 @@ describe("App project commands", () => {
 
     await waitFor(() => expect(document.querySelector(".workspace")).not.toBeNull());
     expect(screen.queryByLabelText("Project title")).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Story Flow" })).toHaveClass("is-active");
+    expect(screen.getByRole("button", { name: "Switch to Story Flow" })).toHaveClass("is-active");
   });
 
   it("hides the detail inspector when the graph pane clears an entity selection", async () => {
@@ -691,34 +845,30 @@ describe("App project commands", () => {
     expect(screen.getByTestId(`flow-node-${fixture.clue.id}`)).toHaveAttribute("data-faded", "true");
     expect(screen.getByTestId(`flow-edge-${fixture.allyLink.id}`)).toHaveAttribute("data-opacity", "0.12");
 
-    fireEvent.click(screen.getByRole("button", { name: "Open Settings" }));
-
     expect(screen.queryByRole("button", { name: "Graph focus depth 0" })).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Graph focus depth 2" }));
+    const depthSelect = screen.getByRole("combobox", { name: "Graph focus depth" });
+    fireEvent.keyDown(depthSelect, { key: "ArrowDown" });
+    fireEvent.click(screen.getByRole("option", { name: "2" }));
     expect(window.localStorage.getItem("storyteller.graphFocusDepth")).toBe("2");
-    fireEvent.click(screen.getByRole("button", { name: "Back to Workspace" }));
 
     await waitFor(() => expect(screen.getByTestId(`flow-node-${fixture.clue.id}`)).toHaveAttribute("data-connected", "true"));
     expect(screen.getByTestId(`flow-node-${fixture.faction.id}`)).toHaveAttribute("data-faded", "true");
 
-    fireEvent.click(screen.getByRole("button", { name: "Open Settings" }));
-    fireEvent.click(screen.getByRole("button", { name: "Graph focus depth 3" }));
-    fireEvent.click(screen.getByRole("button", { name: "Back to Workspace" }));
+    fireEvent.keyDown(depthSelect, { key: "ArrowDown" });
+    fireEvent.click(screen.getByRole("option", { name: "3" }));
 
     await waitFor(() => expect(screen.getByTestId(`flow-node-${fixture.faction.id}`)).toHaveAttribute("data-connected", "true"));
     expect(screen.getByTestId(`flow-node-${fixture.relic.id}`)).toHaveAttribute("data-faded", "true");
 
-    fireEvent.click(screen.getByRole("button", { name: "Open Settings" }));
-    fireEvent.click(screen.getByRole("button", { name: "Graph focus depth 4" }));
+    fireEvent.keyDown(depthSelect, { key: "ArrowDown" });
+    fireEvent.click(screen.getByRole("option", { name: "4" }));
     expect(window.localStorage.getItem("storyteller.graphFocusDepth")).toBe("4");
-    fireEvent.click(screen.getByRole("button", { name: "Back to Workspace" }));
 
     await waitFor(() => expect(screen.getByTestId(`flow-node-${fixture.relic.id}`)).toHaveAttribute("data-connected", "true"));
 
-    fireEvent.click(screen.getByRole("button", { name: "Open Settings" }));
-    fireEvent.click(screen.getByRole("button", { name: "Graph focus depth All" }));
+    fireEvent.keyDown(depthSelect, { key: "ArrowDown" });
+    fireEvent.click(screen.getByRole("option", { name: "All" }));
     expect(window.localStorage.getItem("storyteller.graphFocusDepth")).toBe("all");
-    fireEvent.click(screen.getByRole("button", { name: "Back to Workspace" }));
 
     await waitFor(() => expect(screen.getByTestId(`flow-node-${fixture.relic.id}`)).toHaveAttribute("data-faded", "false"));
     expect(screen.getByTestId(`flow-node-${fixture.hero.id}`)).toHaveAttribute("data-connected", "false");
@@ -732,9 +882,8 @@ describe("App project commands", () => {
     render(<App />);
 
     await waitFor(() => expect(screen.getByText("Focus Depth Project")).toBeInTheDocument());
-    fireEvent.click(screen.getByRole("button", { name: "Open Settings" }));
-    expect(screen.getByRole("button", { name: "Graph focus depth 3" })).toHaveClass("is-active");
-    fireEvent.click(screen.getByRole("button", { name: "Back to Workspace" }));
+    expect(screen.getByRole("combobox", { name: "Graph focus depth" })).toBeInTheDocument();
+    expect(document.querySelector(".graph-depth-select__single-value")).toHaveTextContent("3");
     expect(screen.getByTestId(`flow-node-${fixture.faction.id}`)).toHaveAttribute("data-connected", "true");
     expect(screen.getByTestId(`flow-node-${fixture.relic.id}`)).toHaveAttribute("data-faded", "true");
   });
@@ -748,14 +897,15 @@ describe("App project commands", () => {
     fireEvent.click(screen.getByRole("button", { name: "Game Story" }));
     fireEvent.click(screen.getByRole("button", { name: "Back to Workspace" }));
 
-    await waitFor(() => expect(screen.getByRole("button", { name: "Story Flow" })).toHaveClass("is-active"));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Switch to Story Flow" })).toHaveClass("is-active"));
     expect(screen.getByRole("button", { name: "Branching RPG" })).toBeInTheDocument();
     expect(screen.queryByRole("complementary", { name: "Game Story Tools" })).not.toBeInTheDocument();
     expect(document.querySelector(".workspace")).not.toHaveClass("has-game-tools");
-    expect(screen.getByRole("button", { name: "Story Flow" })).toHaveClass("is-active");
-    expect(screen.getByRole("button", { name: "Scene" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Switch to Story Flow" })).toHaveClass("is-active");
+    expect(screen.getByRole("button", { name: "Add Scene" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Add Character" })).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Scene" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add Scene" }));
 
     const sceneNode = await waitFor(() => {
       const node = document.querySelector('[data-testid^="flow-node-scene-"]');
@@ -790,16 +940,20 @@ describe("App project commands", () => {
     render(<App />);
 
     await waitFor(() => expect(screen.getByText("Game Flow Project")).toBeInTheDocument());
-    expect(screen.getByRole("button", { name: "Story Flow" })).toHaveClass("is-active");
+    expect(screen.getByRole("button", { name: "Switch to Story Flow" })).toHaveClass("is-active");
     expect(screen.getByTestId(`flow-node-${fixture.start.id}`)).toHaveAttribute("data-game-start", "true");
     expect(screen.getByTestId(`flow-node-${fixture.ending.id}`)).toHaveAttribute("data-game-ending", "true");
     expect(screen.queryByTestId(`flow-node-${fixture.character.id}`)).not.toBeInTheDocument();
+    expect(screen.getByTestId(`flow-edge-${fixture.branch.id}`)).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "World" }));
+    fireEvent.click(screen.getByRole("button", { name: "Switch to World" }));
 
     await waitFor(() => expect(screen.getByTestId(`flow-node-${fixture.character.id}`)).toBeInTheDocument());
+    expect(screen.getByTestId(`flow-node-${fixture.start.id}`)).toBeInTheDocument();
+    expect(screen.queryByTestId(`flow-edge-${fixture.branch.id}`)).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Story Flow" }));
+    fireEvent.click(screen.getByRole("button", { name: "Switch to Story Flow" }));
+    await waitFor(() => expect(screen.getByTestId(`flow-edge-${fixture.branch.id}`)).toBeInTheDocument());
     expect(screen.queryByRole("complementary", { name: "Game Story Tools" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Preview/ })).not.toBeInTheDocument();
 
@@ -815,6 +969,143 @@ describe("App project commands", () => {
     fireEvent.click(screen.getByRole("button", { name: /Open the gate/ }));
 
     await waitFor(() => expect(document.querySelector(".play-current-node h3")).toHaveTextContent("Bright Ending"));
+  });
+
+  it("keeps World and Story Flow node positions independent", async () => {
+    const fixture = createGameStoryFixture();
+    vi.mocked(loadStarterProject).mockResolvedValue(fixture.project);
+
+    render(<App />);
+
+    await waitFor(() => expect(screen.getByText("Game Flow Project")).toBeInTheDocument());
+    expect(screen.getByRole("button", { name: "Switch to Story Flow" })).toHaveClass("is-active");
+    expect(screen.getByTestId(`flow-node-${fixture.start.id}`)).toHaveAttribute("data-position", "50,60");
+
+    fireEvent.click(screen.getByRole("button", { name: "Move first graph node" }));
+
+    await waitFor(() =>
+      expect(screen.getByTestId(`flow-node-${fixture.start.id}`)).toHaveAttribute("data-position", "321,654")
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Switch to World" }));
+
+    await waitFor(() =>
+      expect(screen.getByTestId(`flow-node-${fixture.start.id}`)).toHaveAttribute("data-position", "0,20")
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Move first graph node alternate" }));
+
+    await waitFor(() =>
+      expect(screen.getByTestId(`flow-node-${fixture.start.id}`)).toHaveAttribute("data-position", "123,456")
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Switch to Story Flow" }));
+
+    await waitFor(() =>
+      expect(screen.getByTestId(`flow-node-${fixture.start.id}`)).toHaveAttribute("data-position", "321,654")
+    );
+  });
+
+  it("creates branch relationships when connecting nodes in Story Flow", async () => {
+    let project = setProjectModeInProject(createBlankProject("Branch Connect Project"), "game_story");
+    const start = createStoryEntity("scene", project.itemTypes, "Start", "story_flow");
+    const ending = createStoryEntity("ending", project.itemTypes, "Ending", "story_flow");
+    project = updateGameStoryProjectMetadata(
+      {
+        ...project,
+        entities: {
+          [start.id]: start,
+          [ending.id]: ending
+        },
+        layout: {
+          [start.id]: { x: 0, y: 20 },
+          [ending.id]: { x: 260, y: 240 }
+        },
+        storyFlowLayout: {
+          [start.id]: { x: 50, y: 60 },
+          [ending.id]: { x: 310, y: 60 }
+        }
+      },
+      { startNodeId: start.id }
+    );
+    vi.mocked(loadStarterProject).mockResolvedValue(project);
+
+    render(<App />);
+
+    await waitFor(() => expect(screen.getByText("Branch Connect Project")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "Connect first graph nodes" }));
+
+    const branchEdge = await waitFor(() => {
+      const edge = document.querySelector('[data-label="Branches to"]');
+      expect(edge).not.toBeNull();
+      return edge as HTMLElement;
+    });
+
+    expect(branchEdge).toHaveAttribute("data-source", start.id);
+    expect(branchEdge).toHaveAttribute("data-target", ending.id);
+  });
+
+  it("creates new items only in the active graph by default", async () => {
+    vi.mocked(loadStarterProject).mockResolvedValue(setProjectModeInProject(createBlankProject("Independent Items"), "game_story"));
+
+    render(<App />);
+
+    await waitFor(() => expect(screen.getByText("Independent Items")).toBeInTheDocument());
+    expect(screen.getByRole("button", { name: "Switch to Story Flow" })).toHaveClass("is-active");
+    fireEvent.click(screen.getByRole("button", { name: "Add Scene" }));
+
+    const storyNode = await waitFor(() => {
+      const node = document.querySelector('[data-testid^="flow-node-scene-"]');
+      expect(node).not.toBeNull();
+      return node as HTMLElement;
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Switch to World" }));
+    await waitFor(() => expect(storyNode).not.toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "Add Character" }));
+
+    const worldNode = await waitFor(() => {
+      const node = document.querySelector('[data-testid^="flow-node-character-"]');
+      expect(node).not.toBeNull();
+      return node as HTMLElement;
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Switch to Story Flow" }));
+
+    await waitFor(() => expect(worldNode).not.toBeInTheDocument());
+    expect(document.querySelector('[data-testid^="flow-node-scene-"]')).not.toBeNull();
+  });
+
+  it("toggles eligible game item visibility between Story Flow, World, and both graphs", async () => {
+    const fixture = createGameStoryFixture();
+    vi.mocked(loadStarterProject).mockResolvedValue(fixture.project);
+
+    render(<App />);
+
+    await waitFor(() => expect(screen.getByText("Game Flow Project")).toBeInTheDocument());
+    fireEvent.click(screen.getByTestId(`flow-node-${fixture.start.id}`));
+    expect(screen.getByLabelText("Graph visibility")).toHaveValue("both");
+
+    fireEvent.change(screen.getByLabelText("Graph visibility"), { target: { value: "world" } });
+
+    await waitFor(() => expect(screen.queryByTestId(`flow-node-${fixture.start.id}`)).not.toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "Switch to World" }));
+    await waitFor(() => expect(screen.getByTestId(`flow-node-${fixture.start.id}`)).toBeInTheDocument());
+
+    fireEvent.click(screen.getByTestId(`flow-node-${fixture.start.id}`));
+    expect(screen.getByLabelText("Graph visibility")).toHaveValue("world");
+    fireEvent.change(screen.getByLabelText("Graph visibility"), { target: { value: "story_flow" } });
+
+    await waitFor(() => expect(screen.queryByTestId(`flow-node-${fixture.start.id}`)).not.toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "Switch to Story Flow" }));
+    await waitFor(() => expect(screen.getByTestId(`flow-node-${fixture.start.id}`)).toBeInTheDocument());
+
+    fireEvent.click(screen.getByTestId(`flow-node-${fixture.start.id}`));
+    expect(screen.getByLabelText("Graph visibility")).toHaveValue("story_flow");
+    fireEvent.change(screen.getByLabelText("Graph visibility"), { target: { value: "both" } });
+    fireEvent.click(screen.getByRole("button", { name: "Switch to World" }));
+
+    await waitFor(() => expect(screen.getByTestId(`flow-node-${fixture.start.id}`)).toBeInTheDocument());
   });
 
   it("opens the optional RPG sidebar to inspect continuity issues", async () => {
@@ -962,10 +1253,10 @@ function createGameStoryFixture(options: { includeLonelyScene?: boolean } = {}) 
     label: "Gate Open",
     defaultValue: false
   });
-  const start = createStoryEntity("scene", project.itemTypes, "Gate Scene");
-  const ending = createStoryEntity("ending", project.itemTypes, "Bright Ending");
+  const start = createStoryEntity("scene", project.itemTypes, "Gate Scene", "both");
+  const ending = createStoryEntity("ending", project.itemTypes, "Bright Ending", "both");
   const character = createStoryEntity("character", project.itemTypes, "Gatekeeper");
-  const lonely = options.includeLonelyScene ? createStoryEntity("scene", project.itemTypes, "Lonely Scene") : null;
+  const lonely = options.includeLonelyScene ? createStoryEntity("scene", project.itemTypes, "Lonely Scene", "both") : null;
   const branch = {
     ...createStoryRelationship(project, start.id, ending.id, "branches_to"),
     gameStory: {
@@ -997,6 +1288,13 @@ function createGameStoryFixture(options: { includeLonelyScene?: boolean } = {}) 
       relationships: [branch],
       layout: Object.fromEntries(
         Object.values(entities).map((entity, index) => [entity.id, { x: index * 260, y: index % 2 === 0 ? 20 : 240 }])
+      ),
+      storyFlowLayout: Object.fromEntries(
+        Object.values(entities)
+          .filter((entity) =>
+            entity.type === "scene" || entity.type === "quest" || entity.type === "dialogue" || entity.type === "ending"
+          )
+          .map((entity, index) => [entity.id, { x: 50 + index * 260, y: 60 }])
       )
     },
     { startNodeId: start.id }

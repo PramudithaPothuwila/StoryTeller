@@ -7,6 +7,7 @@ import {
   GameDialogueMetadata,
   GameDialogueResponse,
   GameDialogueVariant,
+  GraphPresence,
   GamePlaythroughChoice,
   GameQuestMetadata,
   GameQuestObjective,
@@ -93,6 +94,9 @@ export const builtInGameLinkTypes: LinkTypeDefinition[] = [
 export const gameStoryItemTypeIds = new Set(builtInGameItemTypes.map((type) => type.id));
 export const gameStoryLinkTypeIds = new Set(builtInGameLinkTypes.map((type) => type.id));
 
+export type GraphLayoutView = "world" | "story_flow";
+export const graphPresenceOptions: GraphPresence[] = ["story_flow", "both", "world"];
+
 export function nowIso(): string {
   return new Date().toISOString();
 }
@@ -153,13 +157,19 @@ export function typeSoftColor(color: string): string {
   return /^#[\da-f]{6}$/i.test(color) ? `${color}22` : "#edf2f1";
 }
 
-export function createStoryEntity(type: ItemTypeId, itemTypes: ItemTypeDefinition[] = builtInItemTypes, title?: string): StoryEntity {
+export function createStoryEntity(
+  type: ItemTypeId,
+  itemTypes: ItemTypeDefinition[] = builtInItemTypes,
+  title?: string,
+  graphPresence: GraphPresence = "world"
+): StoryEntity {
   const timestamp = nowIso();
   const label = itemTypes.find((itemType) => itemType.id === type)?.label ?? fallbackItemType(type).label;
 
   return ensureEntityDefaults({
     id: makeId(type),
     type,
+    graphPresence,
     title: title ?? `New ${label}`,
     summary: "",
     tags: [],
@@ -420,23 +430,33 @@ export function createBlankProject(title = "Untitled Story", projectMode: Projec
     timelineLaneNames: [defaultTimelineLaneName(0)],
     entities: {},
     relationships: [],
-    layout: {}
+    layout: {},
+    storyFlowLayout: {}
   };
 
   return projectMode === "game_story" ? ensureGameStoryCatalog(project) : project;
 }
 
 export function addEntityToProject(project: StoryProject, entity: StoryEntity, position: Point): StoryProject {
+  const normalizedEntity = ensureEntityDefaults(entity);
+  const isStoryFlowNode = isGameStoryItemType(normalizedEntity.type) || Boolean(normalizedEntity.gameStory);
+
   return touchProject({
     ...project,
     entities: {
       ...project.entities,
-      [entity.id]: ensureEntityDefaults(entity)
+      [normalizedEntity.id]: normalizedEntity
     },
     layout: {
       ...project.layout,
-      [entity.id]: position
-    }
+      [normalizedEntity.id]: position
+    },
+    storyFlowLayout: isStoryFlowNode
+      ? {
+          ...project.storyFlowLayout,
+          [normalizedEntity.id]: position
+        }
+      : project.storyFlowLayout
   });
 }
 
@@ -467,11 +487,13 @@ export function updateEntityInProject(
 export function deleteEntityFromProject(project: StoryProject, entityId: string): StoryProject {
   const { [entityId]: _removed, ...remainingEntities } = project.entities;
   const { [entityId]: _removedLayout, ...remainingLayout } = project.layout;
+  const { [entityId]: _removedStoryFlowLayout, ...remainingStoryFlowLayout } = project.storyFlowLayout;
 
   return touchProject({
     ...project,
     entities: remainingEntities,
     layout: remainingLayout,
+    storyFlowLayout: remainingStoryFlowLayout,
     relationships: project.relationships
       .filter((relationship) => relationship.sourceId !== entityId && relationship.targetId !== entityId)
       .map((relationship) => ({
@@ -522,10 +544,18 @@ export function deleteRelationshipFromProject(project: StoryProject, relationshi
   });
 }
 
-export function setProjectLayout(project: StoryProject, layout: Record<string, Point>): StoryProject {
+export function projectLayoutForView(project: StoryProject, graphView: GraphLayoutView): Record<string, Point> {
+  return graphView === "story_flow" ? project.storyFlowLayout : project.layout;
+}
+
+export function setProjectLayout(
+  project: StoryProject,
+  layout: Record<string, Point>,
+  graphView: GraphLayoutView = "world"
+): StoryProject {
   return touchProject({
     ...project,
-    layout
+    ...(graphView === "story_flow" ? { storyFlowLayout: layout } : { layout })
   });
 }
 
@@ -1054,6 +1084,9 @@ export function nextEntityPosition(project: StoryProject): Point {
 export function migrateProjectShape(project: unknown): StoryProject {
   const value = project as Partial<StoryProject> & { schemaVersion?: number };
   const projectMode: ProjectMode = value.projectMode === "game_story" ? "game_story" : "story";
+  const layout = value.layout ?? {};
+  const hasStoryFlowLayout = Boolean(value.storyFlowLayout);
+  const schemaVersion = typeof value.schemaVersion === "number" ? value.schemaVersion : 1;
   const defaultItemTypes =
     projectMode === "game_story" ? [...cloneBuiltInItemTypes(), ...cloneBuiltInGameItemTypes()] : cloneBuiltInItemTypes();
   const defaultLinkTypes =
@@ -1072,24 +1105,38 @@ export function migrateProjectShape(project: unknown): StoryProject {
     timelineLaneNames: [],
     entities: {},
     relationships: [],
-    layout: value.layout ?? {}
+    layout,
+    storyFlowLayout: value.storyFlowLayout ?? {}
   };
 
   migrated.entities = Object.fromEntries(
     Object.values(value.entities ?? {}).map((entity) => {
-      const normalized = ensureEntityDefaults(entity);
+      const normalized = ensureEntityDefaults({
+        ...entity,
+        graphPresence: defaultGraphPresenceForMigratedEntity(entity, projectMode, schemaVersion)
+      });
       return [normalized.id, normalized];
     })
   );
   migrated.relationships = (value.relationships ?? []).map(normalizeRelationship);
   migrated.timelineLaneNames = normalizeTimelineLaneNames(value.timelineLaneNames, migrated.entities);
 
+  if (!hasStoryFlowLayout && migrated.projectMode === "game_story") {
+    migrated.storyFlowLayout = Object.fromEntries(
+      Object.values(migrated.entities)
+        .filter((entity) => isGameStoryItemType(entity.type) || Boolean(entity.gameStory))
+        .map((entity) => [entity.id, migrated.layout[entity.id]])
+        .filter((entry): entry is [string, Point] => isPoint(entry[1]))
+    );
+  }
+
   return migrated.projectMode === "game_story" ? ensureGameStoryCatalog(migrated) : migrated;
 }
 
-export function ensureEntityDefaults(entity: StoryEntity): StoryEntity {
+export function ensureEntityDefaults(entity: StoryEntity, graphPresence: GraphPresence = "world"): StoryEntity {
   const normalized: StoryEntity = {
     ...entity,
+    graphPresence: normalizeGraphPresence(entity.graphPresence, graphPresence),
     tags: entity.tags ?? [],
     publicInfo: entity.publicInfo ?? "",
     privateInfo: entity.privateInfo ?? "",
@@ -1111,6 +1158,36 @@ export function ensureEntityDefaults(entity: StoryEntity): StoryEntity {
   return normalized;
 }
 
+function defaultGraphPresenceForMigratedEntity(
+  entity: Partial<StoryEntity> | undefined,
+  projectMode: ProjectMode,
+  schemaVersion: number
+): GraphPresence {
+  if (schemaVersion >= 5 && entity?.graphPresence) {
+    return normalizeGraphPresence(entity.graphPresence, "world");
+  }
+
+  if (projectMode === "game_story" && entity?.type && isGameStoryItemType(entity.type)) {
+    return "both";
+  }
+
+  return "world";
+}
+
+export function normalizeGraphPresence(value: unknown, fallback: GraphPresence = "world"): GraphPresence {
+  return value === "world" || value === "story_flow" || value === "both" ? value : fallback;
+}
+
+export function entityVisibleInGraph(entity: StoryEntity, graphView: GraphLayoutView): boolean {
+  const graphPresence = normalizeGraphPresence(entity.graphPresence);
+
+  if (graphView === "story_flow") {
+    return isGameStoryItemType(entity.type) && (graphPresence === "story_flow" || graphPresence === "both");
+  }
+
+  return graphPresence === "world" || graphPresence === "both";
+}
+
 export function normalizeRelationship(relationship: StoryRelationship): StoryRelationship {
   const normalized: StoryRelationship = {
     ...relationship,
@@ -1123,6 +1200,15 @@ export function normalizeRelationship(relationship: StoryRelationship): StoryRel
   }
 
   return normalized;
+}
+
+function isPoint(value: unknown): value is Point {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    Number.isFinite((value as Point).x) &&
+    Number.isFinite((value as Point).y)
+  );
 }
 
 export function isGameStoryItemType(typeId: ItemTypeId): boolean {
@@ -1143,7 +1229,7 @@ export function gameStoryRoleForType(typeId: ItemTypeId): GameStoryNodeRole {
 
 export function getGameStoryNodes(project: StoryProject): StoryEntity[] {
   return Object.values(project.entities)
-    .filter((entity) => isGameStoryItemType(entity.type) || entity.gameStory)
+    .filter((entity) => entityVisibleInGraph(entity, "story_flow"))
     .map((entity) => ensureEntityDefaults(entity));
 }
 

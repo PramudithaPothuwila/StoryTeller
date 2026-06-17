@@ -21,6 +21,7 @@ const guideSections = [
     points: [
       "Drag items around the graph to shape the story map.",
       "Connect nodes to create relationships using the current default link type.",
+      "Use the graph depth dropdown in the toolbar to choose how many relationship steps stay highlighted around the selected item.",
       "Select a relationship line to edit its label, notes, timing, and game-story branch metadata."
     ]
   },
@@ -56,7 +57,7 @@ const guideSections = [
     icon: Save,
     points: [
       "Use New, Open, Select Folder, Save, and Export Backup from the topbar to manage local project files.",
-      "Open Settings to rename the project, switch Story or Game Story mode, set graph focus depth, and edit custom item or link types.",
+      "Open Settings to rename the project, switch Story or Game Story mode, and edit custom item or link types.",
       "In Game Story mode, use Branching RPG in the topbar to open the optional State, Preview, and Continuity tools."
     ]
   }

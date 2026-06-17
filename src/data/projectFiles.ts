@@ -64,8 +64,48 @@ interface ProjectManifestV3 {
   }>;
 }
 
+interface ProjectManifestV4 {
+  schemaVersion: 4;
+  title: string;
+  updatedAt: string;
+  projectMode: ProjectMode;
+  gameStory?: GameStoryProjectMetadata;
+  itemTypes: ItemTypeDefinition[];
+  linkTypes: LinkTypeDefinition[];
+  timelineLaneNames?: string[];
+  graphLayout: StoryProject["layout"];
+  storyFlowLayout: StoryProject["storyFlowLayout"];
+  entityIndex: Array<{
+    id: string;
+    type: string;
+    title: string;
+    updatedAt: string;
+    path: string;
+  }>;
+}
+
+interface ProjectManifestV5 {
+  schemaVersion: 5;
+  title: string;
+  updatedAt: string;
+  projectMode: ProjectMode;
+  gameStory?: GameStoryProjectMetadata;
+  itemTypes: ItemTypeDefinition[];
+  linkTypes: LinkTypeDefinition[];
+  timelineLaneNames?: string[];
+  graphLayout: StoryProject["layout"];
+  storyFlowLayout: StoryProject["storyFlowLayout"];
+  entityIndex: Array<{
+    id: string;
+    type: string;
+    title: string;
+    updatedAt: string;
+    path: string;
+  }>;
+}
+
 interface RelationshipsFile {
-  schemaVersion: 1 | 2 | 3;
+  schemaVersion: 1 | 2 | 3 | 4 | 5;
   relationships: StoryRelationship[];
 }
 
@@ -75,12 +115,12 @@ interface ProjectBundle {
   files: Record<string, string>;
 }
 
-type ProjectManifest = ProjectManifestV1 | ProjectManifestV2 | ProjectManifestV3;
+type ProjectManifest = ProjectManifestV1 | ProjectManifestV2 | ProjectManifestV3 | ProjectManifestV4 | ProjectManifestV5;
 
 export function buildProjectFiles(project: StoryProject): Record<string, string> {
   const files: Record<string, string> = {};
   const entities = Object.values(project.entities);
-  const manifest: ProjectManifestV3 = {
+  const manifest: ProjectManifestV5 = {
     schemaVersion: STORY_PROJECT_SCHEMA_VERSION,
     title: project.title,
     updatedAt: project.updatedAt,
@@ -90,6 +130,7 @@ export function buildProjectFiles(project: StoryProject): Record<string, string>
     linkTypes: project.linkTypes,
     timelineLaneNames: project.timelineLaneNames,
     graphLayout: project.layout,
+    storyFlowLayout: project.storyFlowLayout,
     entityIndex: entities.map((entity) => ({
       id: entity.id,
       type: entity.type,
@@ -122,7 +163,13 @@ export function projectFromFiles(files: Record<string, string>): StoryProject {
 
   const manifest = parseJson<ProjectManifest>(manifestText, "project manifest");
 
-  if (manifest.schemaVersion !== 1 && manifest.schemaVersion !== 2 && manifest.schemaVersion !== 3) {
+  if (
+    manifest.schemaVersion !== 1 &&
+    manifest.schemaVersion !== 2 &&
+    manifest.schemaVersion !== 3 &&
+    manifest.schemaVersion !== 4 &&
+    manifest.schemaVersion !== 5
+  ) {
     throw new Error("Unsupported or invalid StoryTeller project manifest");
   }
 
@@ -145,16 +192,41 @@ export function projectFromFiles(files: Record<string, string>): StoryProject {
     schemaVersion: manifest.schemaVersion,
     title: manifest.title,
     updatedAt: manifest.updatedAt,
-    projectMode: manifest.schemaVersion === 3 ? manifest.projectMode : undefined,
-    gameStory: manifest.schemaVersion === 3 ? manifest.gameStory : undefined,
-    itemTypes: manifest.schemaVersion === 2 || manifest.schemaVersion === 3 ? manifest.itemTypes : undefined,
-    linkTypes: manifest.schemaVersion === 2 || manifest.schemaVersion === 3 ? manifest.linkTypes : undefined,
-    timelineLaneNames: manifest.schemaVersion === 2 || manifest.schemaVersion === 3 ? manifest.timelineLaneNames : undefined,
+    projectMode:
+      manifest.schemaVersion === 3 || manifest.schemaVersion === 4 || manifest.schemaVersion === 5
+        ? manifest.projectMode
+        : undefined,
+    gameStory:
+      manifest.schemaVersion === 3 || manifest.schemaVersion === 4 || manifest.schemaVersion === 5
+        ? manifest.gameStory
+        : undefined,
+    itemTypes:
+      manifest.schemaVersion === 2 ||
+      manifest.schemaVersion === 3 ||
+      manifest.schemaVersion === 4 ||
+      manifest.schemaVersion === 5
+        ? manifest.itemTypes
+        : undefined,
+    linkTypes:
+      manifest.schemaVersion === 2 ||
+      manifest.schemaVersion === 3 ||
+      manifest.schemaVersion === 4 ||
+      manifest.schemaVersion === 5
+        ? manifest.linkTypes
+        : undefined,
+    timelineLaneNames:
+      manifest.schemaVersion === 2 ||
+      manifest.schemaVersion === 3 ||
+      manifest.schemaVersion === 4 ||
+      manifest.schemaVersion === 5
+        ? manifest.timelineLaneNames
+        : undefined,
     entities,
     relationships: (relationshipFile.relationships ?? []).filter(
       (relationship) => entities[relationship.sourceId] && entities[relationship.targetId]
     ),
-    layout: manifest.graphLayout ?? {}
+    layout: manifest.graphLayout ?? {},
+    storyFlowLayout: manifest.schemaVersion === 4 || manifest.schemaVersion === 5 ? manifest.storyFlowLayout : undefined
   });
 }
 
@@ -246,7 +318,11 @@ async function readExistingProjectManifest(directoryHandle: FileSystemDirectoryH
   try {
     const manifest = parseJson<ProjectManifest>(await readTextPath(directoryHandle, MANIFEST_PATH), "project manifest");
 
-    return (manifest.schemaVersion === 1 || manifest.schemaVersion === 2 || manifest.schemaVersion === 3) &&
+    return (manifest.schemaVersion === 1 ||
+      manifest.schemaVersion === 2 ||
+      manifest.schemaVersion === 3 ||
+      manifest.schemaVersion === 4 ||
+      manifest.schemaVersion === 5) &&
       Array.isArray(manifest.entityIndex)
       ? manifest
       : null;

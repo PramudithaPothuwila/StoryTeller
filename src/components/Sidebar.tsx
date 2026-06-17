@@ -1,12 +1,10 @@
 import { Search } from "lucide-react";
-import { iconForName } from "../data/icons";
 import { findItemType } from "../data/story";
-import { ItemTypeId, StoryEntity, StoryProject } from "../types";
+import { StoryEntity, StoryProject } from "../types";
 
 interface SidebarProps {
   project: StoryProject;
   search: string;
-  onCreateEntity: (type: ItemTypeId) => void;
   onSelectEntity: (id: string) => void;
   onSearchChange: (value: string) => void;
 }
@@ -14,7 +12,6 @@ interface SidebarProps {
 export function Sidebar({
   project,
   search,
-  onCreateEntity,
   onSelectEntity,
   onSearchChange
 }: SidebarProps) {
@@ -22,24 +19,6 @@ export function Sidebar({
 
   return (
     <aside className="sidebar">
-      <section className="sidebar-section">
-        <div className="section-heading">
-          <h2>Add Item</h2>
-        </div>
-        <div className="entity-type-grid">
-          {project.itemTypes.map((type) => {
-            const Icon = iconForName(type.icon);
-
-            return (
-              <button key={type.id} type="button" onClick={() => onCreateEntity(type.id)}>
-                <Icon aria-hidden="true" />
-                {type.label}
-              </button>
-            );
-          })}
-        </div>
-      </section>
-
       <section className="sidebar-section entity-browser">
         <div className="section-heading">
           <h2>Items</h2>

@@ -37,17 +37,18 @@ describe("project file model", () => {
     expect(files["storyteller.project.json"]).toBeTruthy();
     expect(files["graph/relationships.json"]).toBeTruthy();
     expect(Object.keys(files).some((path) => path.startsWith("entities/character/"))).toBe(true);
-    expect(JSON.parse(files["storyteller.project.json"]).schemaVersion).toBe(3);
+    expect(JSON.parse(files["storyteller.project.json"]).schemaVersion).toBe(5);
     expect(JSON.parse(files["storyteller.project.json"]).projectMode).toBe("story");
     expect(JSON.parse(files["storyteller.project.json"]).timelineLaneNames).toEqual(project.timelineLaneNames);
     expect(Object.keys(restoredProject.entities)).toHaveLength(Object.keys(project.entities).length);
     expect(restoredProject.relationships).toHaveLength(project.relationships.length);
     expect(restoredProject.layout).toEqual(project.layout);
+    expect(restoredProject.storyFlowLayout).toEqual(project.storyFlowLayout);
     expect(restoredProject.timelineLaneNames).toEqual(project.timelineLaneNames);
   });
 
-  it("migrates v1 project files to schema v3 with built-in type catalogs", () => {
-    const entity: StoryEntity = {
+  it("migrates v1 project files to schema v5 with built-in type catalogs", () => {
+    const entity = {
       id: "character-1",
       type: "character",
       title: "Ada",
@@ -58,7 +59,7 @@ describe("project file model", () => {
       bodyMarkdown: "",
       createdAt: "2026-01-01T00:00:00.000Z",
       updatedAt: "2026-01-01T00:00:00.000Z"
-    };
+    } as unknown as StoryEntity;
     const files = {
       "storyteller.project.json": JSON.stringify({
         schemaVersion: 1,
@@ -84,7 +85,8 @@ describe("project file model", () => {
 
     const project = projectFromFiles(files);
 
-    expect(project.schemaVersion).toBe(3);
+    expect(project.schemaVersion).toBe(5);
+    expect(project.entities[entity.id].graphPresence).toBe("world");
     expect(project.projectMode).toBe("story");
     expect(project.itemTypes.some((type) => type.id === "character")).toBe(true);
     expect(project.linkTypes.some((type) => type.id === "relates_to")).toBe(true);
@@ -200,7 +202,7 @@ describe("project file model", () => {
     expect(restoredFromBundle.entities[rule.id].worldRule).toEqual(rule.worldRule);
   });
 
-  it("round-trips schema v3 game story metadata through folder files and bundles", async () => {
+  it("round-trips schema v5 game story metadata and layouts through folder files and bundles", async () => {
     let project = setProjectModeInProject(createBlankProject("Branching Game"), "game_story");
     project = addGameStateVariableToProject(project, "flag");
     const variable = project.gameStory!.stateVariables[0];
@@ -242,6 +244,10 @@ describe("project file model", () => {
         layout: {
           [start.id]: { x: 10, y: 20 },
           [ending.id]: { x: 300, y: 20 }
+        },
+        storyFlowLayout: {
+          [start.id]: { x: 50, y: 60 },
+          [ending.id]: { x: 350, y: 60 }
         }
       },
       { startNodeId: start.id }
@@ -259,13 +265,17 @@ describe("project file model", () => {
     } as File);
     const manifest = JSON.parse(files["storyteller.project.json"]);
 
-    expect(manifest.schemaVersion).toBe(3);
+    expect(manifest.schemaVersion).toBe(5);
     expect(manifest.projectMode).toBe("game_story");
     expect(manifest.gameStory.startNodeId).toBe(start.id);
+    expect(manifest.storyFlowLayout).toEqual(project.storyFlowLayout);
     expect(restoredFromFiles.gameStory?.stateVariables[0].id).toBe("met-ally");
+    expect(restoredFromFiles.entities[start.id].graphPresence).toBe("world");
+    expect(restoredFromFiles.storyFlowLayout).toEqual(project.storyFlowLayout);
     expect(restoredFromFiles.entities[start.id].gameStory?.dialogue?.responses[0].targetNodeId).toBe(ending.id);
     expect(restoredFromFiles.relationships[0].gameStory?.choiceText).toBe("Accept the offer");
     expect(restoredFromBundle.projectMode).toBe("game_story");
+    expect(restoredFromBundle.storyFlowLayout).toEqual(project.storyFlowLayout);
   });
 
   it("removes stale entity markdown files when saving a folder project", async () => {
