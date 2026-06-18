@@ -1,15 +1,9 @@
-import { ArrowLeft, Bot, BookOpen, Gamepad2, Plus, Trash2 } from "lucide-react";
+import { ArrowLeft, Bot, Plus, Trash2 } from "lucide-react";
 import { ReactNode, useState } from "react";
 import { AgentSettings, DEFAULT_AGENT_SETTINGS } from "../data/agent";
 import { iconForName, iconOptions } from "../data/icons";
 import { isItemTypeInUse, isLinkTypeInUse } from "../data/story";
-import {
-  ItemTypeDefinition,
-  LinkTypeDefinition,
-  LinkTypeId,
-  ProjectMode,
-  StoryProject
-} from "../types";
+import { ItemTypeDefinition, LinkTypeDefinition, LinkTypeId, StoryProject } from "../types";
 
 interface SettingsPageProps {
   project: StoryProject;
@@ -23,7 +17,6 @@ interface SettingsPageProps {
   onDefaultRelationshipTypeChange: (type: LinkTypeId) => void;
   onDeleteItemType: (typeId: string) => void;
   onDeleteLinkType: (typeId: string) => void;
-  onProjectModeChange: (projectMode: ProjectMode) => void;
   onProjectTitleChange: (title: string) => void;
   onUpdateItemType: (typeId: string, patch: Partial<ItemTypeDefinition>) => void;
   onUpdateLinkType: (typeId: string, patch: Partial<LinkTypeDefinition>) => void;
@@ -41,7 +34,6 @@ export function SettingsPage({
   onDefaultRelationshipTypeChange,
   onDeleteItemType,
   onDeleteLinkType,
-  onProjectModeChange,
   onProjectTitleChange,
   onUpdateItemType,
   onUpdateLinkType
@@ -73,30 +65,6 @@ export function SettingsPage({
             value={project.title}
             onChange={(event) => onProjectTitleChange(event.target.value)}
           />
-
-          <div className="settings-control-group">
-            <span>Mode</span>
-            <div className="mode-toggle" role="group" aria-label="Project mode">
-              <button
-                type="button"
-                className={project.projectMode === "story" ? "is-active" : ""}
-                aria-pressed={project.projectMode === "story"}
-                onClick={() => onProjectModeChange("story")}
-              >
-                <BookOpen aria-hidden="true" />
-                Story
-              </button>
-              <button
-                type="button"
-                className={project.projectMode === "game_story" ? "is-active" : ""}
-                aria-pressed={project.projectMode === "game_story"}
-                onClick={() => onProjectModeChange("game_story")}
-              >
-                <Gamepad2 aria-hidden="true" />
-                Game Story
-              </button>
-            </div>
-          </div>
         </section>
 
         <section className="settings-panel" aria-labelledby="workspace-defaults-title">
@@ -285,8 +253,13 @@ export function AgentSettingsPanel({
         Browser-side API keys can be inspected by anyone using this browser session. Use a limited, personal key.
       </p>
       <p className="agent-compat-note">
-        The Agent API must support OpenAPI-compatible Responses API behavior, including the /responses endpoint and
-        structured outputs.
+        Active provider: <strong>{displayAgentProvider(agentSettings.provider)}</strong>. Provider selection is a
+        build/deploy-time setting, not a runtime toggle. Set <code>VITE_AGENT_PROVIDER=nvidia</code> to deploy with the
+        NVIDIA AI platform.
+      </p>
+      <p className="agent-compat-note">
+        The Agent API must support OpenAPI compatibility through an OpenAI-compatible API shape for the selected
+        provider: Responses structured outputs for OpenAI, or Chat Completions JSON output for NVIDIA.
       </p>
       <label className="field-label" htmlFor={`${headingId}-api-key`}>
         API Key
@@ -328,6 +301,10 @@ export function AgentSettingsPanel({
       </button>
     </section>
   );
+}
+
+function displayAgentProvider(provider: AgentSettings["provider"]): string {
+  return provider === "nvidia" ? "NVIDIA AI" : "OpenAI Responses";
 }
 
 interface TypeListProps {

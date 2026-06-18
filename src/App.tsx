@@ -16,6 +16,7 @@ import {
 } from "@xyflow/react";
 import {
   ArrowLeft,
+  BookOpen,
   Bot,
   CircleHelp,
   CloudUpload,
@@ -68,6 +69,7 @@ import {
   findItemType,
   findLinkType,
   getGameContinuityIssues,
+  getGameStoryNodes,
   getTimelineEvents,
   isRelationshipActiveAt,
   isGameStoryLinkType,
@@ -80,7 +82,6 @@ import {
   renameTimelineLaneInProject,
   resolveRelationshipAt,
   setProjectLayout,
-  setProjectModeInProject,
   touchProject,
   updateGameStoryProjectMetadata,
   updateEntityInProject,
@@ -117,6 +118,7 @@ import {
 } from "./data/cloudProjects";
 import {
   BUILT_IN_EVENT_TYPE_ID,
+  BUILT_IN_TRIGGER_LINK_TYPE_ID,
   BUILT_IN_WORLD_RULE_TYPE_ID,
   ItemTypeDefinition,
   ItemTypeId,
@@ -361,8 +363,8 @@ function StoryAppRoutes() {
     void refreshCloudProjects();
   }, [refreshCloudProjects]);
 
-  const handleNewBrowserProject = useCallback(() => {
-    const project = createBlankProject();
+  const handleNewBrowserProject = useCallback((projectMode: ProjectMode) => {
+    const project = createBlankProject("Untitled Story", projectMode);
     const id = createLocalProjectRouteId("browser");
 
     openWorkspaceSeed(
@@ -501,14 +503,14 @@ function StoryAppRoutes() {
     [cloudUser, navigate, openWorkspaceSeed]
   );
 
-  const handleCreateCloudProject = useCallback(async () => {
+  const handleCreateCloudProject = useCallback(async (projectMode: ProjectMode) => {
     if (!cloudUser) {
       navigate("/auth");
       return;
     }
 
     try {
-      const savedProject = await createCloudProject(createBlankProject());
+      const savedProject = await createCloudProject(createBlankProject("Untitled Story", projectMode));
       setCloudProjects((projects) => upsertCloudProjectSummary(projects, savedProject));
       openWorkspaceSeed(
         {
@@ -688,10 +690,10 @@ interface HomePageProps {
   cloudProjectsLoading: boolean;
   cloudUser: CloudUser | null;
   recentProjects: RecentProjectCard[];
-  onCreateCloudProject: () => Promise<void>;
+  onCreateCloudProject: (projectMode: ProjectMode) => Promise<void>;
   onDeleteCloudProject: (id: string) => Promise<void>;
   onImportBackup: () => void;
-  onNewProject: () => void;
+  onNewProject: (projectMode: ProjectMode) => void;
   onOpenCloudProject: (id: string) => Promise<void>;
   onOpenFolder: () => Promise<void>;
   onOpenRecentProject: (project: RecentProjectCard) => void;
@@ -715,15 +717,16 @@ function HomePage({
   onRefreshCloudProjects
 }: HomePageProps) {
   const [newProjectDialogOpen, setNewProjectDialogOpen] = useState(false);
+  const [newProjectMode, setNewProjectMode] = useState<ProjectMode>("story");
 
   function handleCreateLocalProject() {
     setNewProjectDialogOpen(false);
-    onNewProject();
+    onNewProject(newProjectMode);
   }
 
   async function handleCreateCloudProject() {
     setNewProjectDialogOpen(false);
-    await onCreateCloudProject();
+    await onCreateCloudProject(newProjectMode);
   }
 
   return (
@@ -769,6 +772,29 @@ function HomePage({
               </button>
             </header>
             <div className="cloud-dialog__body">
+              <div className="settings-control-group">
+                <span>Mode</span>
+                <div className="mode-toggle" role="group" aria-label="New project mode">
+                  <button
+                    type="button"
+                    className={newProjectMode === "story" ? "is-active" : ""}
+                    aria-pressed={newProjectMode === "story"}
+                    onClick={() => setNewProjectMode("story")}
+                  >
+                    <BookOpen aria-hidden="true" />
+                    Story
+                  </button>
+                  <button
+                    type="button"
+                    className={newProjectMode === "game_story" ? "is-active" : ""}
+                    aria-pressed={newProjectMode === "game_story"}
+                    onClick={() => setNewProjectMode("game_story")}
+                  >
+                    <Gamepad2 aria-hidden="true" />
+                    Game Story
+                  </button>
+                </div>
+              </div>
               <div className="new-project-choice-grid">
                 <button type="button" className="primary-action" onClick={handleCreateLocalProject}>
                   <FilePlus2 aria-hidden="true" />
@@ -1373,26 +1399,6 @@ function StoryWorkspace({
     [cloudUser]
   );
 
-  const handleProjectModeChange = useCallback(
-    (projectMode: ProjectMode) => {
-      if (project.projectMode === projectMode) {
-        return;
-      }
-
-      const nextProject = setProjectModeInProject(project, projectMode);
-      const nextGraphView = projectMode === "game_story" ? "story_flow" : "world";
-      markProjectChanged(nextProject);
-      setGraphView(nextGraphView);
-
-      if (projectMode === "game_story") {
-        setDefaultRelationshipType("branches_to");
-      } else {
-        setDefaultRelationshipType("relates_to");
-      }
-    },
-    [markProjectChanged, project]
-  );
-
   const handleGraphViewChange = useCallback((nextGraphView: GraphView) => {
     setGraphView(nextGraphView);
 
@@ -1402,6 +1408,15 @@ function StoryWorkspace({
       setDefaultRelationshipType((currentType) => (isGameStoryLinkType(currentType) ? "relates_to" : currentType));
     }
   }, []);
+
+  const handleSelectEntityInGraph = useCallback(
+    (id: string, nextGraphView: GraphView) => {
+      setActivePage("workspace");
+      handleGraphViewChange(nextGraphView);
+      setSelection({ kind: "entity", id });
+    },
+    [handleGraphViewChange]
+  );
 
   const handleOpenRulebook = useCallback(() => {
     setActivePage("workspace");
@@ -1508,6 +1523,33 @@ function StoryWorkspace({
     [markProjectChanged, project]
   );
 
+  const handleCreateTriggerLink = useCallback(
+    (sourceId: string, targetId: string) => {
+      if (!project.entities[sourceId] || !project.entities[targetId] || sourceId === targetId) {
+        return;
+      }
+
+      const existingTrigger = project.relationships.find(
+        (relationship) =>
+          relationship.sourceId === sourceId &&
+          relationship.targetId === targetId &&
+          relationship.type === BUILT_IN_TRIGGER_LINK_TYPE_ID
+      );
+
+      if (existingTrigger) {
+        return;
+      }
+
+      const relationship = createStoryRelationship(project, sourceId, targetId, BUILT_IN_TRIGGER_LINK_TYPE_ID);
+
+      markProjectChanged({
+        ...touchProject(project),
+        relationships: [...project.relationships, relationship]
+      });
+    },
+    [markProjectChanged, project]
+  );
+
   const handleDeleteEntity = useCallback(
     (id: string) => {
       markProjectChanged(deleteEntityFromProject(project, id));
@@ -1560,9 +1602,12 @@ function StoryWorkspace({
     return entity.id;
   }, [markProjectChanged, project]);
 
-  const handleFocusWorldRule = useCallback((id: string) => {
-    setSelection({ kind: "entity", id });
-  }, []);
+  const handleFocusWorldRule = useCallback(
+    (id: string) => {
+      handleSelectEntityInGraph(id, "world");
+    },
+    [handleSelectEntityInGraph]
+  );
 
   const handleAddTimelineTrack = useCallback(() => {
     markProjectChanged(addTimelineLaneToProject(project));
@@ -1973,7 +2018,6 @@ function StoryWorkspace({
           onDefaultRelationshipTypeChange={setDefaultRelationshipType}
           onDeleteItemType={handleDeleteItemType}
           onDeleteLinkType={handleDeleteLinkType}
-          onProjectModeChange={handleProjectModeChange}
           onProjectTitleChange={handleProjectTitleChange}
           onUpdateItemType={handleUpdateItemType}
           onUpdateLinkType={handleUpdateLinkType}
@@ -2039,8 +2083,10 @@ function StoryWorkspace({
             <DetailInspector
               project={project}
               selection={selection}
+              onCreateTriggerLink={handleCreateTriggerLink}
               onEntityChange={handleEntityChange}
               onRelationshipChange={handleRelationshipChange}
+              onSelectEntityInGraph={handleSelectEntityInGraph}
               onTimelineEffect={handleTimelineEffect}
               onDeleteEntity={handleDeleteEntity}
               onDeleteRelationship={handleDeleteRelationship}
@@ -2321,6 +2367,7 @@ function relationshipLabelOffset(index: number): number {
 }
 
 function outgoingGraphViewTargets(project: StoryProject, entityId: string): string[] {
+  const gameNodeIds = new Set(getGameStoryNodes(project).map((entity) => entity.id));
   const branchTargets = project.relationships
     .filter((relationship) => relationship.sourceId === entityId && relationship.type === "branches_to")
     .map((relationship) => relationship.targetId);
@@ -2329,7 +2376,7 @@ function outgoingGraphViewTargets(project: StoryProject, entityId: string): stri
       .map((response) => response.targetNodeId)
       .filter((targetId): targetId is string => Boolean(targetId)) ?? [];
 
-  return [...branchTargets, ...responseTargets].filter((targetId) => Boolean(project.entities[targetId]));
+  return [...branchTargets, ...responseTargets].filter((targetId) => gameNodeIds.has(targetId));
 }
 
 function relationshipOpacity(active: boolean, fadedByFocus: boolean, connectedToFocus: boolean): number {

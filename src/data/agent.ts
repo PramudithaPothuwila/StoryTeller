@@ -31,7 +31,10 @@ export interface AgentSettings {
   apiKey: string;
   baseUrl: string;
   model: string;
+  provider: AgentProvider;
 }
+
+export type AgentProvider = "openai" | "nvidia";
 
 export interface AgentMessage {
   id: string;
@@ -147,13 +150,22 @@ interface AgentProjectContext {
 }
 
 const BODY_EXCERPT_LENGTH = 700;
+const ACTIVE_AGENT_PROVIDER = normalizeAgentProvider(import.meta.env.VITE_AGENT_PROVIDER);
 
-export const DEFAULT_AGENT_SETTINGS: AgentSettings = {
-  apiKey: "",
-  baseUrl: "https://api.openai.com/v1",
-  model: "gpt-5.5"
+const agentProviderDefaults: Record<AgentProvider, Omit<AgentSettings, "apiKey">> = {
+  openai: {
+    provider: "openai",
+    baseUrl: "https://api.openai.com/v1",
+    model: "gpt-5.5"
+  },
+  nvidia: {
+    provider: "nvidia",
+    baseUrl: "https://integrate.api.nvidia.com/v1",
+    model: "nvidia/llama-3.1-nemotron-nano-8b-v1"
+  }
 };
 
+export const DEFAULT_AGENT_SETTINGS: AgentSettings = defaultAgentSettings();
 export const AGENT_SETTINGS_STORAGE_KEY = "storyteller.agentSettings";
 
 export const AGENT_SYSTEM_PROMPT = [
@@ -165,7 +177,7 @@ export const AGENT_SYSTEM_PROMPT = [
   "Every create_entity operation must include entity.id, entity.type, and entity.title.",
   "Every create_relationship operation must include relationship.id, sourceId, targetId, and type.",
   "Use privateInfo for author-only secrets and publicInfo for audience/player-facing facts.",
-  "For game-story projects, use story_flow or both graphPresence for scene, quest, dialogue, and ending nodes."
+  "For game-story projects, use graphPresence to place each item in the world graph, story_flow graph, or both."
 ].join("\n");
 
 export const AGENT_RESPONSE_FORMAT = {
@@ -196,6 +208,17 @@ export const AGENT_RESPONSE_FORMAT = {
     required: ["summary", "assumptions", "changes", "followUpQuestions"]
   }
 } as const;
+
+export function activeAgentProvider(): AgentProvider {
+  return ACTIVE_AGENT_PROVIDER;
+}
+
+export function defaultAgentSettings(provider: AgentProvider = ACTIVE_AGENT_PROVIDER): AgentSettings {
+  return {
+    apiKey: "",
+    ...agentProviderDefaults[provider]
+  };
+}
 
 export function buildAgentProjectContext(project: StoryProject): AgentProjectContext {
   return {
@@ -231,11 +254,22 @@ export function readStoredAgentSettings(): AgentSettings {
 
   try {
     const stored = JSON.parse(window.localStorage.getItem(AGENT_SETTINGS_STORAGE_KEY) ?? "{}") as Partial<AgentSettings>;
+    const storedProvider = normalizeAgentProvider(stored.provider);
+    const hasLegacyProvider = stored.provider === undefined || stored.provider === null;
+    const providerMatchesActive = hasLegacyProvider ? ACTIVE_AGENT_PROVIDER === "openai" : storedProvider === ACTIVE_AGENT_PROVIDER;
+    const defaults = providerMatchesActive ? defaultAgentSettings(ACTIVE_AGENT_PROVIDER) : DEFAULT_AGENT_SETTINGS;
 
     return {
-      apiKey: typeof stored.apiKey === "string" ? stored.apiKey : DEFAULT_AGENT_SETTINGS.apiKey,
-      baseUrl: typeof stored.baseUrl === "string" && stored.baseUrl.trim() ? stored.baseUrl : DEFAULT_AGENT_SETTINGS.baseUrl,
-      model: typeof stored.model === "string" && stored.model.trim() ? stored.model : DEFAULT_AGENT_SETTINGS.model
+      provider: ACTIVE_AGENT_PROVIDER,
+      apiKey: providerMatchesActive && typeof stored.apiKey === "string" ? stored.apiKey : defaults.apiKey,
+      baseUrl:
+        providerMatchesActive && typeof stored.baseUrl === "string" && stored.baseUrl.trim()
+          ? stored.baseUrl
+          : defaults.baseUrl,
+      model:
+        providerMatchesActive && typeof stored.model === "string" && stored.model.trim()
+          ? stored.model
+          : defaults.model
     };
   } catch {
     return { ...DEFAULT_AGENT_SETTINGS };
@@ -265,6 +299,54 @@ export function buildAgentInput(project: StoryProject, userPrompt: string): stri
   );
 }
 
+export function createAgentRequest(settings: AgentSettings, project: StoryProject, userPrompt: string): Request {
+  const provider = settings.provider ?? ACTIVE_AGENT_PROVIDER;
+  const baseUrl = settings.baseUrl.replace(/\/+$/, "");
+  const headers = {
+    Authorization: `Bearer ${settings.apiKey.trim()}`,
+    "Content-Type": "application/json"
+  };
+
+  if (provider === "nvidia") {
+    return new Request(`${baseUrl}/chat/completions`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        model: settings.model.trim() || agentProviderDefaults.nvidia.model,
+        messages: [
+          {
+            role: "system",
+            content: buildNvidiaSystemPrompt()
+          },
+          {
+            role: "user",
+            content: buildAgentInput(project, userPrompt)
+          }
+        ],
+        temperature: 0,
+        top_p: 0.95,
+        max_tokens: 4096,
+        frequency_penalty: 0,
+        presence_penalty: 0,
+        stream: false
+      })
+    });
+  }
+
+  return new Request(`${baseUrl}/responses`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({
+      model: settings.model.trim() || agentProviderDefaults.openai.model,
+      instructions: AGENT_SYSTEM_PROMPT,
+      input: buildAgentInput(project, userPrompt),
+      text: {
+        format: AGENT_RESPONSE_FORMAT
+      }
+    })
+  });
+}
+
 export function normalizeAgentChangePlan(value: unknown): AgentChangePlan {
   const record = objectRecord(value, "Agent response must be an object.");
   const changes = arrayValue(record.changes, "changes").map(normalizeAgentChange);
@@ -281,6 +363,12 @@ export function normalizeAgentChangePlan(value: unknown): AgentChangePlan {
 
 export function parseAgentResponsePayload(payload: unknown): AgentChangePlan {
   const parsed = objectRecord(payload, "Response payload must be an object.");
+
+  const chatCompletionPlan = parseChatCompletionPayload(parsed);
+
+  if (chatCompletionPlan) {
+    return chatCompletionPlan;
+  }
 
   if (typeof parsed.output_parsed === "object" && parsed.output_parsed !== null) {
     return normalizeAgentChangePlan(parsed.output_parsed);
@@ -312,6 +400,24 @@ export function parseAgentResponsePayload(payload: unknown): AgentChangePlan {
   }
 
   throw new Error("The agent response did not include a structured change plan.");
+}
+
+function parseChatCompletionPayload(parsed: Record<string, unknown>): AgentChangePlan | null {
+  const choices = Array.isArray(parsed.choices) ? parsed.choices : [];
+
+  for (const choice of choices) {
+    if (!isRecord(choice) || !isRecord(choice.message)) {
+      continue;
+    }
+
+    const content = choice.message.content;
+
+    if (typeof content === "string" && content.trim()) {
+      return normalizeAgentChangePlan(JSON.parse(cleanJsonText(content)));
+    }
+  }
+
+  return null;
 }
 
 export function validateAgentChangePlan(project: StoryProject, plan: AgentChangePlan): AgentChangeValidation[] {
@@ -502,9 +608,6 @@ function validateGraphPresenceForType(
     errors.push("Story flow graph presence requires Game Story mode.");
   }
 
-  if (graphPresence === "story_flow" && type && !isGameStoryItemType(type)) {
-    errors.push("Only game-story item types can use story_flow-only presence.");
-  }
 }
 
 function validateNewRelationship(
@@ -828,6 +931,37 @@ function stringValue(value: unknown, label: string): string {
 
 function optionalString(value: unknown): string | undefined {
   return typeof value === "string" && value.trim() ? value : undefined;
+}
+
+function normalizeAgentProvider(value: unknown): AgentProvider {
+  return value === "nvidia" ? "nvidia" : "openai";
+}
+
+function buildNvidiaSystemPrompt(): string {
+  return [
+    "detailed thinking off",
+    AGENT_SYSTEM_PROMPT,
+    "Return only valid JSON. Do not wrap it in Markdown fences.",
+    "The JSON must match this schema:",
+    JSON.stringify(AGENT_RESPONSE_FORMAT.schema)
+  ].join("\n");
+}
+
+function cleanJsonText(value: string): string {
+  let cleaned = value.trim();
+
+  if (cleaned.startsWith("```")) {
+    cleaned = cleaned.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
+  }
+
+  const start = cleaned.indexOf("{");
+  const end = cleaned.lastIndexOf("}");
+
+  if (start >= 0 && end > start) {
+    return cleaned.slice(start, end + 1);
+  }
+
+  return cleaned;
 }
 
 function validateEventReference(project: StoryProject, eventId: string, label: string, errors: string[]) {

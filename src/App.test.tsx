@@ -274,6 +274,7 @@ describe("App project commands", () => {
   let fileClickSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
+    window.history.pushState({}, "", "/project/browser-loaded");
     vi.mocked(loadStarterProject).mockResolvedValue(createBlankProject("Loaded Project"));
     vi.mocked(hasFolderProjectSupport).mockReturnValue(true);
     vi.mocked(readProjectFromDirectory).mockResolvedValue(createBlankProject("Opened Project"));
@@ -363,7 +364,7 @@ describe("App project commands", () => {
     expect(screen.getByRole("button", { name: "Add Character" })).toBeInTheDocument();
     expect(screen.getByRole("combobox", { name: "Graph focus depth" })).toBeInTheDocument();
     expect(document.querySelector(".graph-depth-select__single-value")).toHaveTextContent("1");
-    expect(screen.queryByRole("button", { name: "Switch to Story Flow" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Switch to Game Story" })).not.toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Add Item" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Save folder" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Open folder" })).not.toBeInTheDocument();
@@ -461,7 +462,8 @@ describe("App project commands", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Open Settings" }));
     fireEvent.change(screen.getByLabelText("Agent API key"), { target: { value: "sk-test" } });
-    expect(screen.getByText(/The Agent API must support OpenAPI-compatible Responses API behavior/)).toBeInTheDocument();
+    expect(screen.getByText(/Provider selection is a build\/deploy-time setting/)).toBeInTheDocument();
+    expect(screen.getByText(/The Agent API must support OpenAPI compatibility/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Workspace" }));
 
     await waitFor(() => expect(document.querySelector(".workspace")).not.toBeNull());
@@ -540,14 +542,14 @@ describe("App project commands", () => {
     expect(screen.getByRole("heading", { name: "AI Agent" })).toBeInTheDocument();
     expect(screen.getByLabelText("Agent model")).toHaveValue("gpt-5.5");
     expect(screen.getByLabelText("Agent base URL")).toHaveValue("https://api.openai.com/v1");
-    expect(screen.getByText(/The Agent API must support OpenAPI-compatible Responses API behavior/)).toBeInTheDocument();
+    expect(screen.getByText(/Provider selection is a build\/deploy-time setting/)).toBeInTheDocument();
+    expect(screen.getByText(/The Agent API must support OpenAPI compatibility/)).toBeInTheDocument();
+    expect(screen.queryByRole("group", { name: "Project mode" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Game Story" })).not.toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText("Project title"), { target: { value: "Settings Project" } });
     expect(screen.getByText("Settings Project")).toBeInTheDocument();
     expect(screen.getByText("Unsaved changes")).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole("button", { name: "Game Story" }));
-    expect(screen.getByLabelText("Default Link")).toHaveValue("branches_to");
 
     fireEvent.change(screen.getByLabelText("Default Link"), { target: { value: "knows" } });
     expect(screen.getByLabelText("Default Link")).toHaveValue("knows");
@@ -556,7 +558,7 @@ describe("App project commands", () => {
 
     await waitFor(() => expect(document.querySelector(".workspace")).not.toBeNull());
     expect(screen.queryByLabelText("Project title")).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Switch to Story Flow" })).toHaveClass("is-active");
+    expect(screen.queryByRole("button", { name: "Switch to Game Story" })).not.toBeInTheDocument();
   });
 
   it("hides the detail inspector when the graph pane clears an entity selection", async () => {
@@ -690,56 +692,51 @@ describe("App project commands", () => {
     expect(within(rulebook).getAllByText("No rules").length).toBeGreaterThan(0);
   });
 
-  it("asks for a project folder and saves immediately when creating a new project", async () => {
+  it("creates a default Story project from the New Project dialog", async () => {
+    window.history.pushState({}, "", "/");
     render(<App />);
-    await waitFor(() => expect(screen.getByText("Loaded Project")).toBeInTheDocument());
 
     fireEvent.click(screen.getByRole("button", { name: "New Project" }));
+    const dialog = await screen.findByRole("dialog", { name: "New Project" });
+    expect(within(dialog).getByRole("group", { name: "New project mode" })).toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: "Story" })).toHaveAttribute("aria-pressed", "true");
+    expect(within(dialog).getByRole("button", { name: "Game Story" })).toHaveAttribute("aria-pressed", "false");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Local Project" }));
 
-    await waitFor(() => expect(writeProjectToDirectory).toHaveBeenCalledTimes(1));
-    expect(window.showDirectoryPicker).toHaveBeenCalledTimes(1);
-    expect(writeProjectToDirectory).toHaveBeenLastCalledWith(
-      expect.objectContaining({ title: "Untitled Story" }),
-      folderHandle
-    );
-    expect(screen.getByText("Untitled Story")).toBeInTheDocument();
-    expect(screen.getByText("Project saved")).toBeInTheDocument();
-    expect(screen.getByText("Story Folder")).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole("button", { name: "Save Project" }));
-
-    await waitFor(() => expect(writeProjectToDirectory).toHaveBeenCalledTimes(2));
-    expect(window.showDirectoryPicker).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(screen.getByText("Untitled Story")).toBeInTheDocument());
+    expect(screen.queryByRole("button", { name: "Branching RPG" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Switch to Game Story" })).not.toBeInTheDocument();
   });
 
-  it("does not create a new project when folder access is unavailable", async () => {
+  it("creates browser projects without requiring folder access", async () => {
+    window.history.pushState({}, "", "/");
     vi.mocked(hasFolderProjectSupport).mockReturnValue(false);
     render(<App />);
-    await waitFor(() => expect(screen.getByText("Loaded Project")).toBeInTheDocument());
 
     fireEvent.click(screen.getByRole("button", { name: "New Project" }));
+    const dialog = await screen.findByRole("dialog", { name: "New Project" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Local Project" }));
 
     expect(writeProjectToDirectory).not.toHaveBeenCalled();
     expect(createProjectBundle).not.toHaveBeenCalled();
     expect(anchorClickSpy).not.toHaveBeenCalled();
-    expect(screen.getByText("Loaded Project")).toBeInTheDocument();
-    expect(
-      screen.getByText(
-        "Folder selection is unavailable in this browser. Use a browser with folder access to save folder projects."
-      )
-    ).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText("Untitled Story")).toBeInTheDocument());
   });
 
-  it("keeps the current project if new project folder selection is cancelled", async () => {
-    window.showDirectoryPicker = vi.fn(async () => undefined as unknown as FileSystemDirectoryHandle);
+  it("creates a Game Story project from the New Project dialog", async () => {
+    window.history.pushState({}, "", "/");
     render(<App />);
-    await waitFor(() => expect(screen.getByText("Loaded Project")).toBeInTheDocument());
 
     fireEvent.click(screen.getByRole("button", { name: "New Project" }));
+    const dialog = await screen.findByRole("dialog", { name: "New Project" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Game Story" }));
+    expect(within(dialog).getByRole("button", { name: "Game Story" })).toHaveAttribute("aria-pressed", "true");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Local Project" }));
 
-    await waitFor(() => expect(screen.getByText("Choose a project folder to create a new project")).toBeInTheDocument());
-    expect(writeProjectToDirectory).not.toHaveBeenCalled();
-    expect(screen.getByText("Loaded Project")).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByRole("button", { name: "Switch to Game Story" })).toHaveClass("is-active"));
+    expect(screen.getByRole("button", { name: "Branching RPG" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Add Scene" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Add Character" })).not.toBeInTheDocument();
   });
 
   it("selects a project folder and saves the current project into it", async () => {
@@ -996,20 +993,17 @@ describe("App project commands", () => {
     expect(screen.getByTestId(`flow-node-${fixture.relic.id}`)).toHaveAttribute("data-faded", "true");
   });
 
-  it("switches to Game Story Mode and creates state-backed game nodes", async () => {
+  it("creates state-backed game nodes in a Game Story project", async () => {
+    vi.mocked(loadStarterProject).mockResolvedValue(createBlankProject("Loaded Project", "game_story"));
     render(<App />);
 
     await waitFor(() => expect(screen.getByText("Loaded Project")).toBeInTheDocument());
 
-    fireEvent.click(screen.getByRole("button", { name: "Open Settings" }));
-    fireEvent.click(screen.getByRole("button", { name: "Game Story" }));
-    fireEvent.click(screen.getByRole("button", { name: "Back to Workspace" }));
-
-    await waitFor(() => expect(screen.getByRole("button", { name: "Switch to Story Flow" })).toHaveClass("is-active"));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Switch to Game Story" })).toHaveClass("is-active"));
     expect(screen.getByRole("button", { name: "Branching RPG" })).toBeInTheDocument();
     expect(screen.queryByRole("complementary", { name: "Game Story Tools" })).not.toBeInTheDocument();
     expect(document.querySelector(".workspace")).not.toHaveClass("has-game-tools");
-    expect(screen.getByRole("button", { name: "Switch to Story Flow" })).toHaveClass("is-active");
+    expect(screen.getByRole("button", { name: "Switch to Game Story" })).toHaveClass("is-active");
     expect(screen.getByRole("button", { name: "Add Scene" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Add Character" })).not.toBeInTheDocument();
 
@@ -1048,19 +1042,19 @@ describe("App project commands", () => {
     render(<App />);
 
     await waitFor(() => expect(screen.getByText("Game Flow Project")).toBeInTheDocument());
-    expect(screen.getByRole("button", { name: "Switch to Story Flow" })).toHaveClass("is-active");
+    expect(screen.getByRole("button", { name: "Switch to Game Story" })).toHaveClass("is-active");
     expect(screen.getByTestId(`flow-node-${fixture.start.id}`)).toHaveAttribute("data-game-start", "true");
     expect(screen.getByTestId(`flow-node-${fixture.ending.id}`)).toHaveAttribute("data-game-ending", "true");
     expect(screen.queryByTestId(`flow-node-${fixture.character.id}`)).not.toBeInTheDocument();
     expect(screen.getByTestId(`flow-edge-${fixture.branch.id}`)).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Switch to World" }));
+    fireEvent.click(screen.getByRole("button", { name: "Switch to World Building" }));
 
     await waitFor(() => expect(screen.getByTestId(`flow-node-${fixture.character.id}`)).toBeInTheDocument());
     expect(screen.getByTestId(`flow-node-${fixture.start.id}`)).toBeInTheDocument();
     expect(screen.queryByTestId(`flow-edge-${fixture.branch.id}`)).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Switch to Story Flow" }));
+    fireEvent.click(screen.getByRole("button", { name: "Switch to Game Story" }));
     await waitFor(() => expect(screen.getByTestId(`flow-edge-${fixture.branch.id}`)).toBeInTheDocument());
     expect(screen.queryByRole("complementary", { name: "Game Story Tools" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Preview/ })).not.toBeInTheDocument();
@@ -1086,7 +1080,7 @@ describe("App project commands", () => {
     render(<App />);
 
     await waitFor(() => expect(screen.getByText("Game Flow Project")).toBeInTheDocument());
-    expect(screen.getByRole("button", { name: "Switch to Story Flow" })).toHaveClass("is-active");
+    expect(screen.getByRole("button", { name: "Switch to Game Story" })).toHaveClass("is-active");
     expect(screen.getByTestId(`flow-node-${fixture.start.id}`)).toHaveAttribute("data-position", "50,60");
 
     fireEvent.click(screen.getByRole("button", { name: "Move first graph node" }));
@@ -1095,7 +1089,7 @@ describe("App project commands", () => {
       expect(screen.getByTestId(`flow-node-${fixture.start.id}`)).toHaveAttribute("data-position", "321,654")
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Switch to World" }));
+    fireEvent.click(screen.getByRole("button", { name: "Switch to World Building" }));
 
     await waitFor(() =>
       expect(screen.getByTestId(`flow-node-${fixture.start.id}`)).toHaveAttribute("data-position", "0,20")
@@ -1107,7 +1101,7 @@ describe("App project commands", () => {
       expect(screen.getByTestId(`flow-node-${fixture.start.id}`)).toHaveAttribute("data-position", "123,456")
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Switch to Story Flow" }));
+    fireEvent.click(screen.getByRole("button", { name: "Switch to Game Story" }));
 
     await waitFor(() =>
       expect(screen.getByTestId(`flow-node-${fixture.start.id}`)).toHaveAttribute("data-position", "321,654")
@@ -1159,7 +1153,7 @@ describe("App project commands", () => {
     render(<App />);
 
     await waitFor(() => expect(screen.getByText("Independent Items")).toBeInTheDocument());
-    expect(screen.getByRole("button", { name: "Switch to Story Flow" })).toHaveClass("is-active");
+    expect(screen.getByRole("button", { name: "Switch to Game Story" })).toHaveClass("is-active");
     fireEvent.click(screen.getByRole("button", { name: "Add Scene" }));
 
     const storyNode = await waitFor(() => {
@@ -1168,7 +1162,7 @@ describe("App project commands", () => {
       return node as HTMLElement;
     });
 
-    fireEvent.click(screen.getByRole("button", { name: "Switch to World" }));
+    fireEvent.click(screen.getByRole("button", { name: "Switch to World Building" }));
     await waitFor(() => expect(storyNode).not.toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: "Add Character" }));
 
@@ -1178,13 +1172,13 @@ describe("App project commands", () => {
       return node as HTMLElement;
     });
 
-    fireEvent.click(screen.getByRole("button", { name: "Switch to Story Flow" }));
+    fireEvent.click(screen.getByRole("button", { name: "Switch to Game Story" }));
 
     await waitFor(() => expect(worldNode).not.toBeInTheDocument());
     expect(document.querySelector('[data-testid^="flow-node-scene-"]')).not.toBeNull();
   });
 
-  it("toggles eligible game item visibility between Story Flow, World, and both graphs", async () => {
+  it("toggles item visibility between Story Flow, World, and both graphs", async () => {
     const fixture = createGameStoryFixture();
     vi.mocked(loadStarterProject).mockResolvedValue(fixture.project);
 
@@ -1197,7 +1191,7 @@ describe("App project commands", () => {
     fireEvent.change(screen.getByLabelText("Graph visibility"), { target: { value: "world" } });
 
     await waitFor(() => expect(screen.queryByTestId(`flow-node-${fixture.start.id}`)).not.toBeInTheDocument());
-    fireEvent.click(screen.getByRole("button", { name: "Switch to World" }));
+    fireEvent.click(screen.getByRole("button", { name: "Switch to World Building" }));
     await waitFor(() => expect(screen.getByTestId(`flow-node-${fixture.start.id}`)).toBeInTheDocument());
 
     fireEvent.click(screen.getByTestId(`flow-node-${fixture.start.id}`));
@@ -1205,15 +1199,72 @@ describe("App project commands", () => {
     fireEvent.change(screen.getByLabelText("Graph visibility"), { target: { value: "story_flow" } });
 
     await waitFor(() => expect(screen.queryByTestId(`flow-node-${fixture.start.id}`)).not.toBeInTheDocument());
-    fireEvent.click(screen.getByRole("button", { name: "Switch to Story Flow" }));
+    fireEvent.click(screen.getByRole("button", { name: "Switch to Game Story" }));
     await waitFor(() => expect(screen.getByTestId(`flow-node-${fixture.start.id}`)).toBeInTheDocument());
 
     fireEvent.click(screen.getByTestId(`flow-node-${fixture.start.id}`));
     expect(screen.getByLabelText("Graph visibility")).toHaveValue("story_flow");
     fireEvent.change(screen.getByLabelText("Graph visibility"), { target: { value: "both" } });
-    fireEvent.click(screen.getByRole("button", { name: "Switch to World" }));
+    fireEvent.click(screen.getByRole("button", { name: "Switch to World Building" }));
 
     await waitFor(() => expect(screen.getByTestId(`flow-node-${fixture.start.id}`)).toBeInTheDocument());
+  });
+
+  it("shares ordinary story items into Story Flow without treating them as playable game nodes", async () => {
+    window.history.pushState({}, "", "/project/browser-shared-items");
+    const fixture = createGameStoryFixture();
+    vi.mocked(loadStarterProject).mockResolvedValue(fixture.project);
+
+    render(<App />);
+
+    await waitFor(() => expect(screen.getByText("Game Flow Project")).toBeInTheDocument());
+    expect(screen.queryByTestId(`flow-node-${fixture.character.id}`)).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Switch to World Building" }));
+    await waitFor(() => expect(screen.getByTestId(`flow-node-${fixture.character.id}`)).toBeInTheDocument());
+    fireEvent.click(screen.getByTestId(`flow-node-${fixture.character.id}`));
+    expect(screen.getByLabelText("Graph visibility")).toHaveValue("world");
+
+    fireEvent.change(screen.getByLabelText("Graph visibility"), { target: { value: "both" } });
+    fireEvent.click(screen.getByRole("button", { name: "Switch to Game Story" }));
+
+    await waitFor(() => expect(screen.getByTestId(`flow-node-${fixture.character.id}`)).toBeInTheDocument());
+    expect(screen.getByTestId(`flow-node-${fixture.character.id}`)).toHaveAttribute("data-game-start", "false");
+    expect(screen.getByTestId(`flow-node-${fixture.character.id}`)).toHaveAttribute("data-game-dead-end", "false");
+
+    fireEvent.click(screen.getByRole("button", { name: "Branching RPG" }));
+
+    const startNodeSelect = screen.getByLabelText("Game story start node") as HTMLSelectElement;
+    expect(Array.from(startNodeSelect.options).map((option) => option.textContent)).not.toContain("Gatekeeper");
+  });
+
+  it("links world-building items to game story nodes with trigger cross-links", async () => {
+    const fixture = createGameStoryFixture();
+    vi.mocked(loadStarterProject).mockResolvedValue(fixture.project);
+
+    render(<App />);
+
+    await waitFor(() => expect(screen.getByRole("button", { name: "Switch to Game Story" })).toHaveClass("is-active"));
+    fireEvent.click(screen.getByRole("button", { name: "Switch to World Building" }));
+    await waitFor(() => expect(screen.getByTestId(`flow-node-${fixture.character.id}`)).toBeInTheDocument());
+
+    fireEvent.click(screen.getByTestId(`flow-node-${fixture.character.id}`));
+    expect(screen.getByText("Triggers Game Story")).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Game story trigger target"), { target: { value: fixture.start.id } });
+    fireEvent.click(screen.getByRole("button", { name: "Trigger" }));
+
+    expect(screen.getByRole("button", { name: `Open game node: ${fixture.start.title}` })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: `Open game node: ${fixture.start.title}` }));
+
+    await waitFor(() => expect(screen.getByRole("button", { name: "Switch to Game Story" })).toHaveClass("is-active"));
+    expect(screen.getByTestId(`flow-node-${fixture.start.id}`)).toHaveAttribute("data-selected", "true");
+    expect(screen.getByText("Triggered By World Building")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: `Open world item: ${fixture.character.title}` })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: `Open world item: ${fixture.character.title}` }));
+
+    await waitFor(() => expect(screen.getByRole("button", { name: "Switch to World Building" })).toHaveClass("is-active"));
+    expect(screen.getByTestId(`flow-node-${fixture.character.id}`)).toHaveAttribute("data-selected", "true");
   });
 
   it("opens the optional RPG sidebar to inspect continuity issues", async () => {
@@ -1367,6 +1418,29 @@ describe("App project commands", () => {
     expect(screen.getByText("Cloud Project")).toBeInTheDocument();
     expect(screen.getByText("Cloud project opened")).toBeInTheDocument();
     expect(screen.getByText(/Version:/)).toBeInTheDocument();
+  });
+
+  it("creates a Game Story cloud project from the New Project dialog", async () => {
+    window.history.pushState({}, "", "/");
+    vi.mocked(getCurrentCloudUser).mockResolvedValue({ id: "user-a", email: "ada@example.com" });
+
+    render(<App />);
+
+    await waitFor(() => expect(screen.getByRole("link", { name: "Account" })).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "New Project" }));
+
+    const dialog = await screen.findByRole("dialog", { name: "New Project" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Game Story" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Cloud Project" }));
+
+    await waitFor(() =>
+      expect(createCloudProject).toHaveBeenCalledWith(
+        expect.objectContaining({
+          projectMode: "game_story",
+          title: "Untitled Story"
+        })
+      )
+    );
   });
 
   it("imports a backup as a new cloud project", async () => {
@@ -1533,3 +1607,4 @@ function createGameStoryFixture(options: { includeLonelyScene?: boolean } = {}) 
     branch
   };
 }
+

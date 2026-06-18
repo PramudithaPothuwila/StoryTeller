@@ -1,5 +1,6 @@
 export const BUILT_IN_EVENT_TYPE_ID = "event";
 export const BUILT_IN_WORLD_RULE_TYPE_ID = "world_rule";
+export const BUILT_IN_TRIGGER_LINK_TYPE_ID = "triggers";
 export const STORY_PROJECT_SCHEMA_VERSION = 5;
 
 export type ItemTypeId = string;

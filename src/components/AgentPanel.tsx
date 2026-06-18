@@ -1,13 +1,10 @@
 import { Bot, CheckCircle2, Send, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import {
-  AGENT_RESPONSE_FORMAT,
-  AGENT_SYSTEM_PROMPT,
   AgentChangePlan,
   AgentSettings,
-  DEFAULT_AGENT_SETTINGS,
   applyAgentChangePlan,
-  buildAgentInput,
+  createAgentRequest,
   parseAgentResponsePayload,
   validateAgentChangePlan
 } from "../data/agent";
@@ -59,21 +56,7 @@ export function AgentPanel({
     onStatusChange("Agent thinking...");
 
     try {
-      const response = await fetch(`${agentSettings.baseUrl.replace(/\/+$/, "")}/responses`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${agentSettings.apiKey.trim()}`,
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          model: agentSettings.model.trim() || DEFAULT_AGENT_SETTINGS.model,
-          instructions: AGENT_SYSTEM_PROMPT,
-          input: buildAgentInput(project, cleanPrompt),
-          text: {
-            format: AGENT_RESPONSE_FORMAT
-          }
-        })
-      });
+      const response = await fetch(createAgentRequest(agentSettings, project, cleanPrompt));
 
       if (!response.ok) {
         const detail = await response.text();

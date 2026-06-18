@@ -1,5 +1,6 @@
 import {
   BUILT_IN_EVENT_TYPE_ID,
+  BUILT_IN_TRIGGER_LINK_TYPE_ID,
   BUILT_IN_WORLD_RULE_TYPE_ID,
   EventTimeline,
   GameContinuityIssue,
@@ -88,11 +89,23 @@ export const builtInLinkTypes: LinkTypeDefinition[] = [
 export const builtInGameLinkTypes: LinkTypeDefinition[] = [
   { id: "branches_to", label: "Branches to", color: "#dc2626", icon: "git-branch", direction: "directed", builtIn: true },
   { id: "requires", label: "Requires", color: "#7c3aed", icon: "key", direction: "directed", builtIn: true },
-  { id: "unlocks", label: "Unlocks", color: "#0891b2", icon: "sparkles", direction: "directed", builtIn: true }
+  { id: "unlocks", label: "Unlocks", color: "#0891b2", icon: "sparkles", direction: "directed", builtIn: true },
+  {
+    id: BUILT_IN_TRIGGER_LINK_TYPE_ID,
+    label: "Triggers",
+    color: "#f59e0b",
+    icon: "sparkles",
+    direction: "directed",
+    builtIn: true
+  }
 ];
 
 export const gameStoryItemTypeIds = new Set(builtInGameItemTypes.map((type) => type.id));
-export const gameStoryLinkTypeIds = new Set(builtInGameLinkTypes.map((type) => type.id));
+export const gameStoryLinkTypeIds = new Set(
+  builtInGameLinkTypes
+    .filter((type) => type.id !== BUILT_IN_TRIGGER_LINK_TYPE_ID)
+    .map((type) => type.id)
+);
 
 export type GraphLayoutView = "world" | "story_flow";
 export const graphPresenceOptions: GraphPresence[] = ["story_flow", "both", "world"];
@@ -439,7 +452,7 @@ export function createBlankProject(title = "Untitled Story", projectMode: Projec
 
 export function addEntityToProject(project: StoryProject, entity: StoryEntity, position: Point): StoryProject {
   const normalizedEntity = ensureEntityDefaults(entity);
-  const isStoryFlowNode = isGameStoryItemType(normalizedEntity.type) || Boolean(normalizedEntity.gameStory);
+  const isStoryFlowNode = entityVisibleInGraph(normalizedEntity, "story_flow");
 
   return touchProject({
     ...project,
@@ -1124,7 +1137,7 @@ export function migrateProjectShape(project: unknown): StoryProject {
   if (!hasStoryFlowLayout && migrated.projectMode === "game_story") {
     migrated.storyFlowLayout = Object.fromEntries(
       Object.values(migrated.entities)
-        .filter((entity) => isGameStoryItemType(entity.type) || Boolean(entity.gameStory))
+        .filter((entity) => entityVisibleInGraph(entity, "story_flow"))
         .map((entity) => [entity.id, migrated.layout[entity.id]])
         .filter((entry): entry is [string, Point] => isPoint(entry[1]))
     );
@@ -1182,7 +1195,7 @@ export function entityVisibleInGraph(entity: StoryEntity, graphView: GraphLayout
   const graphPresence = normalizeGraphPresence(entity.graphPresence);
 
   if (graphView === "story_flow") {
-    return isGameStoryItemType(entity.type) && (graphPresence === "story_flow" || graphPresence === "both");
+    return graphPresence === "story_flow" || graphPresence === "both";
   }
 
   return graphPresence === "world" || graphPresence === "both";
@@ -1229,7 +1242,7 @@ export function gameStoryRoleForType(typeId: ItemTypeId): GameStoryNodeRole {
 
 export function getGameStoryNodes(project: StoryProject): StoryEntity[] {
   return Object.values(project.entities)
-    .filter((entity) => entityVisibleInGraph(entity, "story_flow"))
+    .filter((entity) => entityVisibleInGraph(entity, "story_flow") && isGameStoryNodeEntity(entity))
     .map((entity) => ensureEntityDefaults(entity));
 }
 
@@ -1243,6 +1256,40 @@ export function getGameStoryRelationships(project: StoryProject): StoryRelations
         gameNodeIds.has(relationship.sourceId) &&
         gameNodeIds.has(relationship.targetId)
     )
+    .map(normalizeRelationship);
+}
+
+export function isGameStoryNodeEntity(entity: StoryEntity): boolean {
+  return isGameStoryItemType(entity.type) || Boolean(entity.gameStory);
+}
+
+export function getWorldTriggerRelationships(project: StoryProject, sourceId?: string): StoryRelationship[] {
+  return getValidTriggerRelationships(project).filter(
+    (relationship) => !sourceId || relationship.sourceId === sourceId
+  );
+}
+
+export function getGameStoryTriggerRelationships(project: StoryProject, targetId?: string): StoryRelationship[] {
+  return getValidTriggerRelationships(project).filter(
+    (relationship) => !targetId || relationship.targetId === targetId
+  );
+}
+
+function getValidTriggerRelationships(project: StoryProject): StoryRelationship[] {
+  return project.relationships
+    .filter((relationship) => relationship.type === BUILT_IN_TRIGGER_LINK_TYPE_ID)
+    .filter((relationship) => {
+      const source = project.entities[relationship.sourceId];
+      const target = project.entities[relationship.targetId];
+
+      return Boolean(
+        source &&
+          target &&
+          entityVisibleInGraph(source, "world") &&
+          entityVisibleInGraph(target, "story_flow") &&
+          isGameStoryNodeEntity(target)
+      );
+    })
     .map(normalizeRelationship);
 }
 
@@ -1324,9 +1371,10 @@ export function getGamePlayableChoices(
   state: Record<string, GameStateValue>
 ): GamePlaythroughChoice[] {
   const currentNode = project.entities[currentNodeId];
+  const gameNodeIds = new Set(getGameStoryNodes(project).map((entity) => entity.id));
   const branchChoices: GamePlaythroughChoice[] = project.relationships
     .filter((relationship) => relationship.sourceId === currentNodeId && relationship.type === "branches_to")
-    .filter((relationship) => project.entities[relationship.targetId])
+    .filter((relationship) => gameNodeIds.has(relationship.targetId))
     .map((relationship) => {
       const metadata = normalizeGameStoryRelationshipMetadata(relationship.gameStory);
       const target = project.entities[relationship.targetId];
@@ -1346,7 +1394,7 @@ export function getGamePlayableChoices(
       } satisfies GamePlaythroughChoice;
     });
   const dialogueChoices: GamePlaythroughChoice[] = currentNode?.gameStory?.dialogue?.responses
-    .filter((response) => response.targetNodeId && project.entities[response.targetNodeId])
+    .filter((response) => response.targetNodeId && gameNodeIds.has(response.targetNodeId))
     .map((response) => {
       const targetId = response.targetNodeId!;
       const targetEntryConditions = project.entities[targetId]?.gameStory?.entryConditions ?? [];
@@ -1739,6 +1787,7 @@ function gameStateVariableMap(project: StoryProject): Map<string, GameStateVaria
 }
 
 function outgoingGameStoryTargetIds(project: StoryProject, nodeId: string): string[] {
+  const gameNodeIds = new Set(getGameStoryNodes(project).map((entity) => entity.id));
   const branchTargets = project.relationships
     .filter((relationship) => relationship.sourceId === nodeId && relationship.type === "branches_to")
     .map((relationship) => relationship.targetId);
@@ -1747,10 +1796,11 @@ function outgoingGameStoryTargetIds(project: StoryProject, nodeId: string): stri
       .map((response) => response.targetNodeId)
       .filter((targetId): targetId is string => Boolean(targetId)) ?? [];
 
-  return [...branchTargets, ...responseTargets].filter((targetId) => Boolean(project.entities[targetId]));
+  return [...branchTargets, ...responseTargets].filter((targetId) => gameNodeIds.has(targetId));
 }
 
 function incomingGameStorySourceIds(project: StoryProject, nodeId: string): string[] {
+  const gameNodeIds = new Set(getGameStoryNodes(project).map((entity) => entity.id));
   const branchSources = project.relationships
     .filter((relationship) => relationship.targetId === nodeId && relationship.type === "branches_to")
     .map((relationship) => relationship.sourceId);
@@ -1758,7 +1808,7 @@ function incomingGameStorySourceIds(project: StoryProject, nodeId: string): stri
     .filter((entity) => entity.gameStory?.dialogue?.responses.some((response) => response.targetNodeId === nodeId))
     .map((entity) => entity.id);
 
-  return [...branchSources, ...responseSources].filter((sourceId) => Boolean(project.entities[sourceId]));
+  return [...branchSources, ...responseSources].filter((sourceId) => gameNodeIds.has(sourceId));
 }
 
 function addInvalidStateReferenceIssues(

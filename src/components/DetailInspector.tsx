@@ -1,4 +1,4 @@
-import { Eye, EyeOff, Link2, Plus, Trash2 } from "lucide-react";
+import { Crosshair, Eye, EyeOff, Link2, Plus, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import {
   BUILT_IN_EVENT_TYPE_ID,
@@ -12,9 +12,14 @@ import {
   TimelineEffectDraft
 } from "../types";
 import {
+  entityVisibleInGraph,
   ensureEventTimeline,
   findItemType,
   findLinkType,
+  getGameStoryNodes,
+  getGameStoryTriggerRelationships,
+  getWorldTriggerRelationships,
+  isGameStoryNodeEntity,
   isGameStoryItemType,
   isGameStoryLinkType,
   linkLabel,
@@ -26,8 +31,10 @@ import { WorldRuleFields } from "./WorldRuleFields";
 interface DetailInspectorProps {
   project: StoryProject;
   selection: Selection | null;
+  onCreateTriggerLink: (sourceId: string, targetId: string) => void;
   onEntityChange: (id: string, patch: Partial<StoryEntity>) => void;
   onRelationshipChange: (id: string, patch: Partial<StoryRelationship>) => void;
+  onSelectEntityInGraph: (id: string, graphView: "world" | "story_flow") => void;
   onTimelineEffect: (eventId: string, draft: TimelineEffectDraft) => void;
   onDeleteEntity: (id: string) => void;
   onDeleteRelationship: (id: string) => void;
@@ -36,8 +43,10 @@ interface DetailInspectorProps {
 export function DetailInspector({
   project,
   selection,
+  onCreateTriggerLink,
   onEntityChange,
   onRelationshipChange,
+  onSelectEntityInGraph,
   onTimelineEffect,
   onDeleteEntity,
   onDeleteRelationship
@@ -99,7 +108,7 @@ export function DetailInspector({
           />
         </label>
 
-        {project.projectMode === "game_story" && isGameStoryItemType(selectedEntity.type) ? (
+        {project.projectMode === "game_story" ? (
           <label className="field-stack">
             Graph Visibility
             <select
@@ -109,9 +118,9 @@ export function DetailInspector({
                 onEntityChange(selectedEntity.id, { graphPresence: event.target.value as GraphPresence })
               }
             >
-              <option value="story_flow">Story Flow</option>
-              <option value="both">World + Story Flow</option>
-              <option value="world">World</option>
+              <option value="story_flow">Game Story</option>
+              <option value="both">World Building + Game Story</option>
+              <option value="world">World Building</option>
             </select>
           </label>
         ) : null}
@@ -139,6 +148,26 @@ export function DetailInspector({
             idPrefix={`inspector-${selectedEntity.id}`}
             onEntityChange={(patch) => onEntityChange(selectedEntity.id, patch)}
           />
+        ) : null}
+
+        {project.projectMode === "game_story" ? (
+          isGameStoryNodeEntity(selectedEntity) ? (
+            <TriggeredByWorldBuilding
+              project={project}
+              entity={selectedEntity}
+              onCreateTriggerLink={onCreateTriggerLink}
+              onDeleteRelationship={onDeleteRelationship}
+              onSelectEntityInGraph={onSelectEntityInGraph}
+            />
+          ) : (
+            <TriggersGameStory
+              project={project}
+              entity={selectedEntity}
+              onCreateTriggerLink={onCreateTriggerLink}
+              onDeleteRelationship={onDeleteRelationship}
+              onSelectEntityInGraph={onSelectEntityInGraph}
+            />
+          )
         ) : null}
 
         <label className="field-stack">
@@ -203,6 +232,202 @@ export function DetailInspector({
       <h2>Select an item</h2>
       <p>The graph and item list both open details here.</p>
     </aside>
+  );
+}
+
+interface TriggerLinksProps {
+  project: StoryProject;
+  entity: StoryEntity;
+  onCreateTriggerLink: (sourceId: string, targetId: string) => void;
+  onDeleteRelationship: (id: string) => void;
+  onSelectEntityInGraph: (id: string, graphView: "world" | "story_flow") => void;
+}
+
+function TriggersGameStory({
+  project,
+  entity,
+  onCreateTriggerLink,
+  onDeleteRelationship,
+  onSelectEntityInGraph
+}: TriggerLinksProps) {
+  const triggerLinks = getWorldTriggerRelationships(project, entity.id);
+  const linkedTargetIds = new Set(triggerLinks.map((relationship) => relationship.targetId));
+  const targetOptions = getGameStoryNodes(project).filter((node) => !linkedTargetIds.has(node.id));
+  const [targetId, setTargetId] = useState(targetOptions[0]?.id ?? "");
+
+  useEffect(() => {
+    setTargetId((currentTargetId) =>
+      currentTargetId && targetOptions.some((node) => node.id === currentTargetId)
+        ? currentTargetId
+        : targetOptions[0]?.id ?? ""
+    );
+  }, [targetOptions]);
+
+  return (
+    <section className="game-subsection">
+      <div className="game-subsection__header">
+        <h3>Triggers Game Story</h3>
+      </div>
+
+      <TriggerRelationshipList
+        emptyText="No game story triggers yet."
+        project={project}
+        relationships={triggerLinks}
+        linkedEntitySide="target"
+        openLabel="Open game node"
+        openGraphView="story_flow"
+        onDeleteRelationship={onDeleteRelationship}
+        onSelectEntityInGraph={onSelectEntityInGraph}
+      />
+
+      <div className="game-condition-row">
+        <select
+          aria-label="Game story trigger target"
+          value={targetId}
+          onChange={(event) => setTargetId(event.target.value)}
+        >
+          <option value="">Choose game node</option>
+          {targetOptions.map((node) => (
+            <option key={node.id} value={node.id}>
+              {node.title}
+            </option>
+          ))}
+        </select>
+        <button
+          type="button"
+          className="text-tool-button"
+          disabled={!targetId}
+          onClick={() => onCreateTriggerLink(entity.id, targetId)}
+        >
+          <Plus aria-hidden="true" />
+          Trigger
+        </button>
+      </div>
+    </section>
+  );
+}
+
+function TriggeredByWorldBuilding({
+  project,
+  entity,
+  onCreateTriggerLink,
+  onDeleteRelationship,
+  onSelectEntityInGraph
+}: TriggerLinksProps) {
+  const triggerLinks = getGameStoryTriggerRelationships(project, entity.id);
+  const linkedSourceIds = new Set(triggerLinks.map((relationship) => relationship.sourceId));
+  const sourceOptions = Object.values(project.entities)
+    .filter((candidate) => entityVisibleInGraph(candidate, "world"))
+    .filter((candidate) => !isGameStoryNodeEntity(candidate))
+    .filter((candidate) => !linkedSourceIds.has(candidate.id));
+  const [sourceId, setSourceId] = useState(sourceOptions[0]?.id ?? "");
+
+  useEffect(() => {
+    setSourceId((currentSourceId) =>
+      currentSourceId && sourceOptions.some((source) => source.id === currentSourceId)
+        ? currentSourceId
+        : sourceOptions[0]?.id ?? ""
+    );
+  }, [sourceOptions]);
+
+  return (
+    <section className="game-subsection">
+      <div className="game-subsection__header">
+        <h3>Triggered By World Building</h3>
+      </div>
+
+      <TriggerRelationshipList
+        emptyText="No world-building triggers yet."
+        project={project}
+        relationships={triggerLinks}
+        linkedEntitySide="source"
+        openLabel="Open world item"
+        openGraphView="world"
+        onDeleteRelationship={onDeleteRelationship}
+        onSelectEntityInGraph={onSelectEntityInGraph}
+      />
+
+      <div className="game-condition-row">
+        <select
+          aria-label="World building trigger source"
+          value={sourceId}
+          onChange={(event) => setSourceId(event.target.value)}
+        >
+          <option value="">Choose world item</option>
+          {sourceOptions.map((source) => (
+            <option key={source.id} value={source.id}>
+              {source.title}
+            </option>
+          ))}
+        </select>
+        <button
+          type="button"
+          className="text-tool-button"
+          disabled={!sourceId}
+          onClick={() => onCreateTriggerLink(sourceId, entity.id)}
+        >
+          <Plus aria-hidden="true" />
+          Trigger Source
+        </button>
+      </div>
+    </section>
+  );
+}
+
+interface TriggerRelationshipListProps {
+  emptyText: string;
+  linkedEntitySide: "source" | "target";
+  openGraphView: "world" | "story_flow";
+  openLabel: string;
+  project: StoryProject;
+  relationships: StoryRelationship[];
+  onDeleteRelationship: (id: string) => void;
+  onSelectEntityInGraph: (id: string, graphView: "world" | "story_flow") => void;
+}
+
+function TriggerRelationshipList({
+  emptyText,
+  linkedEntitySide,
+  openGraphView,
+  openLabel,
+  project,
+  relationships,
+  onDeleteRelationship,
+  onSelectEntityInGraph
+}: TriggerRelationshipListProps) {
+  if (!relationships.length) {
+    return <p className="game-empty-note">{emptyText}</p>;
+  }
+
+  return (
+    <div className="timeline-effects">
+      {relationships.map((relationship) => {
+        const linkedEntityId = linkedEntitySide === "source" ? relationship.sourceId : relationship.targetId;
+        const linkedEntity = project.entities[linkedEntityId];
+
+        return (
+          <div key={relationship.id}>
+            <button
+              type="button"
+              className="text-tool-button"
+              aria-label={`${openLabel}: ${linkedEntity?.title ?? "Missing item"}`}
+              onClick={() => onSelectEntityInGraph(linkedEntityId, openGraphView)}
+            >
+              <Crosshair aria-hidden="true" />
+              <strong>{linkedEntity?.title ?? "Missing item"}</strong>
+            </button>
+            <button
+              type="button"
+              className="icon-button danger"
+              aria-label={`Remove trigger ${linkedEntity?.title ?? relationship.id}`}
+              onClick={() => onDeleteRelationship(relationship.id)}
+            >
+              <Trash2 aria-hidden="true" />
+            </button>
+          </div>
+        );
+      })}
+    </div>
   );
 }
 

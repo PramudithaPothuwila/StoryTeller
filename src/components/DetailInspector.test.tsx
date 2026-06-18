@@ -24,8 +24,10 @@ describe("DetailInspector", () => {
       <DetailInspector
         project={projectWithCharacter}
         selection={{ kind: "entity", id: character.id }}
+        onCreateTriggerLink={vi.fn()}
         onEntityChange={vi.fn()}
         onRelationshipChange={vi.fn()}
+        onSelectEntityInGraph={vi.fn()}
         onTimelineEffect={vi.fn()}
         onDeleteEntity={vi.fn()}
         onDeleteRelationship={vi.fn()}
@@ -55,8 +57,10 @@ describe("DetailInspector", () => {
       <DetailInspector
         project={projectWithEvent}
         selection={{ kind: "entity", id: event.id }}
+        onCreateTriggerLink={vi.fn()}
         onEntityChange={vi.fn()}
         onRelationshipChange={vi.fn()}
+        onSelectEntityInGraph={vi.fn()}
         onTimelineEffect={vi.fn()}
         onDeleteEntity={vi.fn()}
         onDeleteRelationship={vi.fn()}
@@ -91,8 +95,10 @@ describe("DetailInspector", () => {
       <DetailInspector
         project={projectWithRule}
         selection={{ kind: "entity", id: rule.id }}
+        onCreateTriggerLink={vi.fn()}
         onEntityChange={onEntityChange}
         onRelationshipChange={vi.fn()}
+        onSelectEntityInGraph={vi.fn()}
         onTimelineEffect={vi.fn()}
         onDeleteEntity={vi.fn()}
         onDeleteRelationship={vi.fn()}
@@ -127,8 +133,10 @@ describe("DetailInspector", () => {
       <DetailInspector
         project={projectWithCharacter}
         selection={{ kind: "entity", id: character.id }}
+        onCreateTriggerLink={vi.fn()}
         onEntityChange={vi.fn()}
         onRelationshipChange={vi.fn()}
+        onSelectEntityInGraph={vi.fn()}
         onTimelineEffect={vi.fn()}
         onDeleteEntity={vi.fn()}
         onDeleteRelationship={vi.fn()}

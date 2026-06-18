@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { BUILT_IN_WORLD_RULE_TYPE_ID } from "../types";
+import { BUILT_IN_TRIGGER_LINK_TYPE_ID, BUILT_IN_WORLD_RULE_TYPE_ID } from "../types";
 import { projectFromFiles } from "./projectFiles";
 import { getGameContinuityIssues } from "./story";
 import { DEFAULT_STARTER_PROJECT_ID, getStarterProjects, loadStarterProject } from "./starterProject";
@@ -163,9 +163,22 @@ describe("starter project loader", () => {
           sourceId: "dialogue-confront-evelyn-park",
           targetId: "ending-false-frame",
           type: "branches_to"
+        }),
+        expect.objectContaining({
+          sourceId: "event-murder-victim-found",
+          targetId: "scene-murder-victim-found",
+          type: BUILT_IN_TRIGGER_LINK_TYPE_ID
+        }),
+        expect.objectContaining({
+          sourceId: "clue-signal-room-ledger",
+          targetId: "dialogue-confront-evelyn-park",
+          type: BUILT_IN_TRIGGER_LINK_TYPE_ID
         })
       ])
     );
+    expect(project.entities["scene-murder-victim-found"].graphPresence).toBe("story_flow");
+    expect(project.entities["item-locker-12-key"].graphPresence).toBe("both");
+    expect(project.storyFlowLayout["scene-murder-victim-found"]).toEqual({ x: -720, y: 0 });
     expect(getGameContinuityIssues(project)).toEqual([]);
   });
 });

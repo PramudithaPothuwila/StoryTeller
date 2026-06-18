@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { BUILT_IN_WORLD_RULE_TYPE_ID, StoryEntity } from "../types";
+import { BUILT_IN_TRIGGER_LINK_TYPE_ID, BUILT_IN_WORLD_RULE_TYPE_ID, StoryEntity } from "../types";
 import {
   addGameStateVariableToProject,
   addTimelineLaneToProject,
@@ -15,9 +15,12 @@ import {
   ensureEventTimeline,
   getGameContinuityIssues,
   getGameStoryNodes,
+  getGameStoryTriggerRelationships,
   getGamePlayableChoices,
   getInitialGameState,
   getTimelineLaneNames,
+  getWorldTriggerRelationships,
+  isGameStoryLinkType,
   migrateProjectShape,
   moveTimelineEventInProject,
   renameTimelineLaneInProject,
@@ -202,8 +205,12 @@ describe("game story mode", () => {
     expect(gameProject.gameStory?.stateVariables).toEqual([]);
     expect(gameProject.itemTypes).toEqual(expect.arrayContaining([expect.objectContaining({ id: "scene", builtIn: true })]));
     expect(gameProject.linkTypes).toEqual(
-      expect.arrayContaining([expect.objectContaining({ id: "branches_to", builtIn: true })])
+      expect.arrayContaining([
+        expect.objectContaining({ id: "branches_to", builtIn: true }),
+        expect.objectContaining({ id: BUILT_IN_TRIGGER_LINK_TYPE_ID, label: "Triggers", builtIn: true })
+      ])
     );
+    expect(isGameStoryLinkType(BUILT_IN_TRIGGER_LINK_TYPE_ID)).toBe(false);
   });
 
   it("migrates v3 game projects by copying game node positions into Story Flow layout", () => {
@@ -236,7 +243,7 @@ describe("game story mode", () => {
     });
   });
 
-  it("normalizes graph presence defaults and Story Flow eligibility", () => {
+  it("normalizes graph presence defaults and keeps shared reference items out of game node validation", () => {
     const storyProject = createBlankProject("Presence");
     const scene = createStoryEntity("scene", storyProject.itemTypes, "Scene", "story_flow");
     const character = createStoryEntity("character", storyProject.itemTypes, "Character", "both");
@@ -258,7 +265,7 @@ describe("game story mode", () => {
     expect(scene.graphPresence).toBe("story_flow");
     expect(migratedStory.entities[character.id].graphPresence).toBe("world");
     expect(entityVisibleInGraph(character, "world")).toBe(true);
-    expect(entityVisibleInGraph(character, "story_flow")).toBe(false);
+    expect(entityVisibleInGraph(character, "story_flow")).toBe(true);
     expect(getGameStoryNodes({ ...storyProject, entities: { [character.id]: character } })).toEqual([]);
   });
 
@@ -282,6 +289,28 @@ describe("game story mode", () => {
 
     expect(deleted.layout[start.id]).toBeUndefined();
     expect(deleted.storyFlowLayout[start.id]).toBeUndefined();
+  });
+
+  it("finds valid trigger links from both world-building and game-story sides", () => {
+    const project = setProjectModeInProject(createBlankProject("Triggers"), "game_story");
+    const event = createStoryEntity("event", project.itemTypes, "Storm Opens", "world");
+    const scene = createStoryEntity("scene", project.itemTypes, "Opening Scene", "story_flow");
+    const trigger = createStoryRelationship(project, event.id, scene.id, BUILT_IN_TRIGGER_LINK_TYPE_ID);
+    const projectWithTrigger = {
+      ...project,
+      entities: {
+        [event.id]: event,
+        [scene.id]: scene
+      },
+      relationships: [trigger]
+    };
+
+    expect(getWorldTriggerRelationships(projectWithTrigger, event.id)).toEqual([trigger]);
+    expect(getGameStoryTriggerRelationships(projectWithTrigger, scene.id)).toEqual([trigger]);
+
+    const deleted = deleteEntityFromProject(projectWithTrigger, scene.id);
+
+    expect(getWorldTriggerRelationships(deleted, event.id)).toEqual([]);
   });
 
   it("simulates available and locked branches from state variables without mutating the project", () => {

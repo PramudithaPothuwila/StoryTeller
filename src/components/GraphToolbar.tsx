@@ -71,8 +71,8 @@ export function GraphToolbar({
           <button
             type="button"
             className={graphView === "world" ? "graph-toolbar__button is-active" : "graph-toolbar__button"}
-            aria-label="Switch to World"
-            title="World"
+            aria-label="Switch to World Building"
+            title="World Building"
             aria-pressed={graphView === "world"}
             onClick={() => onGraphViewChange("world")}
           >
@@ -81,8 +81,8 @@ export function GraphToolbar({
           <button
             type="button"
             className={graphView === "story_flow" ? "graph-toolbar__button is-active" : "graph-toolbar__button"}
-            aria-label="Switch to Story Flow"
-            title="Story Flow"
+            aria-label="Switch to Game Story"
+            title="Game Story"
             aria-pressed={graphView === "story_flow"}
             onClick={() => onGraphViewChange("story_flow")}
           >
