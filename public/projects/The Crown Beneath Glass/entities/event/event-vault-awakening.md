@@ -59,9 +59,9 @@
         "notes": "Orin stops managing the truth and guards Mara while she decides how much to reveal."
       }
     ]
-  }
+  },
+  "graphPresence": "world"
 }
-
 ---
 ## Scene Goal
 Reach the Vault before Lysandra can use Tovan's Lantern to aim the Crown at the crowd.

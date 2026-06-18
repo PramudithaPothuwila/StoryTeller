@@ -13,9 +13,9 @@
   "publicInfo": "Repairs public clocks and makes illegal pocket automata from scrap brass.",
   "privateInfo": "Tovan built the Blue Glass Lantern from stolen Mirror Guild plans and has not realized it can wake the Underclock Vault.",
   "createdAt": "2026-06-05T12:30:00.000Z",
-  "updatedAt": "2026-06-05T12:30:00.000Z"
+  "updatedAt": "2026-06-05T12:30:00.000Z",
+  "graphPresence": "world"
 }
-
 ---
 ## Role
 Tovan is the story's emotional fuse. Threaten him and Mara moves. Trust him and the plot opens a locked door.

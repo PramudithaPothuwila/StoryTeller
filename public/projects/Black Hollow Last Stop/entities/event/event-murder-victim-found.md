@@ -17,9 +17,9 @@
     "order": 2,
     "track": 0,
     "effects": []
-  }
+  },
+  "graphPresence": "world"
 }
-
 ---
 ## Planning Notes
 - The opening should not ask the player to solve the murder immediately.

@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 3,
+  "schemaVersion": 5,
   "relationships": [
     {
       "id": "branch-found-to-staged-quest",
@@ -512,21 +512,48 @@
       "timelineVersions": []
     },
     {
-      "id": "link-murder-event-game-scene",
+      "id": "trigger-murder-event-opening-scene",
       "sourceId": "event-murder-victim-found",
       "targetId": "scene-murder-victim-found",
-      "type": "relates_to",
-      "label": "Playable opening",
-      "notes": "The timeline event is represented as the first Game Story scene.",
+      "type": "triggers",
+      "label": "Triggers playable opening",
+      "notes": "The world timeline event is the canon source for the first playable crime-scene scene.",
       "timelineVersions": []
     },
     {
-      "id": "link-argument-dialogue",
+      "id": "trigger-drag-marks-staged-quest",
+      "sourceId": "clue-drag-marks",
+      "targetId": "quest-prove-station-staged",
+      "type": "triggers",
+      "label": "Triggers staged-body quest",
+      "notes": "The physical contradiction turns into the main investigation quest once the player treats the station as staged.",
+      "timelineVersions": []
+    },
+    {
+      "id": "trigger-argument-silas-interview",
       "sourceId": "event-victim-was-arguing",
       "targetId": "dialogue-interview-silas-crowe",
-      "type": "relates_to",
-      "label": "Questioned in witness interview",
-      "notes": "Silas's interview should sharpen the argument clue without resolving it too early.",
+      "type": "triggers",
+      "label": "Triggers witness interview",
+      "notes": "The last public argument gives the Silas interview a concrete world-building reason to exist.",
+      "timelineVersions": []
+    },
+    {
+      "id": "trigger-locker-search-signal-room",
+      "sourceId": "location-signal-room-locker-12",
+      "targetId": "scene-search-signal-room",
+      "type": "triggers",
+      "label": "Triggers signal-room search",
+      "notes": "The world location becomes playable when the investigation route points the player toward Locker 12.",
+      "timelineVersions": []
+    },
+    {
+      "id": "trigger-ledger-evelyn-confrontation",
+      "sourceId": "clue-signal-room-ledger",
+      "targetId": "dialogue-confront-evelyn-park",
+      "type": "triggers",
+      "label": "Triggers Evelyn confrontation",
+      "notes": "The ledger is the world evidence that turns suspicion into a playable accusation scene.",
       "timelineVersions": []
     }
   ]

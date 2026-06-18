@@ -13,9 +13,9 @@
   "publicInfo": "Scholars visit for land deeds and genealogies. Thieves visit for the things missing from both.",
   "privateInfo": "The archive has a second index written on the underside of each shelf. Orin wrote half of it while in exile.",
   "createdAt": "2026-06-05T12:30:00.000Z",
-  "updatedAt": "2026-06-05T12:30:00.000Z"
+  "updatedAt": "2026-06-05T12:30:00.000Z",
+  "graphPresence": "world"
 }
-
 ---
 ## Set Piece
 Readers sit above glass floor panels while drowned shelves drift beneath them like patient ghosts.

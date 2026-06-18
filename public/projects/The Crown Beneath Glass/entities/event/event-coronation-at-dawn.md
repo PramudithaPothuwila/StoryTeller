@@ -39,9 +39,9 @@
         "notes": "Lysandra loses control of the crowd but still chooses prosecution over surrender."
       }
     ]
-  }
+  },
+  "graphPresence": "world"
 }
-
 ---
 ## Scene Goal
 Let the truth be witnessed without letting the symbol become another weapon.

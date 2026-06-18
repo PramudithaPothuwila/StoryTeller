@@ -13,9 +13,9 @@
   "publicInfo": "Looks like a salt-stained shipping register from the old west docks.",
   "privateInfo": "Under moonlight, the margins list heirs hidden after the Fall, including Mara under a false lullaby name.",
   "createdAt": "2026-06-05T12:30:00.000Z",
-  "updatedAt": "2026-06-05T12:30:00.000Z"
+  "updatedAt": "2026-06-05T12:30:00.000Z",
+  "graphPresence": "world"
 }
-
 ---
 ## Clues Inside
 - A scratched-out line matching Mara's route book.

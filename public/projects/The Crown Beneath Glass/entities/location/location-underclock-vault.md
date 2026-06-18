@@ -13,9 +13,9 @@
   "publicInfo": "Officially a collapsed bell foundry sealed after a century-old flood.",
   "privateInfo": "The vault opens for a crown-bearer only if someone else freely pays the cost of being remembered.",
   "createdAt": "2026-06-05T12:30:00.000Z",
-  "updatedAt": "2026-06-05T12:30:00.000Z"
+  "updatedAt": "2026-06-05T12:30:00.000Z",
+  "graphPresence": "world"
 }
-
 ---
 ## Rules
 - The gears move when a true name is spoken.

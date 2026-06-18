@@ -13,9 +13,9 @@
   "publicInfo": "A sliver of blue mirror found in the Market Fire ash.",
   "privateInfo": "The fifth reflection is Queen Ilyra's last witness, trapped as a memory in the glass array beneath the city.",
   "createdAt": "2026-06-05T12:30:00.000Z",
-  "updatedAt": "2026-06-05T12:30:00.000Z"
+  "updatedAt": "2026-06-05T12:30:00.000Z",
+  "graphPresence": "world"
 }
-
 ---
 ## Discovery Trail
 1. Found after the Market Fire, too cold to touch.

@@ -12,9 +12,9 @@
   "publicInfo": "The station has been abandoned for years. Its platforms, signal room, and service corridors are dusty, unstable, and under redevelopment pressure.",
   "privateInfo": "The station is not the primary murder location. Evelyn used it because Rowan's railway past made the placement believable and because Locker 12 still held the ledger she needed to recover.",
   "createdAt": "2026-06-07T00:00:00.000Z",
-  "updatedAt": "2026-06-07T00:00:00.000Z"
+  "updatedAt": "2026-06-07T00:00:00.000Z",
+  "graphPresence": "world"
 }
-
 ---
 ## Planning Notes
 - Keep the station tactile: wet dust, old oil, sealed-up quiet, rusted signal boxes, rain in broken roof glass.

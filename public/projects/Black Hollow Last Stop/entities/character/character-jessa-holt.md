@@ -12,9 +12,9 @@
   "publicInfo": "Jessa sneaks into abandoned places for photos and dares, and she has posted images from Black Hollow Station before.",
   "privateInfo": "Jessa entered after the body was dumped. She saw a dark town car leave by the service road but ran before checking the body.",
   "createdAt": "2026-06-07T00:00:00.000Z",
-  "updatedAt": "2026-06-07T00:00:00.000Z"
+  "updatedAt": "2026-06-07T00:00:00.000Z",
+  "graphPresence": "world"
 }
-
 ---
 ## Planning Notes
 - Jessa should initially lie about being at the station because trespassing could cost her scholarship.

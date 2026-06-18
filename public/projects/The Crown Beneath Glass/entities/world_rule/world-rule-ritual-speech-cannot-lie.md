@@ -21,7 +21,8 @@
     "limits": "The rule applies only to formal ritual speech, not ordinary conversation, rumor, or written orders.",
     "exceptions": "A speaker can omit context or use technically true phrasing to mislead.",
     "storyPurpose": "Lets the Choir be trusted in public while preserving room for political ambiguity."
-  }
+  },
+  "graphPresence": "world"
 }
 ---
 ## Revision Notes

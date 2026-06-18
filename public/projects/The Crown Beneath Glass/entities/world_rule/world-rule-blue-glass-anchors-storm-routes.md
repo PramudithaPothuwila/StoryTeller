@@ -21,7 +21,8 @@
     "limits": "The route fails if the lantern cracks, the mirror line is blocked, or the storm moves faster than the bell cadence.",
     "exceptions": "The Underclock Vault can project a route without weather, but only when its gears are awake.",
     "storyPurpose": "Makes the Lantern a practical plot tool and gives the dockside eclipse a clear physical constraint."
-  }
+  },
+  "graphPresence": "world"
 }
 ---
 ## Revision Notes

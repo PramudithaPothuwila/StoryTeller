@@ -13,9 +13,9 @@
   "publicInfo": "Most citizens think it was melted after the monarchy fell.",
   "privateInfo": "The Crown is not gold. It is pressure-cut glass around a black iron circuit, and it rejects anyone who treats people as fuel.",
   "createdAt": "2026-06-05T12:30:00.000Z",
-  "updatedAt": "2026-06-05T12:30:00.000Z"
+  "updatedAt": "2026-06-05T12:30:00.000Z",
+  "graphPresence": "world"
 }
-
 ---
 ## Powers
 - Amplifies civic vows spoken near bell-metal.

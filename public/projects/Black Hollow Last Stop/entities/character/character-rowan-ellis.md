@@ -12,9 +12,9 @@
   "publicInfo": "Rowan Ellis was known as quiet, careful, and difficult to provoke. He once maintained Black Hollow's rail switches before the station closed.",
   "privateInfo": "Rowan found the Signal Room Ledger proving Platform 7 safety reports were falsified. He argued with Evelyn Park, was killed near the service road office, and was moved into the station after death or incapacitation.",
   "createdAt": "2026-06-07T00:00:00.000Z",
-  "updatedAt": "2026-06-07T00:00:00.000Z"
+  "updatedAt": "2026-06-07T00:00:00.000Z",
+  "graphPresence": "world"
 }
-
 ---
 ## Planning Notes
 - Rowan should remain vivid through habits, not flashbacks: precise notes, clean tools, old route maps, and a careful fear of public scenes.

@@ -58,9 +58,9 @@
         "notes": "A handler tries to command the Crown and triggers the blue flare."
       }
     ]
-  }
+  },
+  "graphPresence": "world"
 }
-
 ---
 ## Scene Goal
 Mara wants to deliver a sealed letter. Orin wants her out of the square. Lysandra wants a crowd frightened enough to accept emergency rule.

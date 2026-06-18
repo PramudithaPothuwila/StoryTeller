@@ -13,9 +13,9 @@
   "publicInfo": "They make windows, mirrors, lenses, and diplomatic deniability.",
   "privateInfo": "Guild masters have seen three possible dawns. In two, they sell Mara out. In one, they become her witnesses.",
   "createdAt": "2026-06-05T12:30:00.000Z",
-  "updatedAt": "2026-06-05T12:30:00.000Z"
+  "updatedAt": "2026-06-05T12:30:00.000Z",
+  "graphPresence": "world"
 }
-
 ---
 ## Bargain Style
 The Mirror Guild never gives an answer without also giving a debt-shaped reflection of it.

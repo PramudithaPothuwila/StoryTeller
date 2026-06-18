@@ -13,9 +13,9 @@
   "publicInfo": "Use this note to test searching, tags, long notes, and non-story graph nodes.",
   "privateInfo": "The midpoint should make every alliance useful and unsafe at the same time.",
   "createdAt": "2026-06-05T12:30:00.000Z",
-  "updatedAt": "2026-06-05T12:30:00.000Z"
+  "updatedAt": "2026-06-05T12:30:00.000Z",
+  "graphPresence": "world"
 }
-
 ---
 ## Pressure Lines
 - Lysandra can arrest Tovan, but doing so exposes the Lantern.

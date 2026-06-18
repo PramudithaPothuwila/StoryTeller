@@ -13,9 +13,9 @@
   "publicInfo": "Fastest bridge-runner in the Glass Quarter; trusted with letters no guild will insure.",
   "privateInfo": "Her birthmark is a star map key. The Crown responds to her pulse, but only after she chooses the city over the throne.",
   "createdAt": "2026-06-05T12:30:00.000Z",
-  "updatedAt": "2026-06-05T12:30:00.000Z"
+  "updatedAt": "2026-06-05T12:30:00.000Z",
+  "graphPresence": "world"
 }
-
 ---
 ## Wants
 - Keep her younger brother Tovan away from council politics.

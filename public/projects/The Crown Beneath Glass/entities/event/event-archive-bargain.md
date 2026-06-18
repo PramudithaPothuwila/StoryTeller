@@ -56,9 +56,9 @@
         "notes": "The Ledger names a bell shipment arriving during the eclipse."
       }
     ]
-  }
+  },
+  "graphPresence": "world"
 }
-
 ---
 ## Scene Goal
 Get the Moonlit Ledger, escape the flood bells, and decide whether Sable is thief, ally, or both.

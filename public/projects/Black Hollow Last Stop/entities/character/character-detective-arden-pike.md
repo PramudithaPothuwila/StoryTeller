@@ -12,9 +12,9 @@
   "publicInfo": "A county detective with a reputation for reconstructing crimes from small spatial contradictions.",
   "privateInfo": "Arden is less interested in heroic confession scenes than in making evidence survive pressure from powerful locals. Their weakness is impatience with sentimental witnesses like Silas.",
   "createdAt": "2026-06-07T00:00:00.000Z",
-  "updatedAt": "2026-06-07T00:00:00.000Z"
+  "updatedAt": "2026-06-07T00:00:00.000Z",
+  "graphPresence": "world"
 }
-
 ---
 ## Planning Notes
 - Arden should feel competent but not omniscient.

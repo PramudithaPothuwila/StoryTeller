@@ -12,9 +12,9 @@
   "publicInfo": "The board argues that the abandoned station is unsafe and blocks economic recovery.",
   "privateInfo": "Several board members know the demolition timeline is designed to erase old Platform 7 liability before outside inspectors can reopen the file.",
   "createdAt": "2026-06-07T00:00:00.000Z",
-  "updatedAt": "2026-06-07T00:00:00.000Z"
+  "updatedAt": "2026-06-07T00:00:00.000Z",
+  "graphPresence": "world"
 }
-
 ---
 ## Planning Notes
 - The board creates time pressure without needing every member to be guilty.

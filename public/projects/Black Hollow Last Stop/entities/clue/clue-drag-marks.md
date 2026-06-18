@@ -12,9 +12,9 @@
   "publicInfo": "Drag marks are found near and inside the abandoned station. The marks suggest Rowan's body was moved into position.",
   "privateInfo": "The drag marks point back toward the service road culvert, not deeper into the station. Evelyn used the back route to stage the body and search for Rowan's key.",
   "createdAt": "2026-06-07T00:00:00.000Z",
-  "updatedAt": "2026-06-07T00:00:00.000Z"
+  "updatedAt": "2026-06-07T00:00:00.000Z",
+  "graphPresence": "world"
 }
-
 ---
 ## Planning Notes
 - This is the first major contradiction and should be available immediately.

@@ -21,7 +21,8 @@
     "limits": "Coerced memory theft is unstable and may leave sensory fragments behind.",
     "exceptions": "A memory can echo through an emotionally charged object, but the echo is evidence rather than full restoration.",
     "storyPurpose": "Sets the cost of power and prevents lost identity from becoming an easy reversal."
-  }
+  },
+  "graphPresence": "world"
 }
 ---
 ## Revision Notes

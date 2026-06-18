@@ -13,9 +13,9 @@
   "publicInfo": "Runs salvage crews from Blackwater Docks and never carries the same name twice.",
   "privateInfo": "Sable is an Ember Choir informant who has been feeding Lysandra bad manifests for months.",
   "createdAt": "2026-06-05T12:30:00.000Z",
-  "updatedAt": "2026-06-05T12:30:00.000Z"
+  "updatedAt": "2026-06-05T12:30:00.000Z",
+  "graphPresence": "world"
 }
-
 ---
 ## Surface
 Sable flirts like it is weather: constant, directional, and mostly a warning system.

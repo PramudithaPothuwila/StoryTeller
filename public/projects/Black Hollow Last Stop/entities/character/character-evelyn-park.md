@@ -13,9 +13,9 @@
   "publicInfo": "Evelyn Park presents herself as a practical civic leader trying to turn Black Hollow Station into usable land.",
   "privateInfo": "Evelyn killed Rowan after he confronted her with the ledger. She moved the body to recover the key, hide the true murder location, and make Silas look like a station-haunted culprit.",
   "createdAt": "2026-06-07T00:00:00.000Z",
-  "updatedAt": "2026-06-07T00:00:00.000Z"
+  "updatedAt": "2026-06-07T00:00:00.000Z",
+  "graphPresence": "world"
 }
-
 ---
 ## Planning Notes
 - Evelyn should never sound like a cackling villain. She thinks she is preventing a town-killing scandal.

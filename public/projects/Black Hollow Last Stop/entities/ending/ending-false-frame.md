@@ -26,9 +26,9 @@
       }
     ],
     "exitEffects": []
-  }
+  },
+  "graphPresence": "story_flow"
 }
-
 ---
 ## Outcome
 - Silas is treated as the culprit or primary suspect.

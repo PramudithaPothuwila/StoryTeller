@@ -12,9 +12,9 @@
   "publicInfo": "Fresh footprints are found inside Black Hollow Train Station near the platform approach.",
   "privateInfo": "Some prints belong to Jessa Holt, who entered after the body was dumped. They are real but misleading unless separated from the drag route.",
   "createdAt": "2026-06-07T00:00:00.000Z",
-  "updatedAt": "2026-06-07T00:00:00.000Z"
+  "updatedAt": "2026-06-07T00:00:00.000Z",
+  "graphPresence": "world"
 }
-
 ---
 ## Planning Notes
 - This clue should teach that physical evidence still needs timing.

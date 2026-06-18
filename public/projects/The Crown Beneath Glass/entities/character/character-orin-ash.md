@@ -13,9 +13,9 @@
   "publicInfo": "Owns Ash and Angle, a map shop wedged between two canal bridges.",
   "privateInfo": "He burned the last public proof of Mara's lineage to keep Lysandra from finding her. He also kept a private copy in the Signet Key.",
   "createdAt": "2026-06-05T12:30:00.000Z",
-  "updatedAt": "2026-06-05T12:30:00.000Z"
+  "updatedAt": "2026-06-05T12:30:00.000Z",
+  "graphPresence": "world"
 }
-
 ---
 ## Wound
 Orin betrayed the old queen by surviving. His every kindness has a ledger entry in his mind.

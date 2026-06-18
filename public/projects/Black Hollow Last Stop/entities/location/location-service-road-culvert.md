@@ -12,9 +12,9 @@
   "publicInfo": "A narrow culvert behind the station connects the service road to the old parcel entrance.",
   "privateInfo": "This is the route Evelyn used to move Rowan's body from the true attack site toward the platform.",
   "createdAt": "2026-06-07T00:00:00.000Z",
-  "updatedAt": "2026-06-07T00:00:00.000Z"
+  "updatedAt": "2026-06-07T00:00:00.000Z",
+  "graphPresence": "world"
 }
-
 ---
 ## Planning Notes
 - The culvert should be ugly, practical, and less theatrical than the station.

@@ -61,9 +61,9 @@
         }
       ]
     }
-  }
+  },
+  "graphPresence": "story_flow"
 }
-
 ---
 ## Dialogue Goal
 Make the final choice about proof, not intuition.

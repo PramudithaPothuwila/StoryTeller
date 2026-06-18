@@ -62,9 +62,9 @@
         }
       ]
     }
-  }
+  },
+  "graphPresence": "story_flow"
 }
-
 ---
 ## Dialogue Goal
 Make Silas feel like an obvious suspect and a possible key witness at the same time.

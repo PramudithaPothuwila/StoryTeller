@@ -13,9 +13,9 @@
   "publicInfo": "Silas still visits the abandoned station and argues against demolition at public meetings.",
   "privateInfo": "Silas did not kill Rowan. He knows Rowan asked about Locker 12 and can reveal the key route if the player does not treat him as the murderer from the start.",
   "createdAt": "2026-06-07T00:00:00.000Z",
-  "updatedAt": "2026-06-07T00:00:00.000Z"
+  "updatedAt": "2026-06-07T00:00:00.000Z",
+  "graphPresence": "world"
 }
-
 ---
 ## Planning Notes
 - Silas is prickly, not sinister.

@@ -1,7 +1,7 @@
 {
-  "schemaVersion": 2,
+  "schemaVersion": 5,
   "title": "The Crown Beneath Glass",
-  "updatedAt": "2026-06-05T12:30:00.000Z",
+  "updatedAt": "2026-06-18T00:00:00.000Z",
   "itemTypes": [
     {
       "id": "character",
@@ -490,5 +490,10 @@
       "updatedAt": "2026-06-05T12:30:00.000Z",
       "path": "entities/event/event-coronation-at-dawn.md"
     }
-  ]
+  ],
+  "projectMode": "story",
+  "timelineLaneNames": [
+    "Track 1"
+  ],
+  "storyFlowLayout": {}
 }

@@ -13,9 +13,9 @@
   "publicInfo": "Repeated images: bells, reflected crowds, rewritten records, names sung by strangers.",
   "privateInfo": "The final sacrifice should not erase a person. It should erase the lie that made erasure seem merciful.",
   "createdAt": "2026-06-05T12:30:00.000Z",
-  "updatedAt": "2026-06-05T12:30:00.000Z"
+  "updatedAt": "2026-06-05T12:30:00.000Z",
+  "graphPresence": "world"
 }
-
 ---
 ## Motifs
 - Bells as public memory.

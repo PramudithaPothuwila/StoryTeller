@@ -56,9 +56,9 @@
         "notes": "Lysandra pins the Market Fire on Mara and makes neutrality impossible."
       }
     ]
-  }
+  },
+  "graphPresence": "world"
 }
-
 ---
 ## Scene Goal
 Intercept the bell shipment before Lysandra's militia finds Tovan and the Lantern.

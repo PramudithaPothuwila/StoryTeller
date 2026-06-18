@@ -13,9 +13,9 @@
   "publicInfo": "The brightest district in Bellweather and the easiest place to lose someone in reflections.",
   "privateInfo": "The street mirrors are not decorative. They are an old civic memory array built to recognize royal bloodlines.",
   "createdAt": "2026-06-05T12:30:00.000Z",
-  "updatedAt": "2026-06-05T12:30:00.000Z"
+  "updatedAt": "2026-06-05T12:30:00.000Z",
+  "graphPresence": "world"
 }
-
 ---
 ## Sensory Palette
 Blue-white glare, wet stone, citrus peels, brass bells, laundry snapping above canals.

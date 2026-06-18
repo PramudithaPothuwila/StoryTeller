@@ -1,7 +1,7 @@
 {
-  "schemaVersion": 3,
+  "schemaVersion": 5,
   "title": "Black Hollow: Last Stop",
-  "updatedAt": "2026-06-08T12:01:26.111Z",
+  "updatedAt": "2026-06-18T00:00:00.000Z",
   "projectMode": "game_story",
   "gameStory": {
     "startNodeId": "scene-murder-victim-found",
@@ -272,6 +272,14 @@
       "id": "unlocks",
       "label": "Unlocks",
       "color": "#0891b2",
+      "icon": "sparkles",
+      "direction": "directed",
+      "builtIn": true
+    },
+    {
+      "id": "triggers",
+      "label": "Triggers",
+      "color": "#f59e0b",
       "icon": "sparkles",
       "direction": "directed",
       "builtIn": true
@@ -563,5 +571,39 @@
       "updatedAt": "2026-06-07T00:00:00.000Z",
       "path": "entities/ending/ending-false-frame.md"
     }
-  ]
+  ],
+  "storyFlowLayout": {
+    "scene-murder-victim-found": {
+      "x": -720,
+      "y": 0
+    },
+    "quest-prove-station-staged": {
+      "x": -360,
+      "y": 0
+    },
+    "dialogue-interview-silas-crowe": {
+      "x": 0,
+      "y": -160
+    },
+    "scene-search-signal-room": {
+      "x": 320,
+      "y": 0
+    },
+    "item-locker-12-key": {
+      "x": 320,
+      "y": 240
+    },
+    "dialogue-confront-evelyn-park": {
+      "x": 680,
+      "y": 0
+    },
+    "ending-true-route": {
+      "x": 1040,
+      "y": -120
+    },
+    "ending-false-frame": {
+      "x": 1040,
+      "y": 160
+    }
+  }
 }

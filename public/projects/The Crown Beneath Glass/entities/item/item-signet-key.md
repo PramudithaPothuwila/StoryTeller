@@ -13,9 +13,9 @@
   "publicInfo": "A dull ring Orin twists whenever he claims he has nothing left to say.",
   "privateInfo": "The key contains a rolled glass strip: Mara's original birth record and the name of the midwife who smuggled her out.",
   "createdAt": "2026-06-05T12:30:00.000Z",
-  "updatedAt": "2026-06-05T12:30:00.000Z"
+  "updatedAt": "2026-06-05T12:30:00.000Z",
+  "graphPresence": "world"
 }
-
 ---
 ## Use
 The key opens the Archive air bells, then breaks. Its destruction forces Orin to stop treating truth as something he can reseal.

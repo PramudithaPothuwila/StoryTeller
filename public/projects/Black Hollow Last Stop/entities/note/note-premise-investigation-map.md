@@ -13,9 +13,9 @@
   "publicInfo": "Rowan Ellis is found dead inside the abandoned Black Hollow Train Station. Fresh footprints and drag marks suggest the station may be a staged body dump rather than the true murder site.",
   "privateInfo": "Evelyn Park killed Rowan after he found the Signal Room Ledger. She moved the body to Platform 7 to search for the locker evidence, connect the murder to Rowan's railway past, and frame Silas Crowe as a station-obsessed suspect.",
   "createdAt": "2026-06-07T00:00:00.000Z",
-  "updatedAt": "2026-06-07T00:00:00.000Z"
+  "updatedAt": "2026-06-07T00:00:00.000Z",
+  "graphPresence": "world"
 }
-
 ---
 ## Creative Basics
 - Genre: grounded detective mystery built for a branching RPG investigation.

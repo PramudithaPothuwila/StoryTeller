@@ -13,9 +13,9 @@
   "publicInfo": "Presents itself as the practical alternative to monarchy.",
   "privateInfo": "Three of its seven ministers know Lysandra has a private militia. Two think they control it.",
   "createdAt": "2026-06-05T12:30:00.000Z",
-  "updatedAt": "2026-06-05T12:30:00.000Z"
+  "updatedAt": "2026-06-05T12:30:00.000Z",
+  "graphPresence": "world"
 }
-
 ---
 ## Public Promise
 No crowns, no riots, no hungry wards, no old blood deciding new law.

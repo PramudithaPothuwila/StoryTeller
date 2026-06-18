@@ -77,9 +77,9 @@
       "rewards": "Unlocks the strongest confrontation route against Evelyn Park.",
       "consequences": "Skipping the ledger leaves the player vulnerable to the Silas frame."
     }
-  }
+  },
+  "graphPresence": "story_flow"
 }
-
 ---
 ## Quest Shape
 - Physical proof first: drag direction and body placement.
