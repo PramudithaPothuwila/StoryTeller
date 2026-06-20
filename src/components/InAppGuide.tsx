@@ -56,8 +56,8 @@ const guideSections = [
     title: "Save and Configure",
     icon: Save,
     points: [
-      "Use New, Open, Select Folder, Save, and Export Backup from the topbar to manage local project files.",
-      "Open Settings to rename the project, switch Story or Game Story mode, and edit custom item or link types.",
+      "Use New, Open, Select Folder, and Save to manage local project files.",
+      "Open Settings to rename the project, export a backup, switch Story or Game Story mode, and edit custom item or link types.",
       "In Game Story mode, use Branching RPG in the topbar to open the optional State, Preview, and Continuity tools."
     ]
   },
