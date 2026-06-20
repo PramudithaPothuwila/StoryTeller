@@ -1,4 +1,4 @@
-import { BookOpen, GitBranch, Map, Save, Search, Settings2, Timer, X } from "lucide-react";
+import { BookOpen, GitBranch, Keyboard, Map, Save, Search, Settings2, Timer, X } from "lucide-react";
 import { useEffect } from "react";
 
 interface InAppGuideProps {
@@ -59,6 +59,16 @@ const guideSections = [
       "Use New, Open, Select Folder, Save, and Export Backup from the topbar to manage local project files.",
       "Open Settings to rename the project, switch Story or Game Story mode, and edit custom item or link types.",
       "In Game Story mode, use Branching RPG in the topbar to open the optional State, Preview, and Continuity tools."
+    ]
+  },
+  {
+    title: "Keyboard Shortcuts",
+    icon: Keyboard,
+    points: [
+      "Use Ctrl/Cmd+S to save, Ctrl/Cmd+E to export a backup, Ctrl/Cmd+F to focus item search, and ? to open this guide.",
+      "Use R to toggle Rulebook, A for AI Agent on cloud projects, and B for Branching RPG; W/G switch graph views and T toggles the timeline.",
+      "Use C, N, L, E, I, F, U, S, Q, and D to create visible graph item types; 1-4 and 0 change graph focus depth.",
+      "Use Alt+1, Alt+2, and Alt+3 for Game Story tabs. Shortcuts are ignored while typing, and deletion requires Ctrl/Cmd+Backspace or Ctrl/Cmd+Delete."
     ]
   }
 ];

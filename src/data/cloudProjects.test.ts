@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createBlankProject } from "./story";
-import { openCloudProject, serializeCloudProject } from "./cloudProjects";
+import { openCloudProject, requestAgentPlan, serializeCloudProject } from "./cloudProjects";
 
 const { supabaseClientMock, projectsQueryMock } = vi.hoisted(() => {
   const query: Record<string, unknown> = {};
@@ -18,6 +18,9 @@ const { supabaseClientMock, projectsQueryMock } = vi.hoisted(() => {
       single: ReturnType<typeof vi.fn>;
     },
     supabaseClientMock: {
+      functions: {
+        invoke: vi.fn()
+      },
       from: vi.fn(() => query)
     }
   };
@@ -73,5 +76,40 @@ describe("cloud project storage", () => {
     expect(result.project.schemaVersion).toBe(5);
     expect(result.project.title).toBe("Legacy Cloud");
     expect(result.version).toBe(7);
+  });
+
+  it("invokes the cloud agent function with project and prompt", async () => {
+    const project = createBlankProject("Agent Cloud");
+    supabaseClientMock.functions.invoke.mockResolvedValue({
+      data: {
+        output_text: "{\"summary\":\"Done\",\"assumptions\":[],\"changes\":[],\"followUpQuestions\":[]}"
+      },
+      error: null
+    });
+
+    const result = await requestAgentPlan(project, "Add a rival.");
+
+    expect(supabaseClientMock.functions.invoke).toHaveBeenCalledWith("agent", {
+      body: {
+        project,
+        prompt: "Add a rival."
+      }
+    });
+    expect(result).toEqual({
+      output_text: "{\"summary\":\"Done\",\"assumptions\":[],\"changes\":[],\"followUpQuestions\":[]}"
+    });
+  });
+
+  it("surfaces cloud agent function errors", async () => {
+    supabaseClientMock.functions.invoke.mockResolvedValue({
+      data: null,
+      error: {
+        message: "Sign in before using the agent."
+      }
+    });
+
+    await expect(requestAgentPlan(createBlankProject("Agent Error"), "Help")).rejects.toThrow(
+      "Sign in before using the agent."
+    );
   });
 });

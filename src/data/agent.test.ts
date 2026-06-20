@@ -5,7 +5,7 @@ import {
   AgentChangePlan,
   applyAgentChangePlan,
   buildAgentProjectContext,
-  createAgentRequest,
+  buildNvidiaSystemPrompt,
   parseAgentResponsePayload,
   validateAgentChangePlan
 } from "./agent";
@@ -164,28 +164,13 @@ describe("agent project helpers", () => {
     expect(result.changedRelationshipIds).toContain("link-hero-rival");
   });
 
-  it("creates a NVIDIA Chat Completions request when the deployed provider is nvidia", async () => {
-    const project = createBlankProject("NVIDIA Plan");
-    const request = createAgentRequest(
-      {
-        provider: "nvidia",
-        apiKey: "nvapi-test",
-        baseUrl: "https://integrate.api.nvidia.com/v1/",
-        model: "nvidia/llama-3.1-nemotron-nano-8b-v1"
-      },
-      project,
-      "Add a rival."
-    );
-    const body = await request.json();
+  it("builds NVIDIA system instructions for JSON-only change plans", () => {
+    const prompt = buildNvidiaSystemPrompt();
 
-    expect(request.url).toBe("https://integrate.api.nvidia.com/v1/chat/completions");
-    expect(request.headers.get("Authorization")).toBe("Bearer nvapi-test");
-    expect(body.model).toBe("nvidia/llama-3.1-nemotron-nano-8b-v1");
-    expect(body.stream).toBe(false);
-    expect(body.temperature).toBe(0);
-    expect(body.messages[0].content).toContain("detailed thinking off");
-    expect(body.messages[0].content).toContain("Return only valid JSON");
-    expect(body.messages[1].content).toContain("Add a rival.");
+    expect(prompt).toContain("detailed thinking off");
+    expect(prompt).toContain("Return only valid JSON");
+    expect(prompt).toContain("structured change plan");
+    expect(prompt).toContain("create_entity");
   });
 
   it("parses NVIDIA Chat Completions JSON output into an agent change plan", () => {

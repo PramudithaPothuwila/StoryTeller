@@ -270,6 +270,22 @@ export async function writeCloudUserSettings(settings: unknown): Promise<void> {
   }
 }
 
+export async function requestAgentPlan(project: StoryProject, prompt: string): Promise<unknown> {
+  const client = requireSupabaseClient();
+  const { data, error } = await client.functions.invoke("agent", {
+    body: {
+      project,
+      prompt
+    }
+  });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return data;
+}
+
 export function serializeCloudProject(project: StoryProject): StoryProject {
   return JSON.parse(JSON.stringify(project)) as StoryProject;
 }

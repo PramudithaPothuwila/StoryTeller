@@ -57,6 +57,35 @@ VITE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_your-key
 Use the Supabase publishable key for Vite/browser env files. Do not add a
 secret or service-role key to the frontend.
 
+Configure the cloud-only AI agent as Supabase function secrets:
+
+```sh
+supabase secrets set NVIDIA_API_KEY=nvapi_your-key
+```
+
+Optional backend-only overrides:
+
+```sh
+supabase secrets set NVIDIA_MODEL=nvidia/llama-3.1-nemotron-nano-8b-v1
+supabase secrets set NVIDIA_BASE_URL=https://integrate.api.nvidia.com/v1
+```
+
+For local Supabase, use the project-local CLI:
+
+```sh
+npx supabase status
+```
+
+The local agent function is served from:
+
+```text
+http://127.0.0.1:54321/functions/v1/agent
+```
+
+`npx supabase functions list` lists functions deployed to the linked Supabase
+project, not local files. Locally, the function is discovered from
+`supabase/functions/agent/index.ts`.
+
 Start the development server:
 
 ```sh

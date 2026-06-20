@@ -1,10 +1,12 @@
 import { Search } from "lucide-react";
+import { type RefObject } from "react";
 import { findItemType } from "../data/story";
 import { StoryEntity, StoryProject } from "../types";
 
 interface SidebarProps {
   project: StoryProject;
   search: string;
+  searchInputRef?: RefObject<HTMLInputElement>;
   onSelectEntity: (id: string) => void;
   onSearchChange: (value: string) => void;
 }
@@ -12,6 +14,7 @@ interface SidebarProps {
 export function Sidebar({
   project,
   search,
+  searchInputRef,
   onSelectEntity,
   onSearchChange
 }: SidebarProps) {
@@ -27,6 +30,7 @@ export function Sidebar({
         <label className="search-box">
           <Search aria-hidden="true" />
           <input
+            ref={searchInputRef}
             aria-label="Search story items"
             value={search}
             placeholder="Search"

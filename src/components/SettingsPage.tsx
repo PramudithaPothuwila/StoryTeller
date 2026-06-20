@@ -1,18 +1,14 @@
-import { ArrowLeft, Bot, Plus, Trash2 } from "lucide-react";
+import { ArrowLeft, Plus, Trash2 } from "lucide-react";
 import { ReactNode, useState } from "react";
-import { AgentSettings, DEFAULT_AGENT_SETTINGS } from "../data/agent";
 import { iconForName, iconOptions } from "../data/icons";
 import { isItemTypeInUse, isLinkTypeInUse } from "../data/story";
 import { ItemTypeDefinition, LinkTypeDefinition, LinkTypeId, StoryProject } from "../types";
 
 interface SettingsPageProps {
   project: StoryProject;
-  agentSettings: AgentSettings;
-  agentSettingsEditable: boolean;
   defaultRelationshipType: LinkTypeId;
   onAddItemType: () => void;
   onAddLinkType: () => void;
-  onAgentSettingsChange: (settings: AgentSettings) => void;
   onBackToWorkspace: () => void;
   onDefaultRelationshipTypeChange: (type: LinkTypeId) => void;
   onDeleteItemType: (typeId: string) => void;
@@ -24,12 +20,9 @@ interface SettingsPageProps {
 
 export function SettingsPage({
   project,
-  agentSettings,
-  agentSettingsEditable,
   defaultRelationshipType,
   onAddItemType,
   onAddLinkType,
-  onAgentSettingsChange,
   onBackToWorkspace,
   onDefaultRelationshipTypeChange,
   onDeleteItemType,
@@ -84,14 +77,6 @@ export function SettingsPage({
             ))}
           </select>
         </section>
-
-        {agentSettingsEditable ? (
-          <AgentSettingsPanel
-            agentSettings={agentSettings}
-            headingId="agent-settings-title"
-            onAgentSettingsChange={onAgentSettingsChange}
-          />
-        ) : null}
 
         <section className="settings-panel settings-panel--wide" aria-labelledby="type-settings-title">
           <div className="settings-section-heading">
@@ -230,81 +215,6 @@ export function SettingsPage({
       </div>
     </main>
   );
-}
-
-interface AgentSettingsPanelProps {
-  agentSettings: AgentSettings;
-  headingId: string;
-  onAgentSettingsChange: (settings: AgentSettings) => void;
-}
-
-export function AgentSettingsPanel({
-  agentSettings,
-  headingId,
-  onAgentSettingsChange
-}: AgentSettingsPanelProps) {
-  return (
-    <section className="settings-panel" aria-labelledby={headingId}>
-      <div className="settings-panel-heading">
-        <Bot aria-hidden="true" />
-        <h2 id={headingId}>AI Agent</h2>
-      </div>
-      <p className="agent-warning">
-        Browser-side API keys can be inspected by anyone using this browser session. Use a limited, personal key.
-      </p>
-      <p className="agent-compat-note">
-        Active provider: <strong>{displayAgentProvider(agentSettings.provider)}</strong>. Provider selection is a
-        build/deploy-time setting, not a runtime toggle. Set <code>VITE_AGENT_PROVIDER=nvidia</code> to deploy with the
-        NVIDIA AI platform.
-      </p>
-      <p className="agent-compat-note">
-        The Agent API must support OpenAPI compatibility through an OpenAI-compatible API shape for the selected
-        provider: Responses structured outputs for OpenAI, or Chat Completions JSON output for NVIDIA.
-      </p>
-      <label className="field-label" htmlFor={`${headingId}-api-key`}>
-        API Key
-      </label>
-      <input
-        id={`${headingId}-api-key`}
-        aria-label="Agent API key"
-        type="password"
-        autoComplete="off"
-        placeholder="sk-..."
-        value={agentSettings.apiKey}
-        onChange={(event) => onAgentSettingsChange({ ...agentSettings, apiKey: event.target.value })}
-      />
-      <div className="agent-settings-grid">
-        <label className="field-stack">
-          Model
-          <input
-            aria-label="Agent model"
-            value={agentSettings.model}
-            onChange={(event) => onAgentSettingsChange({ ...agentSettings, model: event.target.value })}
-          />
-        </label>
-        <label className="field-stack">
-          Base URL
-          <input
-            aria-label="Agent base URL"
-            value={agentSettings.baseUrl}
-            onChange={(event) => onAgentSettingsChange({ ...agentSettings, baseUrl: event.target.value })}
-          />
-        </label>
-      </div>
-      <button
-        type="button"
-        className="text-tool-button"
-        onClick={() => onAgentSettingsChange({ ...DEFAULT_AGENT_SETTINGS })}
-      >
-        <Trash2 aria-hidden="true" />
-        Clear Agent Settings
-      </button>
-    </section>
-  );
-}
-
-function displayAgentProvider(provider: AgentSettings["provider"]): string {
-  return provider === "nvidia" ? "NVIDIA AI" : "OpenAI Responses";
 }
 
 interface TypeListProps {

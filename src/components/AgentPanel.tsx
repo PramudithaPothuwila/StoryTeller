@@ -2,16 +2,14 @@ import { Bot, CheckCircle2, Send, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import {
   AgentChangePlan,
-  AgentSettings,
   applyAgentChangePlan,
-  createAgentRequest,
   parseAgentResponsePayload,
   validateAgentChangePlan
 } from "../data/agent";
+import { requestAgentPlan } from "../data/cloudProjects";
 import { Selection, StoryProject } from "../types";
 
 interface AgentPanelProps {
-  agentSettings: AgentSettings;
   project: StoryProject;
   onClose: () => void;
   onProjectChange: (project: StoryProject) => void;
@@ -21,7 +19,6 @@ interface AgentPanelProps {
 }
 
 export function AgentPanel({
-  agentSettings,
   project,
   onClose,
   onProjectChange,
@@ -39,12 +36,6 @@ export function AgentPanel({
   async function requestPlan() {
     const cleanPrompt = prompt.trim();
 
-    if (!agentSettings.apiKey.trim()) {
-      setError("Add an API key in Settings before asking the agent.");
-      onStatusChange("Agent needs an API key");
-      return;
-    }
-
     if (!cleanPrompt) {
       setError("Describe what you want the agent to help with.");
       return;
@@ -56,14 +47,7 @@ export function AgentPanel({
     onStatusChange("Agent thinking...");
 
     try {
-      const response = await fetch(createAgentRequest(agentSettings, project, cleanPrompt));
-
-      if (!response.ok) {
-        const detail = await response.text();
-        throw new Error(detail || `Agent request failed with status ${response.status}`);
-      }
-
-      const nextPlan = parseAgentResponsePayload(await response.json());
+      const nextPlan = parseAgentResponsePayload(await requestAgentPlan(project, cleanPrompt));
       setPlan(nextPlan);
       onStatusChange("Agent plan ready");
     } catch (requestError) {

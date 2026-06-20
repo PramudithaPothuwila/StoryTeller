@@ -1467,6 +1467,10 @@ a.toolbar-button {
   background: var(--node-accent);
 }
 
+.node-handle--parallel {
+  opacity: 0.85;
+}
+
 .inspector {
   display: grid;
   align-content: start;

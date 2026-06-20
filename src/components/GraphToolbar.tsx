@@ -50,6 +50,8 @@ export function GraphToolbar({
       <div className="graph-toolbar__group graph-toolbar__group--items" role="group" aria-label="Add items">
         {itemTypes.map((type) => {
           const Icon = iconForName(type.icon);
+          const shortcut = itemTypeShortcutLabel(type.id, graphView);
+          const title = shortcut ? `Add ${type.label} (${shortcut})` : `Add ${type.label}`;
 
           return (
             <button
@@ -57,7 +59,8 @@ export function GraphToolbar({
               type="button"
               className="graph-toolbar__button"
               aria-label={`Add ${type.label}`}
-              title={`Add ${type.label}`}
+              aria-keyshortcuts={shortcut}
+              title={title}
               onClick={() => onCreateEntity(type.id)}
             >
               <Icon aria-hidden="true" style={{ color: type.color }} />
@@ -72,7 +75,8 @@ export function GraphToolbar({
             type="button"
             className={graphView === "world" ? "graph-toolbar__button is-active" : "graph-toolbar__button"}
             aria-label="Switch to World Building"
-            title="World Building"
+            aria-keyshortcuts="W"
+            title="World Building (W)"
             aria-pressed={graphView === "world"}
             onClick={() => onGraphViewChange("world")}
           >
@@ -82,7 +86,8 @@ export function GraphToolbar({
             type="button"
             className={graphView === "story_flow" ? "graph-toolbar__button is-active" : "graph-toolbar__button"}
             aria-label="Switch to Game Story"
-            title="Game Story"
+            aria-keyshortcuts="G"
+            title="Game Story (G)"
             aria-pressed={graphView === "story_flow"}
             onClick={() => onGraphViewChange("story_flow")}
           >
@@ -114,4 +119,33 @@ export function GraphToolbar({
       </div>
     </div>
   );
+}
+
+function itemTypeShortcutLabel(typeId: ItemTypeId, graphView: GraphLayoutView): string | undefined {
+  switch (typeId) {
+    case "character":
+      return "C";
+    case "note":
+      return "N";
+    case "location":
+      return "L";
+    case "event":
+      return graphView === "world" ? "E" : undefined;
+    case "ending":
+      return graphView === "story_flow" ? "E" : undefined;
+    case "item":
+      return "I";
+    case "faction":
+      return "F";
+    case "world_rule":
+      return "U";
+    case "scene":
+      return "S";
+    case "quest":
+      return "Q";
+    case "dialogue":
+      return "D";
+    default:
+      return undefined;
+  }
 }

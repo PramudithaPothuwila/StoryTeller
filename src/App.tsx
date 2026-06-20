@@ -42,13 +42,13 @@ import { BrowserRouter, Link, Navigate, Route, Routes, useNavigate, useParams, u
 import { AgentPanel } from "./components/AgentPanel";
 import { CloudConflictDialog } from "./components/CloudDialogs";
 import { DetailInspector } from "./components/DetailInspector";
-import { EntityNode, EntityNodeData } from "./components/EntityNode";
+import { EntityNode, type EntityNodeData, type EntityNodeHandle } from "./components/EntityNode";
 import { GameStoryPanel, type GameToolTab } from "./components/GameStoryPanel";
 import { GraphToolbar } from "./components/GraphToolbar";
 import { InAppGuide } from "./components/InAppGuide";
 import { RelationshipEdge, type RelationshipEdgeType } from "./components/RelationshipEdge";
 import { RulebookSidebar } from "./components/RulebookSidebar";
-import { AgentSettingsPanel, SettingsPage } from "./components/SettingsPage";
+import { SettingsPage } from "./components/SettingsPage";
 import { Sidebar } from "./components/Sidebar";
 import { TimelinePanel } from "./components/TimelinePanel";
 import {
@@ -75,6 +75,7 @@ import {
   getWorldTriggerRelationships,
   isRelationshipActiveAt,
   isGameStoryNodeEntity,
+  isGameStoryItemType,
   isGameStoryLinkType,
   moveTimelineEventInProject,
   nextEntityPosition,
@@ -98,7 +99,6 @@ import {
   readProjectFromDirectory,
   writeProjectToDirectory
 } from "./data/projectFiles";
-import { AgentSettings, DEFAULT_AGENT_SETTINGS, readStoredAgentSettings, writeStoredAgentSettings } from "./data/agent";
 import {
   CloudProjectConflictError,
   CloudProjectSummary,
@@ -185,7 +185,6 @@ interface RecentProjectCard {
 }
 
 interface CloudStoredSettings {
-  agentSettings?: AgentSettings;
   graphFocusDepth?: GraphFocusDepth;
 }
 
@@ -201,7 +200,10 @@ const FOLDER_ACCESS_UNAVAILABLE_MESSAGE =
   "Folder selection is unavailable in this browser. Use a browser with folder access to save folder projects.";
 const GRAPH_FOCUS_DEPTH_STORAGE_KEY = "storyteller.graphFocusDepth";
 const RECENT_PROJECTS_STORAGE_KEY = "storyteller.recentProjects";
+const PARALLEL_HANDLE_OFFSET_STEP = 18;
 const RELATIONSHIP_LABEL_OFFSET_STEP = 18;
+const modifierShortcutLabel =
+  typeof navigator !== "undefined" && navigator.platform.toLowerCase().includes("mac") ? "Cmd" : "Ctrl";
 const graphFocusDepthOptions: Array<{ label: string; value: GraphFocusDepth }> = [
   { label: "1", value: 1 },
   { label: "2", value: 2 },
@@ -222,15 +224,12 @@ function StoryAppRoutes() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [cloudUser, setCloudUser] = useState<CloudUser | null>(null);
-  const [cloudAgentSettings, setCloudAgentSettings] = useState<AgentSettings>(() => ({ ...DEFAULT_AGENT_SETTINGS }));
   const [cloudProjects, setCloudProjects] = useState<CloudProjectSummary[]>([]);
   const [cloudProjectsLoading, setCloudProjectsLoading] = useState(false);
   const [recentProjects, setRecentProjects] = useState<RecentProjectCard[]>(() => readStoredRecentProjects());
   const [workspaceSeeds, setWorkspaceSeeds] = useState<Record<string, WorkspaceProjectSeed>>({});
   const [routeStatus, setRouteStatus] = useState("Ready");
   const backupInputRef = useRef<HTMLInputElement>(null);
-  const cloudAgentSettingsUserRef = useRef<string | null>(null);
-  const cloudAgentSettingsDirtyRef = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -261,69 +260,6 @@ function StoryAppRoutes() {
       cancelled = true;
       unsubscribe();
     };
-  }, []);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    async function loadCloudAgentSettings() {
-      if (!cloudUser) {
-        cloudAgentSettingsUserRef.current = null;
-        cloudAgentSettingsDirtyRef.current = false;
-        setCloudAgentSettings({ ...DEFAULT_AGENT_SETTINGS });
-        return;
-      }
-
-      try {
-        const settings = parseCloudStoredSettings(await readCloudUserSettings());
-
-        if (cancelled) {
-          return;
-        }
-
-        cloudAgentSettingsUserRef.current = cloudUser.id;
-
-        if (settings.agentSettings) {
-          setCloudAgentSettings(settings.agentSettings);
-        } else {
-          setCloudAgentSettings({ ...DEFAULT_AGENT_SETTINGS });
-        }
-      } catch (error) {
-        if (!cancelled) {
-          setRouteStatus((error as Error).message);
-        }
-      }
-    }
-
-    void loadCloudAgentSettings();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [cloudUser]);
-
-  useEffect(() => {
-    if (!cloudUser || cloudAgentSettingsUserRef.current !== cloudUser.id || !cloudAgentSettingsDirtyRef.current) {
-      return;
-    }
-
-    const timeoutId = window.setTimeout(() => {
-      void (async () => {
-        const currentSettings = parseCloudStoredSettings(await readCloudUserSettings());
-        await writeCloudUserSettings({
-          ...currentSettings,
-          agentSettings: cloudAgentSettings
-        });
-        cloudAgentSettingsDirtyRef.current = false;
-      })().catch((error) => setRouteStatus((error as Error).message));
-    }, 500);
-
-    return () => window.clearTimeout(timeoutId);
-  }, [cloudAgentSettings, cloudUser]);
-
-  const handleCloudAgentSettingsChange = useCallback((settings: AgentSettings) => {
-    cloudAgentSettingsDirtyRef.current = true;
-    setCloudAgentSettings(settings);
   }, []);
 
   const rememberRecentProject = useCallback((recentProject: RecentProjectCard) => {
@@ -651,10 +587,8 @@ function StoryAppRoutes() {
           element={
             <AuthPage
               user={cloudUser}
-              agentSettings={cloudAgentSettings}
               status={routeStatus}
               onMagicLink={handleMagicLink}
-              onAgentSettingsChange={handleCloudAgentSettingsChange}
               onPasswordSignIn={handlePasswordSignIn}
               onPasswordSignUp={handlePasswordSignUp}
               onSignOut={handleSignOut}
@@ -666,7 +600,6 @@ function StoryAppRoutes() {
           element={
             <WorkspaceRoute
               cloudUser={cloudUser}
-              cloudAgentSettings={cloudAgentSettings}
               recentProjects={recentProjects}
               workspaceSeeds={workspaceSeeds}
               onCloudProjectSaved={handleCloudProjectSaved}
@@ -682,7 +615,6 @@ function StoryAppRoutes() {
 
 interface WorkspaceRouteProps {
   cloudUser: CloudUser | null;
-  cloudAgentSettings: AgentSettings;
   recentProjects: RecentProjectCard[];
   workspaceSeeds: Record<string, WorkspaceProjectSeed>;
   onCloudProjectSaved: (project: CloudProjectSummary) => void;
@@ -691,7 +623,6 @@ interface WorkspaceRouteProps {
 
 function WorkspaceRoute({
   cloudUser,
-  cloudAgentSettings,
   recentProjects,
   workspaceSeeds,
   onCloudProjectSaved,
@@ -710,7 +641,6 @@ function WorkspaceRoute({
     <ReactFlowProvider>
       <StoryWorkspace
         cloudUser={cloudUser}
-        cloudAgentSettings={cloudAgentSettings}
         routeProjectId={projectId}
         seed={seed}
         onCloudProjectSaved={onCloudProjectSaved}
@@ -987,9 +917,7 @@ function HomePage({
 
 interface AuthPageProps {
   user: CloudUser | null;
-  agentSettings: AgentSettings;
   status: string;
-  onAgentSettingsChange: (settings: AgentSettings) => void;
   onMagicLink: (email: string) => Promise<void>;
   onPasswordSignIn: (email: string, password: string) => Promise<void>;
   onPasswordSignUp: (email: string, password: string) => Promise<void>;
@@ -998,9 +926,7 @@ interface AuthPageProps {
 
 function AuthPage({
   user,
-  agentSettings,
   status,
-  onAgentSettingsChange,
   onMagicLink,
   onPasswordSignIn,
   onPasswordSignUp,
@@ -1056,25 +982,18 @@ function AuthPage({
 
       <section className="auth-panel">
         {user ? (
-          <div className="auth-account-layout">
-            <div className="cloud-stack">
-              <div className="cloud-account">
-                <Database aria-hidden="true" />
-                <div>
-                  <strong>{user.email ?? "Signed in"}</strong>
-                  <span>{user.id}</span>
-                </div>
+          <div className="cloud-stack">
+            <div className="cloud-account">
+              <Database aria-hidden="true" />
+              <div>
+                <strong>{user.email ?? "Signed in"}</strong>
+                <span>{user.id}</span>
               </div>
-              <button type="button" className="text-tool-button danger" disabled={busy} onClick={() => void run(onSignOut, "Signed out")}>
-                <LogOut aria-hidden="true" />
-                Sign Out
-              </button>
             </div>
-            <AgentSettingsPanel
-              agentSettings={agentSettings}
-              headingId="account-agent-settings-title"
-              onAgentSettingsChange={onAgentSettingsChange}
-            />
+            <button type="button" className="text-tool-button danger" disabled={busy} onClick={() => void run(onSignOut, "Signed out")}>
+              <LogOut aria-hidden="true" />
+              Sign Out
+            </button>
           </div>
         ) : (
           <form className="cloud-stack" onSubmit={(event) => void handlePasswordSubmit(event)}>
@@ -1133,7 +1052,6 @@ function AuthPage({
 
 interface StoryWorkspaceProps {
   cloudUser: CloudUser | null;
-  cloudAgentSettings: AgentSettings;
   routeProjectId?: string;
   seed?: WorkspaceProjectSeed;
   onCloudProjectSaved: (project: CloudProjectSummary) => void;
@@ -1142,7 +1060,6 @@ interface StoryWorkspaceProps {
 
 function StoryWorkspace({
   cloudUser,
-  cloudAgentSettings,
   routeProjectId,
   seed,
   onCloudProjectSaved,
@@ -1170,7 +1087,6 @@ function StoryWorkspace({
   const [cloudSyncStatus, setCloudSyncStatus] = useState<CloudSyncStatus>("signed_out");
   const [cloudVersion, setCloudVersion] = useState<number | null>(null);
   const [cloudConflictOpen, setCloudConflictOpen] = useState(false);
-  const [agentSettings, setAgentSettings] = useState<AgentSettings>(() => readStoredAgentSettings());
   const [defaultRelationshipType, setDefaultRelationshipType] = useState<LinkTypeId>("relates_to");
   const [activePage, setActivePage] = useState<ActivePage>("workspace");
   const [guideOpen, setGuideOpen] = useState(false);
@@ -1183,6 +1099,7 @@ function StoryWorkspace({
   const [triggerPick, setTriggerPick] = useState<TriggerPickState | null>(null);
   const [activeGameTool, setActiveGameTool] = useState<GameToolTab>("state");
   const cloudSettingsUserRef = useRef<string | null>(null);
+  const sidebarSearchInputRef = useRef<HTMLInputElement>(null);
   const graphFocus = useMemo(
     () => createEntityGraphFocus(project, selection, graphFocusDepth, graphView),
     [graphFocusDepth, graphView, project, selection]
@@ -1192,15 +1109,17 @@ function StoryWorkspace({
     () => (project.projectMode === "game_story" ? getGameContinuityIssues(project).length : 0),
     [project]
   );
-  const activeAgentSettings = storageMode === "cloud" ? cloudAgentSettings : agentSettings;
+  const agentAvailable = storageMode === "cloud" && Boolean(cloudUser);
 
   useEffect(() => {
     graphFocusDepthRef.current = graphFocusDepth;
   }, [graphFocusDepth]);
 
   useEffect(() => {
-    writeStoredAgentSettings(agentSettings);
-  }, [agentSettings]);
+    if (!agentAvailable) {
+      setAgentOpen(false);
+    }
+  }, [agentAvailable]);
 
   useEffect(() => {
     setCloudSyncStatus((currentStatus) => {
@@ -1389,7 +1308,7 @@ function StoryWorkspace({
 
   const edges = useMemo<RelationshipEdgeType[]>(
     () => {
-      const labelOffsetByRelationshipId = relationshipLabelOffsetById(graphRelationships);
+      const parallelLayoutByRelationshipId = parallelRelationshipLayoutById(graphRelationships);
 
       return graphRelationships.map((relationship) => {
         const resolvedRelationship = resolveRelationshipAt(project, relationship, selectedTimelineEventId);
@@ -1407,10 +1326,12 @@ function StoryWorkspace({
           id: relationship.id,
           source: relationship.sourceId,
           target: relationship.targetId,
+          sourceHandle: parallelLayoutByRelationshipId.get(relationship.id)?.sourceHandle,
+          targetHandle: parallelLayoutByRelationshipId.get(relationship.id)?.targetHandle,
           label: gameRelationship?.choiceText || resolvedRelationship.label || linkType.label,
           type: "relationship",
           data: {
-            labelOffset: labelOffsetByRelationshipId.get(relationship.id) ?? 0
+            labelOffset: parallelLayoutByRelationshipId.get(relationship.id)?.labelOffset ?? 0
           },
           markerEnd:
             linkType.direction === "directed"
@@ -2095,6 +2016,219 @@ function StoryWorkspace({
     onCloudProjectSaved(savedProject);
   }, [cloudUser, loadProjectIntoWorkspace, onCloudProjectSaved, project]);
 
+  useEffect(() => {
+    function handleWorkspaceShortcut(event: KeyboardEvent) {
+      if (guideOpen || cloudConflictOpen || isShortcutEditableTarget(event.target)) {
+        return;
+      }
+
+      const key = event.key.toLowerCase();
+      const hasModifier = event.ctrlKey || event.metaKey;
+      const hasOnlyModifier = hasModifier && !event.altKey && !event.shiftKey;
+
+      if (hasOnlyModifier && key === "s") {
+        event.preventDefault();
+        void (storageMode === "cloud" ? handleSaveToCloud() : handleSaveProject());
+        return;
+      }
+
+      if (hasOnlyModifier && key === "e") {
+        event.preventDefault();
+        handleExportBackup();
+        return;
+      }
+
+      if (hasOnlyModifier && key === "f") {
+        event.preventDefault();
+        sidebarSearchInputRef.current?.focus();
+        sidebarSearchInputRef.current?.select();
+        return;
+      }
+
+      if (hasOnlyModifier && (key === "backspace" || key === "delete")) {
+        event.preventDefault();
+        if (selection?.kind === "entity") {
+          handleDeleteEntity(selection.id);
+        } else if (selection?.kind === "relationship") {
+          handleDeleteRelationship(selection.id);
+        }
+        return;
+      }
+
+      if (event.altKey && !event.ctrlKey && !event.metaKey && gameToolsVisible) {
+        if (key === "1") {
+          event.preventDefault();
+          setActiveGameTool("state");
+          return;
+        }
+
+        if (key === "2") {
+          event.preventDefault();
+          setActiveGameTool("preview");
+          return;
+        }
+
+        if (key === "3") {
+          event.preventDefault();
+          setActiveGameTool("continuity");
+          return;
+        }
+      }
+
+      if (hasModifier || event.altKey) {
+        return;
+      }
+
+      if (event.key === "?" || (event.shiftKey && event.key === "/")) {
+        event.preventDefault();
+        setGuideOpen(true);
+        return;
+      }
+
+      if (event.key === "Escape") {
+        event.preventDefault();
+
+        if (triggerPick) {
+          handleCancelTriggerPick();
+          return;
+        }
+
+        if (activePage === "settings") {
+          setActivePage("workspace");
+          return;
+        }
+
+        if (rulebookOpen) {
+          setRulebookOpen(false);
+          return;
+        }
+
+        if (agentOpen) {
+          setAgentOpen(false);
+          return;
+        }
+
+        if (gameToolsVisible) {
+          setGameToolsOpen(false);
+          return;
+        }
+
+        if (selection || selectedTimelineEventId) {
+          setSelection(null);
+          setSelectedTimelineEventId(null);
+        }
+        return;
+      }
+
+      if (event.shiftKey && key === "t") {
+        event.preventDefault();
+        handleAddTimelineTrack();
+        return;
+      }
+
+      if (event.shiftKey) {
+        return;
+      }
+
+      const focusDepthByKey: Record<string, GraphFocusDepth> = {
+        "0": "all",
+        "1": 1,
+        "2": 2,
+        "3": 3,
+        "4": 4
+      };
+
+      if (key in focusDepthByKey) {
+        event.preventDefault();
+        handleGraphFocusDepthChange(focusDepthByKey[key]);
+        return;
+      }
+
+      switch (key) {
+        case "r":
+          event.preventDefault();
+          setActivePage("workspace");
+          setRulebookOpen((open) => !open);
+          return;
+        case "a":
+          if (agentAvailable) {
+            event.preventDefault();
+            setActivePage("workspace");
+            setAgentOpen((open) => !open);
+          }
+          return;
+        case "b":
+          if (gameToolsAvailable) {
+            event.preventDefault();
+            setActivePage("workspace");
+            setGameToolsOpen((open) => !open);
+          }
+          return;
+        case "w":
+          if (project.projectMode === "game_story") {
+            event.preventDefault();
+            handleGraphViewChange("world");
+          }
+          return;
+        case "g":
+          if (project.projectMode === "game_story") {
+            event.preventDefault();
+            handleGraphViewChange("story_flow");
+          }
+          return;
+        case "t":
+          event.preventDefault();
+          setTimelineCollapsed((collapsed) => !collapsed);
+          return;
+      }
+
+      const shortcutItemType = itemTypeShortcutForKey(key, graphView);
+
+      if (
+        shortcutItemType &&
+        project.itemTypes.some(
+          (type) =>
+            type.id === shortcutItemType &&
+            (project.projectMode !== "game_story" ||
+              (graphView === "story_flow" ? isGameStoryItemType(type.id) : !isGameStoryItemType(type.id)))
+        )
+      ) {
+        event.preventDefault();
+        setActivePage("workspace");
+        handleCreateEntity(shortcutItemType);
+      }
+    }
+
+    window.addEventListener("keydown", handleWorkspaceShortcut);
+
+    return () => window.removeEventListener("keydown", handleWorkspaceShortcut);
+  }, [
+    activePage,
+    agentOpen,
+    cloudConflictOpen,
+    gameToolsAvailable,
+    gameToolsVisible,
+    graphView,
+    guideOpen,
+    handleAddTimelineTrack,
+    handleCancelTriggerPick,
+    handleCreateEntity,
+    handleDeleteEntity,
+    handleDeleteRelationship,
+    handleExportBackup,
+    handleGraphFocusDepthChange,
+    handleGraphViewChange,
+    handleSaveProject,
+    handleSaveToCloud,
+    project.itemTypes,
+    project.projectMode,
+    rulebookOpen,
+    selectedTimelineEventId,
+    selection,
+    storageMode,
+    triggerPick
+  ]);
+
   return (
     <div className="app-shell">
       <header className="topbar">
@@ -2137,30 +2271,43 @@ function StoryWorkspace({
           <HeaderIconButton
             label="Save Project"
             active={cloudSyncStatus === "saving"}
+            shortcut={`${modifierShortcutLabel}+S`}
+            ariaKeyShortcuts="Control+S Meta+S"
             onClick={() => void (storageMode === "cloud" ? handleSaveToCloud() : handleSaveProject())}
           >
             <Save aria-hidden="true" />
           </HeaderIconButton>
-          <HeaderIconButton label="Export Backup" onClick={handleExportBackup}>
+          <HeaderIconButton
+            label="Export Backup"
+            shortcut={`${modifierShortcutLabel}+E`}
+            ariaKeyShortcuts="Control+E Meta+E"
+            onClick={handleExportBackup}
+          >
             <Download aria-hidden="true" />
           </HeaderIconButton>
-          <HeaderIconButton label="Rulebook" onClick={handleOpenRulebook}>
+          <HeaderIconButton label="Rulebook" shortcut="R" ariaKeyShortcuts="R" onClick={handleOpenRulebook}>
             <ScrollText aria-hidden="true" />
           </HeaderIconButton>
-          <HeaderIconButton
-            label="AI Agent"
-            active={agentOpen}
-            onClick={() => {
-              setActivePage("workspace");
-              setAgentOpen((open) => !open);
-            }}
-          >
-            <Bot aria-hidden="true" />
-          </HeaderIconButton>
+          {agentAvailable ? (
+            <HeaderIconButton
+              label="AI Agent"
+              active={agentOpen}
+              shortcut="A"
+              ariaKeyShortcuts="A"
+              onClick={() => {
+                setActivePage("workspace");
+                setAgentOpen((open) => !open);
+              }}
+            >
+              <Bot aria-hidden="true" />
+            </HeaderIconButton>
+          ) : null}
           {gameToolsAvailable ? (
             <HeaderIconButton
               label="Branching RPG"
               active={gameToolsVisible}
+              shortcut="B"
+              ariaKeyShortcuts="B"
               onClick={() => {
                 setActivePage("workspace");
                 setGameToolsOpen((open) => !open);
@@ -2169,12 +2316,14 @@ function StoryWorkspace({
               <Gamepad2 aria-hidden="true" />
             </HeaderIconButton>
           ) : null}
-          <HeaderIconButton label="Guide" active={guideOpen} onClick={() => setGuideOpen(true)}>
+          <HeaderIconButton label="Guide" active={guideOpen} shortcut="?" ariaKeyShortcuts="?" onClick={() => setGuideOpen(true)}>
             <CircleHelp aria-hidden="true" />
           </HeaderIconButton>
           <HeaderIconButton
             label={activePage === "settings" ? "Back to Workspace" : "Open Settings"}
             active={activePage === "settings"}
+            shortcut="Esc"
+            ariaKeyShortcuts="Escape"
             onClick={() => setActivePage((page) => (page === "settings" ? "workspace" : "settings"))}
           >
             {activePage === "settings" ? <ArrowLeft aria-hidden="true" /> : <Settings2 aria-hidden="true" />}
@@ -2195,12 +2344,9 @@ function StoryWorkspace({
       {activePage === "settings" ? (
         <SettingsPage
           project={project}
-          agentSettings={activeAgentSettings}
-          agentSettingsEditable={storageMode === "local"}
           defaultRelationshipType={defaultRelationshipType}
           onAddItemType={handleAddItemType}
           onAddLinkType={handleAddLinkType}
-          onAgentSettingsChange={setAgentSettings}
           onBackToWorkspace={() => setActivePage("workspace")}
           onDefaultRelationshipTypeChange={setDefaultRelationshipType}
           onDeleteItemType={handleDeleteItemType}
@@ -2214,6 +2360,7 @@ function StoryWorkspace({
           <Sidebar
             project={project}
             search={search}
+            searchInputRef={sidebarSearchInputRef}
             onSelectEntity={(id) => setSelection({ kind: "entity", id })}
             onSearchChange={setSearch}
           />
@@ -2306,9 +2453,8 @@ function StoryWorkspace({
             />
           ) : null}
 
-          {agentOpen ? (
+          {agentAvailable && agentOpen ? (
             <AgentPanel
-              agentSettings={activeAgentSettings}
               project={project}
               onClose={() => setAgentOpen(false)}
               onProjectChange={markProjectChanged}
@@ -2336,24 +2482,73 @@ function StoryWorkspace({
 
 interface HeaderIconButtonProps {
   active?: boolean;
+  ariaKeyShortcuts?: string;
   children: ReactNode;
   label: string;
   onClick: () => void;
+  shortcut?: string;
 }
 
-function HeaderIconButton({ active = false, children, label, onClick }: HeaderIconButtonProps) {
+function HeaderIconButton({
+  active = false,
+  ariaKeyShortcuts,
+  children,
+  label,
+  onClick,
+  shortcut
+}: HeaderIconButtonProps) {
+  const tooltip = shortcut ? `${label} (${shortcut})` : label;
+
   return (
     <button
       type="button"
       className={active ? "toolbar-button is-active" : "toolbar-button"}
       aria-label={label}
-      title={label}
-      data-tooltip={label}
+      aria-keyshortcuts={ariaKeyShortcuts}
+      title={tooltip}
+      data-tooltip={tooltip}
       onClick={onClick}
     >
       {children}
     </button>
   );
+}
+
+function isShortcutEditableTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof Element)) {
+    return false;
+  }
+
+  return Boolean(
+    target.closest("input, textarea, select, [contenteditable]")
+  );
+}
+
+function itemTypeShortcutForKey(key: string, graphView: GraphView): ItemTypeId | null {
+  switch (key) {
+    case "c":
+      return "character";
+    case "n":
+      return "note";
+    case "l":
+      return "location";
+    case "e":
+      return graphView === "story_flow" ? "ending" : BUILT_IN_EVENT_TYPE_ID;
+    case "i":
+      return "item";
+    case "f":
+      return "faction";
+    case "u":
+      return BUILT_IN_WORLD_RULE_TYPE_ID;
+    case "s":
+      return "scene";
+    case "q":
+      return "quest";
+    case "d":
+      return "dialogue";
+    default:
+      return null;
+  }
 }
 
 function firstProjectSelection(project: StoryProject): Selection | null {
@@ -2438,10 +2633,12 @@ function projectNodes(
   graphView: GraphView
 ): Node<EntityNodeData, "storyEntity">[] {
   const layout = projectLayoutForView(project, graphView);
+  const parallelHandlesByEntityId = parallelRelationshipHandlesByEntityId(graphViewRelationships(project, graphView));
 
   return graphViewEntities(project, graphView).map((entity) => {
     const gameMetadata = entity.gameStory ? normalizeGameStoryEntityMetadata(entity.gameStory, entity.type) : null;
     const outgoingTargets = outgoingGraphViewTargets(project, entity.id);
+    const parallelHandles = parallelHandlesByEntityId.get(entity.id);
 
     return {
       id: entity.id,
@@ -2450,6 +2647,8 @@ function projectNodes(
       data: {
         entity,
         itemType: findItemType(project, entity.type),
+        sourceHandles: parallelHandles?.sourceHandles ?? [],
+        targetHandles: parallelHandles?.targetHandles ?? [],
         isSelected: selection?.kind === "entity" && selection.id === entity.id,
         isConnectedToFocus: graphFocus?.connectedEntityIds.has(entity.id) ?? false,
         isFaded: Boolean(graphFocus && !graphFocus.connectedEntityIds.has(entity.id)),
@@ -2476,12 +2675,14 @@ function syncProjectNodes(
 ): Node<EntityNodeData, "storyEntity">[] {
   const currentNodeById = new Map(currentNodes.map((node) => [node.id, node]));
   const layout = projectLayoutForView(project, graphView);
+  const parallelHandlesByEntityId = parallelRelationshipHandlesByEntityId(graphViewRelationships(project, graphView));
 
   return graphViewEntities(project, graphView).map((entity) => {
     const currentNode = currentNodeById.get(entity.id);
     const savedPosition = layout[entity.id];
     const gameMetadata = entity.gameStory ? normalizeGameStoryEntityMetadata(entity.gameStory, entity.type) : null;
     const outgoingTargets = outgoingGraphViewTargets(project, entity.id);
+    const parallelHandles = parallelHandlesByEntityId.get(entity.id);
     const position = isFinitePoint(savedPosition)
       ? savedPosition
       : isFinitePoint(currentNode?.position)
@@ -2496,6 +2697,8 @@ function syncProjectNodes(
       data: {
         entity,
         itemType: findItemType(project, entity.type),
+        sourceHandles: parallelHandles?.sourceHandles ?? [],
+        targetHandles: parallelHandles?.targetHandles ?? [],
         isSelected: selection?.kind === "entity" && selection.id === entity.id,
         isConnectedToFocus: graphFocus?.connectedEntityIds.has(entity.id) ?? false,
         isFaded: Boolean(graphFocus && !graphFocus.connectedEntityIds.has(entity.id)),
@@ -2535,30 +2738,99 @@ function graphViewRelationships(project: StoryProject, graphView: GraphView): St
   });
 }
 
-function relationshipLabelOffsetById(relationships: StoryRelationship[]): Map<string, number> {
-  const relationshipsBySourceId = new Map<string, StoryRelationship[]>();
+interface ParallelRelationshipLayout {
+  sourceHandle: string;
+  targetHandle: string;
+  labelOffset: number;
+}
 
-  for (const relationship of relationships) {
-    relationshipsBySourceId.set(relationship.sourceId, [
-      ...(relationshipsBySourceId.get(relationship.sourceId) ?? []),
-      relationship
-    ]);
-  }
+interface EntityParallelHandles {
+  sourceHandles: EntityNodeHandle[];
+  targetHandles: EntityNodeHandle[];
+}
 
-  const offsetByRelationshipId = new Map<string, number>();
+function parallelRelationshipLayoutById(relationships: StoryRelationship[]): Map<string, ParallelRelationshipLayout> {
+  const layoutByRelationshipId = new Map<string, ParallelRelationshipLayout>();
 
-  for (const sourceRelationships of relationshipsBySourceId.values()) {
-    if (sourceRelationships.length === 1) {
-      offsetByRelationshipId.set(sourceRelationships[0].id, 0);
+  for (const parallelRelationships of parallelRelationshipGroups(relationships).values()) {
+    if (parallelRelationships.length <= 1) {
       continue;
     }
 
-    sourceRelationships.forEach((relationship, index) => {
-      offsetByRelationshipId.set(relationship.id, relationshipLabelOffset(index));
+    parallelRelationships.forEach((relationship, index) => {
+      layoutByRelationshipId.set(relationship.id, {
+        sourceHandle: parallelSourceHandleId(relationship.targetId, index),
+        targetHandle: parallelTargetHandleId(relationship.sourceId, index),
+        labelOffset: relationshipLabelOffset(index)
+      });
     });
   }
 
-  return offsetByRelationshipId;
+  return layoutByRelationshipId;
+}
+
+function parallelRelationshipHandlesByEntityId(relationships: StoryRelationship[]): Map<string, EntityParallelHandles> {
+  const handlesByEntityId = new Map<string, EntityParallelHandles>();
+
+  for (const parallelRelationships of parallelRelationshipGroups(relationships).values()) {
+    if (parallelRelationships.length <= 1) {
+      continue;
+    }
+
+    parallelRelationships.forEach((relationship, index) => {
+      const sourceHandles = entityParallelHandles(handlesByEntityId, relationship.sourceId);
+      const targetHandles = entityParallelHandles(handlesByEntityId, relationship.targetId);
+      const offset = relationshipHandleOffset(index);
+
+      sourceHandles.sourceHandles.push({
+        id: parallelSourceHandleId(relationship.targetId, index),
+        offset
+      });
+      targetHandles.targetHandles.push({
+        id: parallelTargetHandleId(relationship.sourceId, index),
+        offset
+      });
+    });
+  }
+
+  return handlesByEntityId;
+}
+
+function parallelRelationshipGroups(relationships: StoryRelationship[]): Map<string, StoryRelationship[]> {
+  const relationshipsBySourceTarget = new Map<string, StoryRelationship[]>();
+
+  for (const relationship of relationships) {
+    const key = `${relationship.sourceId}\u0000${relationship.targetId}`;
+    relationshipsBySourceTarget.set(key, [...(relationshipsBySourceTarget.get(key) ?? []), relationship]);
+  }
+
+  return relationshipsBySourceTarget;
+}
+
+function entityParallelHandles(handlesByEntityId: Map<string, EntityParallelHandles>, entityId: string): EntityParallelHandles {
+  const handles = handlesByEntityId.get(entityId) ?? {
+    sourceHandles: [],
+    targetHandles: []
+  };
+
+  handlesByEntityId.set(entityId, handles);
+
+  return handles;
+}
+
+function parallelSourceHandleId(targetId: string, index: number): string {
+  return `parallel-source-${targetId}-${index}`;
+}
+
+function parallelTargetHandleId(sourceId: string, index: number): string {
+  return `parallel-target-${sourceId}-${index}`;
+}
+
+function relationshipHandleOffset(index: number): number {
+  const lane = Math.floor(index / 2) + 1;
+  const direction = index % 2 === 0 ? -1 : 1;
+
+  return lane * direction * PARALLEL_HANDLE_OFFSET_STEP;
 }
 
 function relationshipLabelOffset(index: number): number {
@@ -2805,10 +3077,6 @@ function parseCloudStoredSettings(value: unknown): CloudStoredSettings {
   const candidate = value as Partial<CloudStoredSettings>;
   const settings: CloudStoredSettings = {};
 
-  if (isAgentSettings(candidate.agentSettings)) {
-    settings.agentSettings = candidate.agentSettings;
-  }
-
   const graphFocusDepth = parseGraphFocusDepth(String(candidate.graphFocusDepth ?? ""));
 
   if (graphFocusDepth) {
@@ -2816,16 +3084,6 @@ function parseCloudStoredSettings(value: unknown): CloudStoredSettings {
   }
 
   return settings;
-}
-
-function isAgentSettings(value: unknown): value is AgentSettings {
-  return (
-    Boolean(value) &&
-    typeof value === "object" &&
-    typeof (value as Partial<AgentSettings>).apiKey === "string" &&
-    typeof (value as Partial<AgentSettings>).baseUrl === "string" &&
-    typeof (value as Partial<AgentSettings>).model === "string"
-  );
 }
 
 function projectFolderErrorMessage(error: unknown, abortMessage: string): string {

@@ -10,6 +10,7 @@ import {
   listCloudProjects,
   openCloudProject,
   readCloudUserSettings,
+  requestAgentPlan,
   saveCloudProject,
   sendMagicLink,
   signInWithPassword,
@@ -83,8 +84,10 @@ vi.mock("@xyflow/react", () => ({
       labelStyle?: { opacity?: number };
       markerEnd?: { color?: string };
       source: string;
+      sourceHandle?: string | null;
       style?: { opacity?: number; stroke?: string; strokeWidth?: number };
       target: string;
+      targetHandle?: string | null;
       type?: string;
     }>;
     onConnect?: (connection: { source: string; target: string }) => void;
@@ -174,9 +177,11 @@ vi.mock("@xyflow/react", () => ({
           data-marker-color={edge.markerEnd?.color ?? ""}
           data-opacity={`${edge.style?.opacity ?? ""}`}
           data-source={edge.source}
+          data-source-handle={edge.sourceHandle ?? ""}
           data-stroke={edge.style?.stroke ?? ""}
           data-stroke-width={`${edge.style?.strokeWidth ?? ""}`}
           data-target={edge.target}
+          data-target-handle={edge.targetHandle ?? ""}
           data-testid={`flow-edge-${edge.id}`}
           data-type={edge.type ?? ""}
         >
@@ -266,6 +271,14 @@ vi.mock("./data/cloudProjects", async () => {
       updatedAt: "2026-01-01T00:00:00.000Z"
     })),
     readCloudUserSettings: vi.fn(async () => null),
+    requestAgentPlan: vi.fn(async () => ({
+      output_text: JSON.stringify({
+        summary: "No changes.",
+        assumptions: [],
+        followUpQuestions: [],
+        changes: []
+      })
+    })),
     saveCloudProject: vi.fn(async (id, version, project) => ({
       id,
       title: project.title,
@@ -346,6 +359,14 @@ describe("App project commands", () => {
     vi.mocked(getCurrentCloudUser).mockResolvedValue(null);
     vi.mocked(subscribeToCloudAuth).mockReturnValue(() => undefined);
     vi.mocked(readCloudUserSettings).mockResolvedValue(null);
+    vi.mocked(requestAgentPlan).mockResolvedValue({
+      output_text: JSON.stringify({
+        summary: "No changes.",
+        assumptions: [],
+        followUpQuestions: [],
+        changes: []
+      })
+    });
     vi.mocked(writeCloudUserSettings).mockResolvedValue(undefined);
     vi.mocked(signInWithPassword).mockResolvedValue({ id: "user-a", email: "ada@example.com" });
     vi.mocked(sendMagicLink).mockResolvedValue(undefined);
@@ -419,9 +440,9 @@ describe("App project commands", () => {
     expect(screen.getByRole("button", { name: "Select Folder" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Save Project" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Export Backup" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Guide" })).toHaveAttribute("title", "Guide");
-    expect(screen.getByRole("button", { name: "Open Settings" })).toHaveAttribute("title", "Open Settings");
-    expect(screen.getByRole("button", { name: "Save Project" })).toHaveAttribute("title", "Save Project");
+    expect(screen.getByRole("button", { name: "Guide" })).toHaveAttribute("title", "Guide (?)");
+    expect(screen.getByRole("button", { name: "Open Settings" })).toHaveAttribute("title", "Open Settings (Esc)");
+    expect(screen.getByRole("button", { name: "Save Project" })).toHaveAttribute("title", "Save Project (Ctrl+S)");
     expect(screen.getByText("Not selected")).toBeInTheDocument();
     expect(screen.getByRole("toolbar", { name: "Graph tools" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Add Character" })).toBeInTheDocument();
@@ -492,10 +513,193 @@ describe("App project commands", () => {
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "Guide" })).not.toBeInTheDocument());
   });
 
-  it("opens and closes the AI agent panel from the topbar", async () => {
+  it("handles save, export, and search keyboard shortcuts", async () => {
     render(<App />);
 
     await waitFor(() => expect(screen.getByText("Loaded Project")).toBeInTheDocument());
+
+    fireEvent.keyDown(window, { key: "s", ctrlKey: true });
+
+    await waitFor(() => expect(writeProjectToDirectory).toHaveBeenCalledTimes(1));
+    expect(writeProjectToDirectory).toHaveBeenLastCalledWith(expect.objectContaining({ title: "Loaded Project" }), folderHandle);
+
+    fireEvent.keyDown(window, { key: "e", ctrlKey: true });
+
+    expect(createProjectBundle).toHaveBeenCalledWith(expect.objectContaining({ title: "Loaded Project" }));
+    expect(anchorClickSpy).toHaveBeenCalledTimes(1);
+
+    fireEvent.keyDown(window, { key: "f", ctrlKey: true });
+
+    expect(screen.getByLabelText("Search story items")).toHaveFocus();
+    fireEvent.keyDown(screen.getByLabelText("Search story items"), { key: "s", ctrlKey: true });
+    expect(writeProjectToDirectory).toHaveBeenCalledTimes(1);
+  });
+
+  it("toggles workspace panels, graph views, game tabs, and timeline with shortcuts", async () => {
+    const fixture = createGameStoryFixture();
+    mockRouteProject(fixture.project);
+    render(<App />);
+
+    await waitFor(() => expect(screen.getByRole("button", { name: "Switch to Game Story" })).toHaveClass("is-active"));
+
+    fireEvent.keyDown(window, { key: "r" });
+    expect(screen.getByRole("complementary", { name: "Rulebook" })).toBeInTheDocument();
+
+    fireEvent.keyDown(window, { key: "a" });
+    expect(screen.queryByRole("complementary", { name: "AI Agent" })).not.toBeInTheDocument();
+
+    fireEvent.keyDown(window, { key: "b" });
+    expect(screen.getByRole("complementary", { name: "Game Story Tools" })).toBeInTheDocument();
+
+    fireEvent.keyDown(window, { key: "2", altKey: true });
+    expect(screen.getByRole("button", { name: "Preview" })).toHaveClass("is-active");
+    fireEvent.keyDown(window, { key: "3", altKey: true });
+    expect(screen.getByRole("button", { name: /Continuity/ })).toHaveClass("is-active");
+    fireEvent.keyDown(window, { key: "1", altKey: true });
+    expect(screen.getByRole("button", { name: "State" })).toHaveClass("is-active");
+
+    fireEvent.keyDown(window, { key: "w" });
+    await waitFor(() => expect(screen.getByRole("button", { name: "Switch to World Building" })).toHaveClass("is-active"));
+    fireEvent.keyDown(window, { key: "g" });
+    await waitFor(() => expect(screen.getByRole("button", { name: "Switch to Game Story" })).toHaveClass("is-active"));
+
+    expect(screen.getByLabelText("Timeline time")).toBeInTheDocument();
+    fireEvent.keyDown(window, { key: "t" });
+    expect(screen.queryByLabelText("Timeline time")).not.toBeInTheDocument();
+    fireEvent.keyDown(window, { key: "T", shiftKey: true });
+    expect(screen.getByText(/2 tracks/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Open Settings" }));
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Settings" })).toBeInTheDocument());
+    fireEvent.keyDown(window, { key: "Escape" });
+    await waitFor(() => expect(document.querySelector(".workspace")).not.toBeNull());
+  });
+
+  it("creates visible graph items and changes graph focus depth with shortcuts", async () => {
+    render(<App />);
+
+    await waitFor(() => expect(screen.getByText("Loaded Project")).toBeInTheDocument());
+
+    fireEvent.keyDown(window, { key: "c" });
+    expect((await screen.findAllByText("New Character")).length).toBeGreaterThan(0);
+
+    fireEvent.keyDown(window, { key: "4" });
+    expect(document.querySelector(".graph-depth-select__single-value")).toHaveTextContent("4");
+    fireEvent.keyDown(window, { key: "0" });
+    expect(document.querySelector(".graph-depth-select__single-value")).toHaveTextContent("All");
+
+    fireEvent.keyDown(window, { key: "f", ctrlKey: true });
+    fireEvent.keyDown(screen.getByLabelText("Search story items"), { key: "n" });
+    expect(screen.queryByText("New Note")).not.toBeInTheDocument();
+  });
+
+  it("uses context-aware creation shortcuts in Game Story graph views", async () => {
+    const fixture = createGameStoryFixture();
+    mockRouteProject(fixture.project);
+    render(<App />);
+
+    await waitFor(() => expect(screen.getByRole("button", { name: "Switch to Game Story" })).toHaveClass("is-active"));
+
+    fireEvent.keyDown(window, { key: "s" });
+    expect((await screen.findAllByText("New Scene")).length).toBeGreaterThan(0);
+
+    fireEvent.keyDown(window, { key: "e" });
+    expect((await screen.findAllByText("New Ending")).length).toBeGreaterThan(0);
+
+    fireEvent.keyDown(window, { key: "w" });
+    await waitFor(() => expect(screen.getByRole("button", { name: "Switch to World Building" })).toHaveClass("is-active"));
+
+    fireEvent.keyDown(window, { key: "e" });
+    expect((await screen.findAllByText("New Event")).length).toBeGreaterThan(0);
+  });
+
+  it("requires a modifier for selected-item deletion shortcuts and ignores them while typing", async () => {
+    const project = createBlankProject("Shortcut Delete Project");
+    const hero = createStoryEntity("character", project.itemTypes, "Shortcut Hero");
+
+    mockRouteProject({
+      ...project,
+      entities: {
+        [hero.id]: hero
+      }
+    });
+
+    render(<App />);
+
+    await waitFor(() => expect(screen.getByText("Shortcut Delete Project")).toBeInTheDocument());
+    expect(screen.getByTestId(`flow-node-${hero.id}`)).toBeInTheDocument();
+
+    fireEvent.keyDown(window, { key: "Delete" });
+    expect(screen.getByTestId(`flow-node-${hero.id}`)).toBeInTheDocument();
+
+    fireEvent.change(screen.getByDisplayValue("Shortcut Hero"), { target: { value: "Typing Hero" } });
+    fireEvent.keyDown(screen.getByDisplayValue("Typing Hero"), { key: "Backspace", ctrlKey: true });
+    expect(screen.getByTestId(`flow-node-${hero.id}`)).toBeInTheDocument();
+
+    (document.activeElement as HTMLElement | null)?.blur();
+    fireEvent.keyDown(window, { key: "Backspace", ctrlKey: true });
+
+    await waitFor(() => expect(screen.queryByTestId(`flow-node-${hero.id}`)).not.toBeInTheDocument());
+  });
+
+  it("deletes a selected relationship with the modifier deletion shortcut", async () => {
+    const project = createBlankProject("Shortcut Relationship Project");
+    const source = createStoryEntity("character", project.itemTypes, "Shortcut Source");
+    const target = createStoryEntity("location", project.itemTypes, "Shortcut Target");
+    const relationship = createStoryRelationship(project, source.id, target.id, "relates_to");
+
+    mockRouteProject({
+      ...project,
+      entities: {
+        [source.id]: source,
+        [target.id]: target
+      },
+      relationships: [relationship]
+    });
+
+    render(<App />);
+
+    await waitFor(() => expect(screen.getByText("Shortcut Relationship Project")).toBeInTheDocument());
+    fireEvent.click(screen.getByTestId(`flow-edge-${relationship.id}`));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Delete selected relationship" })).toBeInTheDocument());
+
+    fireEvent.keyDown(window, { key: "Delete", ctrlKey: true });
+
+    await waitFor(() => expect(screen.queryByTestId(`flow-edge-${relationship.id}`)).not.toBeInTheDocument());
+  });
+
+  it("documents keyboard shortcuts in the guide and exposes topbar shortcut metadata", async () => {
+    render(<App />);
+
+    await waitFor(() => expect(screen.getByText("Loaded Project")).toBeInTheDocument());
+
+    expect(screen.getByRole("button", { name: "Save Project" })).toHaveAttribute("aria-keyshortcuts", "Control+S Meta+S");
+    expect(screen.getByRole("button", { name: "Save Project" })).toHaveAttribute("title", expect.stringContaining("+S"));
+
+    fireEvent.keyDown(window, { key: "?" });
+
+    const guide = await screen.findByRole("dialog", { name: "Guide" });
+    expect(within(guide).getByText("Keyboard Shortcuts")).toBeInTheDocument();
+    expect(within(guide).getByText(/Shortcuts are ignored while typing/)).toBeInTheDocument();
+    expect(within(guide).getByText(/Ctrl\/Cmd\+Backspace/)).toBeInTheDocument();
+  });
+
+  it("hides AI agent controls for local projects", async () => {
+    render(<App />);
+
+    await waitFor(() => expect(screen.getByText("Loaded Project")).toBeInTheDocument());
+
+    expect(screen.queryByRole("button", { name: "AI Agent" })).not.toBeInTheDocument();
+    fireEvent.keyDown(window, { key: "a" });
+    expect(screen.queryByRole("complementary", { name: "AI Agent" })).not.toBeInTheDocument();
+  });
+
+  it("opens and closes the AI agent panel for signed-in cloud projects", async () => {
+    window.history.pushState({}, "", "/project/cloud-opened");
+    vi.mocked(getCurrentCloudUser).mockResolvedValue({ id: "user-a", email: "ada@example.com" });
+    render(<App />);
+
+    await waitFor(() => expect(screen.getByText("Cloud Project")).toBeInTheDocument());
 
     fireEvent.click(screen.getByRole("button", { name: "AI Agent" }));
 
@@ -507,12 +711,14 @@ describe("App project commands", () => {
     await waitFor(() => expect(screen.queryByRole("complementary", { name: "AI Agent" })).not.toBeInTheDocument());
   });
 
-  it("blocks AI agent requests until an API key is provided", async () => {
+  it("does not call NVIDIA directly from the browser for AI agent requests", async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
+    window.history.pushState({}, "", "/project/cloud-opened");
+    vi.mocked(getCurrentCloudUser).mockResolvedValue({ id: "user-a", email: "ada@example.com" });
     render(<App />);
 
-    await waitFor(() => expect(screen.getByText("Loaded Project")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("Cloud Project")).toBeInTheDocument());
 
     fireEvent.click(screen.getByRole("button", { name: "AI Agent" }));
     fireEvent.change(screen.getByPlaceholderText(/Ask for focused story structure changes/), {
@@ -520,47 +726,36 @@ describe("App project commands", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "Ask Agent" }));
 
-    expect(await screen.findByText("Add an API key in Settings before asking the agent.")).toBeInTheDocument();
+    await waitFor(() => expect(requestAgentPlan).toHaveBeenCalledWith(expect.objectContaining({ title: "Cloud Project" }), "Add a rival."));
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("previews and applies a mocked AI agent change plan", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => ({
-        ok: true,
-        json: async () => ({
-          output_text: JSON.stringify({
-            summary: "Add a rival character.",
-            assumptions: ["The rival should remain tentative."],
-            followUpQuestions: [],
-            changes: [
-              {
-                operation: "create_entity",
-                summary: "Create rival",
-                entity: {
-                  id: "character-rival",
-                  type: "character",
-                  title: "Rival",
-                  summary: "A pressure point for the protagonist."
-                }
-              }
-            ]
-          })
-        })
-      }))
-    );
+    window.history.pushState({}, "", "/project/cloud-opened");
+    vi.mocked(getCurrentCloudUser).mockResolvedValue({ id: "user-a", email: "ada@example.com" });
+    vi.mocked(requestAgentPlan).mockResolvedValue({
+      output_text: JSON.stringify({
+        summary: "Add a rival character.",
+        assumptions: ["The rival should remain tentative."],
+        followUpQuestions: [],
+        changes: [
+          {
+            operation: "create_entity",
+            summary: "Create rival",
+            entity: {
+              id: "character-rival",
+              type: "character",
+              title: "Rival",
+              summary: "A pressure point for the protagonist."
+            }
+          }
+        ]
+      })
+    });
     render(<App />);
 
-    await waitFor(() => expect(screen.getByText("Loaded Project")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("Cloud Project")).toBeInTheDocument());
 
-    fireEvent.click(screen.getByRole("button", { name: "Open Settings" }));
-    fireEvent.change(screen.getByLabelText("Agent API key"), { target: { value: "sk-test" } });
-    expect(screen.getByText(/Provider selection is a build\/deploy-time setting/)).toBeInTheDocument();
-    expect(screen.getByText(/The Agent API must support OpenAPI compatibility/)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Workspace" }));
-
-    await waitFor(() => expect(document.querySelector(".workspace")).not.toBeNull());
     fireEvent.click(screen.getByRole("button", { name: "AI Agent" }));
     fireEvent.change(screen.getByPlaceholderText(/Ask for focused story structure changes/), {
       target: { value: "Add a rival." }
@@ -577,40 +772,31 @@ describe("App project commands", () => {
   });
 
   it("disables applying invalid AI agent plans", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => ({
-        ok: true,
-        json: async () => ({
-          output_text: JSON.stringify({
-            summary: "Connect missing people.",
-            assumptions: [],
-            followUpQuestions: [],
-            changes: [
-              {
-                operation: "create_relationship",
-                summary: "Create impossible link",
-                relationship: {
-                  id: "link-missing",
-                  sourceId: "character-a",
-                  targetId: "character-b",
-                  type: "knows"
-                }
-              }
-            ]
-          })
-        })
-      }))
-    );
+    window.history.pushState({}, "", "/project/cloud-opened");
+    vi.mocked(getCurrentCloudUser).mockResolvedValue({ id: "user-a", email: "ada@example.com" });
+    vi.mocked(requestAgentPlan).mockResolvedValue({
+      output_text: JSON.stringify({
+        summary: "Connect missing people.",
+        assumptions: [],
+        followUpQuestions: [],
+        changes: [
+          {
+            operation: "create_relationship",
+            summary: "Create impossible link",
+            relationship: {
+              id: "link-missing",
+              sourceId: "character-a",
+              targetId: "character-b",
+              type: "knows"
+            }
+          }
+        ]
+      })
+    });
     render(<App />);
 
-    await waitFor(() => expect(screen.getByText("Loaded Project")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("Cloud Project")).toBeInTheDocument());
 
-    fireEvent.click(screen.getByRole("button", { name: "Open Settings" }));
-    fireEvent.change(screen.getByLabelText("Agent API key"), { target: { value: "sk-test" } });
-    fireEvent.click(screen.getByRole("button", { name: "Workspace" }));
-
-    await waitFor(() => expect(document.querySelector(".workspace")).not.toBeNull());
     fireEvent.click(screen.getByRole("button", { name: "AI Agent" }));
     fireEvent.change(screen.getByPlaceholderText(/Ask for focused story structure changes/), {
       target: { value: "Connect two missing characters." }
@@ -633,11 +819,9 @@ describe("App project commands", () => {
     expect(screen.getByLabelText("Project title")).toHaveValue("Loaded Project");
     expect(screen.queryByRole("button", { name: "Graph focus depth 1" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Add item type" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "AI Agent" })).toBeInTheDocument();
-    expect(screen.getByLabelText("Agent model")).toHaveValue("gpt-5.5");
-    expect(screen.getByLabelText("Agent base URL")).toHaveValue("https://api.openai.com/v1");
-    expect(screen.getByText(/Provider selection is a build\/deploy-time setting/)).toBeInTheDocument();
-    expect(screen.getByText(/The Agent API must support OpenAPI compatibility/)).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "AI Agent" })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Agent model")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Agent base URL")).not.toBeInTheDocument();
     expect(screen.queryByRole("group", { name: "Project mode" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Game Story" })).not.toBeInTheDocument();
 
@@ -971,7 +1155,7 @@ describe("App project commands", () => {
     expect(screen.getByText("Unsaved")).toBeInTheDocument();
   });
 
-  it("offsets relationship labels for multiple outgoing links from the same entity", async () => {
+  it("keeps labels and handles unchanged for outgoing links to different targets", async () => {
     const project = createBlankProject("Relationship Labels Project");
     const hero = createStoryEntity("character", project.itemTypes, "Label Source");
     const ally = createStoryEntity("character", project.itemTypes, "First Target");
@@ -1003,9 +1187,86 @@ describe("App project commands", () => {
     await waitFor(() => expect(screen.getByText("Relationship Labels Project")).toBeInTheDocument());
     expect(screen.getByTestId(`flow-edge-${firstLink.id}`)).toHaveAttribute("data-type", "relationship");
     expect(screen.getByTestId(`flow-edge-${firstLink.id}`)).toHaveAttribute("data-label", "Relates to");
+    expect(screen.getByTestId(`flow-edge-${firstLink.id}`)).toHaveAttribute("data-label-offset", "0");
+    expect(screen.getByTestId(`flow-edge-${firstLink.id}`)).toHaveAttribute("data-source-handle", "");
+    expect(screen.getByTestId(`flow-edge-${firstLink.id}`)).toHaveAttribute("data-target-handle", "");
+    expect(screen.getByTestId(`flow-edge-${secondLink.id}`)).toHaveAttribute("data-label-offset", "0");
+    expect(screen.getByTestId(`flow-edge-${thirdLink.id}`)).toHaveAttribute("data-label-offset", "0");
+  });
+
+  it("spreads handles and labels for parallel relationships between the same two entities", async () => {
+    const project = createBlankProject("Parallel Relationship Project");
+    const source = createStoryEntity("character", project.itemTypes, "Parallel Source");
+    const target = createStoryEntity("character", project.itemTypes, "Parallel Target");
+    const firstLink = createStoryRelationship(project, source.id, target.id, "relates_to");
+    const secondLink = createStoryRelationship(project, source.id, target.id, "knows");
+    const thirdLink = createStoryRelationship(project, source.id, target.id, "opposes");
+
+    mockRouteProject({
+      ...project,
+      entities: {
+        [source.id]: source,
+        [target.id]: target
+      },
+      relationships: [firstLink, secondLink, thirdLink],
+      layout: {
+        [source.id]: { x: 10, y: 20 },
+        [target.id]: { x: 310, y: 20 }
+      }
+    });
+
+    render(<App />);
+
+    await waitFor(() => expect(screen.getByText("Parallel Relationship Project")).toBeInTheDocument());
+    expect(screen.getByTestId(`flow-edge-${firstLink.id}`)).toHaveAttribute("data-source-handle", `parallel-source-${target.id}-0`);
+    expect(screen.getByTestId(`flow-edge-${firstLink.id}`)).toHaveAttribute("data-target-handle", `parallel-target-${source.id}-0`);
     expect(screen.getByTestId(`flow-edge-${firstLink.id}`)).toHaveAttribute("data-label-offset", "-18");
+    expect(screen.getByTestId(`flow-edge-${secondLink.id}`)).toHaveAttribute("data-source-handle", `parallel-source-${target.id}-1`);
+    expect(screen.getByTestId(`flow-edge-${secondLink.id}`)).toHaveAttribute("data-target-handle", `parallel-target-${source.id}-1`);
     expect(screen.getByTestId(`flow-edge-${secondLink.id}`)).toHaveAttribute("data-label-offset", "18");
+    expect(screen.getByTestId(`flow-edge-${thirdLink.id}`)).toHaveAttribute("data-source-handle", `parallel-source-${target.id}-2`);
+    expect(screen.getByTestId(`flow-edge-${thirdLink.id}`)).toHaveAttribute("data-target-handle", `parallel-target-${source.id}-2`);
     expect(screen.getByTestId(`flow-edge-${thirdLink.id}`)).toHaveAttribute("data-label-offset", "-36");
+  });
+
+  it("spreads only duplicate source-target pairs when mixed with a single outgoing link", async () => {
+    const project = createBlankProject("Mixed Relationship Project");
+    const source = createStoryEntity("character", project.itemTypes, "Mixed Source");
+    const parallelTarget = createStoryEntity("character", project.itemTypes, "Parallel Target");
+    const singleTarget = createStoryEntity("note", project.itemTypes, "Single Target");
+    const firstParallelLink = createStoryRelationship(project, source.id, parallelTarget.id, "relates_to");
+    const secondParallelLink = createStoryRelationship(project, source.id, parallelTarget.id, "knows");
+    const singleLink = createStoryRelationship(project, source.id, singleTarget.id, "opposes");
+
+    mockRouteProject({
+      ...project,
+      entities: {
+        [source.id]: source,
+        [parallelTarget.id]: parallelTarget,
+        [singleTarget.id]: singleTarget
+      },
+      relationships: [firstParallelLink, secondParallelLink, singleLink],
+      layout: {
+        [source.id]: { x: 10, y: 20 },
+        [parallelTarget.id]: { x: 310, y: 20 },
+        [singleTarget.id]: { x: 310, y: 220 }
+      }
+    });
+
+    render(<App />);
+
+    await waitFor(() => expect(screen.getByText("Mixed Relationship Project")).toBeInTheDocument());
+    expect(screen.getByTestId(`flow-edge-${firstParallelLink.id}`)).toHaveAttribute(
+      "data-source-handle",
+      `parallel-source-${parallelTarget.id}-0`
+    );
+    expect(screen.getByTestId(`flow-edge-${secondParallelLink.id}`)).toHaveAttribute(
+      "data-source-handle",
+      `parallel-source-${parallelTarget.id}-1`
+    );
+    expect(screen.getByTestId(`flow-edge-${singleLink.id}`)).toHaveAttribute("data-source-handle", "");
+    expect(screen.getByTestId(`flow-edge-${singleLink.id}`)).toHaveAttribute("data-target-handle", "");
+    expect(screen.getByTestId(`flow-edge-${singleLink.id}`)).toHaveAttribute("data-label-offset", "0");
   });
 
   it("highlights the selected graph item and fades unrelated neighborhoods", async () => {

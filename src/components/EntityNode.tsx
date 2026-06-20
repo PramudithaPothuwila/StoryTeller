@@ -7,6 +7,8 @@ import { ItemTypeDefinition, StoryEntity } from "../types";
 export interface EntityNodeData extends Record<string, unknown> {
   entity: StoryEntity;
   itemType: ItemTypeDefinition;
+  sourceHandles: EntityNodeHandle[];
+  targetHandles: EntityNodeHandle[];
   isSelected: boolean;
   isConnectedToFocus: boolean;
   isFaded: boolean;
@@ -15,6 +17,11 @@ export interface EntityNodeData extends Record<string, unknown> {
   isGameCriticalPath?: boolean;
   isGameGated?: boolean;
   isGameDeadEnd?: boolean;
+}
+
+export interface EntityNodeHandle {
+  id: string;
+  offset: number;
 }
 
 export type EntityNodeType = Node<EntityNodeData, "storyEntity">;
@@ -45,6 +52,17 @@ export function EntityNode({ data }: NodeProps<EntityNodeType>) {
       }
     >
       <Handle className="node-handle" type="target" position={Position.Left} />
+      {data.targetHandles.map((handle) => (
+        <Handle
+          key={handle.id}
+          id={handle.id}
+          className="node-handle node-handle--parallel"
+          type="target"
+          position={Position.Left}
+          isConnectable={false}
+          style={{ top: `${50 + handle.offset}%` }}
+        />
+      ))}
       <div className="entity-node__header">
         <span className="entity-node__type">
           <Icon aria-hidden="true" />
@@ -71,6 +89,17 @@ export function EntityNode({ data }: NodeProps<EntityNodeType>) {
         </div>
       ) : null}
       <Handle className="node-handle" type="source" position={Position.Right} />
+      {data.sourceHandles.map((handle) => (
+        <Handle
+          key={handle.id}
+          id={handle.id}
+          className="node-handle node-handle--parallel"
+          type="source"
+          position={Position.Right}
+          isConnectable={false}
+          style={{ top: `${50 + handle.offset}%` }}
+        />
+      ))}
     </article>
   );
 }

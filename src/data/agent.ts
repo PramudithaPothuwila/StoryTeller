@@ -27,15 +27,6 @@ import {
   updateRelationshipInProject
 } from "./story";
 
-export interface AgentSettings {
-  apiKey: string;
-  baseUrl: string;
-  model: string;
-  provider: AgentProvider;
-}
-
-export type AgentProvider = "openai" | "nvidia";
-
 export interface AgentMessage {
   id: string;
   role: "user" | "assistant" | "system";
@@ -150,23 +141,6 @@ interface AgentProjectContext {
 }
 
 const BODY_EXCERPT_LENGTH = 700;
-const ACTIVE_AGENT_PROVIDER = normalizeAgentProvider(import.meta.env.VITE_AGENT_PROVIDER);
-
-const agentProviderDefaults: Record<AgentProvider, Omit<AgentSettings, "apiKey">> = {
-  openai: {
-    provider: "openai",
-    baseUrl: "https://api.openai.com/v1",
-    model: "gpt-5.5"
-  },
-  nvidia: {
-    provider: "nvidia",
-    baseUrl: "https://integrate.api.nvidia.com/v1",
-    model: "nvidia/llama-3.1-nemotron-nano-8b-v1"
-  }
-};
-
-export const DEFAULT_AGENT_SETTINGS: AgentSettings = defaultAgentSettings();
-export const AGENT_SETTINGS_STORAGE_KEY = "storyteller.agentSettings";
 
 export const AGENT_SYSTEM_PROMPT = [
   "You are the in-app AI story agent for StoryTeller, a local-first story planning workspace.",
@@ -179,6 +153,8 @@ export const AGENT_SYSTEM_PROMPT = [
   "Use privateInfo for author-only secrets and publicInfo for audience/player-facing facts.",
   "For game-story projects, use graphPresence to place each item in the world graph, story_flow graph, or both."
 ].join("\n");
+
+export const DEFAULT_NVIDIA_AGENT_MODEL = "nvidia/llama-3.1-nemotron-nano-8b-v1";
 
 export const AGENT_RESPONSE_FORMAT = {
   type: "json_schema",
@@ -209,17 +185,6 @@ export const AGENT_RESPONSE_FORMAT = {
   }
 } as const;
 
-export function activeAgentProvider(): AgentProvider {
-  return ACTIVE_AGENT_PROVIDER;
-}
-
-export function defaultAgentSettings(provider: AgentProvider = ACTIVE_AGENT_PROVIDER): AgentSettings {
-  return {
-    apiKey: "",
-    ...agentProviderDefaults[provider]
-  };
-}
-
 export function buildAgentProjectContext(project: StoryProject): AgentProjectContext {
   return {
     schemaVersion: project.schemaVersion,
@@ -247,47 +212,6 @@ export function buildAgentProjectContext(project: StoryProject): AgentProjectCon
   };
 }
 
-export function readStoredAgentSettings(): AgentSettings {
-  if (typeof window === "undefined") {
-    return { ...DEFAULT_AGENT_SETTINGS };
-  }
-
-  try {
-    const stored = JSON.parse(window.localStorage.getItem(AGENT_SETTINGS_STORAGE_KEY) ?? "{}") as Partial<AgentSettings>;
-    const storedProvider = normalizeAgentProvider(stored.provider);
-    const hasLegacyProvider = stored.provider === undefined || stored.provider === null;
-    const providerMatchesActive = hasLegacyProvider ? ACTIVE_AGENT_PROVIDER === "openai" : storedProvider === ACTIVE_AGENT_PROVIDER;
-    const defaults = providerMatchesActive ? defaultAgentSettings(ACTIVE_AGENT_PROVIDER) : DEFAULT_AGENT_SETTINGS;
-
-    return {
-      provider: ACTIVE_AGENT_PROVIDER,
-      apiKey: providerMatchesActive && typeof stored.apiKey === "string" ? stored.apiKey : defaults.apiKey,
-      baseUrl:
-        providerMatchesActive && typeof stored.baseUrl === "string" && stored.baseUrl.trim()
-          ? stored.baseUrl
-          : defaults.baseUrl,
-      model:
-        providerMatchesActive && typeof stored.model === "string" && stored.model.trim()
-          ? stored.model
-          : defaults.model
-    };
-  } catch {
-    return { ...DEFAULT_AGENT_SETTINGS };
-  }
-}
-
-export function writeStoredAgentSettings(settings: AgentSettings) {
-  if (typeof window === "undefined") {
-    return;
-  }
-
-  try {
-    window.localStorage.setItem(AGENT_SETTINGS_STORAGE_KEY, JSON.stringify(settings));
-  } catch {
-    // The agent can still work for the current session when local storage is unavailable.
-  }
-}
-
 export function buildAgentInput(project: StoryProject, userPrompt: string): string {
   return JSON.stringify(
     {
@@ -297,54 +221,6 @@ export function buildAgentInput(project: StoryProject, userPrompt: string): stri
     null,
     2
   );
-}
-
-export function createAgentRequest(settings: AgentSettings, project: StoryProject, userPrompt: string): Request {
-  const provider = settings.provider ?? ACTIVE_AGENT_PROVIDER;
-  const baseUrl = settings.baseUrl.replace(/\/+$/, "");
-  const headers = {
-    Authorization: `Bearer ${settings.apiKey.trim()}`,
-    "Content-Type": "application/json"
-  };
-
-  if (provider === "nvidia") {
-    return new Request(`${baseUrl}/chat/completions`, {
-      method: "POST",
-      headers,
-      body: JSON.stringify({
-        model: settings.model.trim() || agentProviderDefaults.nvidia.model,
-        messages: [
-          {
-            role: "system",
-            content: buildNvidiaSystemPrompt()
-          },
-          {
-            role: "user",
-            content: buildAgentInput(project, userPrompt)
-          }
-        ],
-        temperature: 0,
-        top_p: 0.95,
-        max_tokens: 4096,
-        frequency_penalty: 0,
-        presence_penalty: 0,
-        stream: false
-      })
-    });
-  }
-
-  return new Request(`${baseUrl}/responses`, {
-    method: "POST",
-    headers,
-    body: JSON.stringify({
-      model: settings.model.trim() || agentProviderDefaults.openai.model,
-      instructions: AGENT_SYSTEM_PROMPT,
-      input: buildAgentInput(project, userPrompt),
-      text: {
-        format: AGENT_RESPONSE_FORMAT
-      }
-    })
-  });
 }
 
 export function normalizeAgentChangePlan(value: unknown): AgentChangePlan {
@@ -933,11 +809,7 @@ function optionalString(value: unknown): string | undefined {
   return typeof value === "string" && value.trim() ? value : undefined;
 }
 
-function normalizeAgentProvider(value: unknown): AgentProvider {
-  return value === "nvidia" ? "nvidia" : "openai";
-}
-
-function buildNvidiaSystemPrompt(): string {
+export function buildNvidiaSystemPrompt(): string {
   return [
     "detailed thinking off",
     AGENT_SYSTEM_PROMPT,

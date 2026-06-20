@@ -204,7 +204,8 @@ export function TimelinePanel({
             type="button"
             className="icon-button"
             aria-label="Add timeline track"
-            title="Add timeline track"
+            aria-keyshortcuts="Shift+T"
+            title="Add timeline track (Shift+T)"
             onClick={onAddTrack}
           >
             <Plus aria-hidden="true" />
@@ -216,6 +217,8 @@ export function TimelinePanel({
             type="button"
             className="icon-button"
             aria-label={collapsed ? "Expand timeline" : "Collapse timeline"}
+            aria-keyshortcuts="T"
+            title={collapsed ? "Expand timeline (T)" : "Collapse timeline (T)"}
             onClick={onToggleCollapsed}
           >
             {collapsed ? <ChevronUp aria-hidden="true" /> : <ChevronDown aria-hidden="true" />}
