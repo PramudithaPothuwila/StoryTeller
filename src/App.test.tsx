@@ -34,6 +34,7 @@ import {
   updateGameStateVariableInProject,
   updateGameStoryProjectMetadata
 } from "./data/story";
+import type { StoryProject } from "./types";
 
 vi.mock("@xyflow/react", () => ({
   addEdge: (edge: unknown, edges: unknown[]) => [...edges, edge],
@@ -265,6 +266,25 @@ vi.mock("./data/cloudProjects", async () => {
   };
 });
 
+const RECENT_PROJECTS_STORAGE_KEY = "storyteller.recentProjects";
+
+function mockRouteProject(project: StoryProject, id = "browser-loaded") {
+  vi.mocked(loadStarterProject).mockResolvedValue(project);
+  window.localStorage.setItem(
+    RECENT_PROJECTS_STORAGE_KEY,
+    JSON.stringify([
+      {
+        id,
+        title: project.title,
+        source: id.startsWith("folder-") ? "folder" : id.startsWith("backup-") ? "backup" : "browser",
+        projectMode: project.projectMode,
+        updatedAt: project.updatedAt,
+        project
+      }
+    ])
+  );
+}
+
 describe("App project commands", () => {
   const folderHandle = {
     kind: "directory",
@@ -275,7 +295,8 @@ describe("App project commands", () => {
 
   beforeEach(() => {
     window.history.pushState({}, "", "/project/browser-loaded");
-    vi.mocked(loadStarterProject).mockResolvedValue(createBlankProject("Loaded Project"));
+    window.localStorage.clear();
+    mockRouteProject(createBlankProject("Loaded Project"));
     vi.mocked(hasFolderProjectSupport).mockReturnValue(true);
     vi.mocked(readProjectFromDirectory).mockResolvedValue(createBlankProject("Opened Project"));
     vi.mocked(projectFromBundleFile).mockResolvedValue(createBlankProject("Backup Project"));
@@ -328,7 +349,6 @@ describe("App project commands", () => {
       configurable: true,
       value: vi.fn()
     });
-    window.localStorage.clear();
     anchorClickSpy = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => undefined);
     fileClickSpy = vi.spyOn(HTMLInputElement.prototype, "click").mockImplementation(() => undefined);
   });
@@ -370,6 +390,33 @@ describe("App project commands", () => {
     expect(screen.queryByRole("button", { name: "Open folder" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Import" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Export" })).not.toBeInTheDocument();
+  });
+
+  it("restores a local project route from the recent browser snapshot on reload", async () => {
+    render(<App />);
+
+    await waitFor(() => expect(screen.getByText("Loaded Project")).toBeInTheDocument());
+
+    expect(loadStarterProject).not.toHaveBeenCalled();
+    expect(window.location.pathname).toBe("/project/browser-loaded");
+  });
+
+  it("redirects stale local project routes to recent-project restore instructions", async () => {
+    window.localStorage.clear();
+    window.history.pushState({}, "", "/project/browser-missing");
+
+    render(<App />);
+
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Restore Local Project" })).toBeInTheDocument());
+
+    expect(loadStarterProject).not.toHaveBeenCalled();
+    expect(window.location.pathname).toBe("/");
+    expect(window.location.search).toBe("?restoreProject=browser-missing");
+    expect(
+      screen.getByText(
+        "This local project URL is only available in the browser where it was opened. Open the folder again or import a backup to continue."
+      )
+    ).toBeInTheDocument();
   });
 
   it("opens and closes the in-app guide from the topbar", async () => {
@@ -565,7 +612,7 @@ describe("App project commands", () => {
     const project = createBlankProject("Selection Project");
     const hero = createStoryEntity("character", project.itemTypes, "Pane Click Hero");
 
-    vi.mocked(loadStarterProject).mockResolvedValue({
+    mockRouteProject({
       ...project,
       entities: {
         [hero.id]: hero
@@ -595,7 +642,7 @@ describe("App project commands", () => {
     const project = createBlankProject("Delete Entity Project");
     const hero = createStoryEntity("character", project.itemTypes, "Short-Lived Hero");
 
-    vi.mocked(loadStarterProject).mockResolvedValue({
+    mockRouteProject({
       ...project,
       entities: {
         [hero.id]: hero
@@ -620,7 +667,7 @@ describe("App project commands", () => {
     const target = createStoryEntity("location", project.itemTypes, "Target Harbor");
     const relationship = createStoryRelationship(project, source.id, target.id, "relates_to");
 
-    vi.mocked(loadStarterProject).mockResolvedValue({
+    mockRouteProject({
       ...project,
       entities: {
         [source.id]: source,
@@ -823,7 +870,7 @@ describe("App project commands", () => {
   it("keeps graph nodes rendered after node position changes", async () => {
     const project = createBlankProject("Graph Project");
     const hero = createStoryEntity("character", project.itemTypes, "Draggable Hero");
-    vi.mocked(loadStarterProject).mockResolvedValue({
+    mockRouteProject({
       ...project,
       entities: {
         [hero.id]: hero
@@ -864,7 +911,7 @@ describe("App project commands", () => {
     const secondLink = createStoryRelationship(project, hero.id, clue.id, "knows");
     const thirdLink = createStoryRelationship(project, hero.id, faction.id, "opposes");
 
-    vi.mocked(loadStarterProject).mockResolvedValue({
+    mockRouteProject({
       ...project,
       entities: {
         [hero.id]: hero,
@@ -900,7 +947,7 @@ describe("App project commands", () => {
     const heroLink = createStoryRelationship(project, hero.id, ally.id, "relates_to");
     const outsideLink = createStoryRelationship(project, outsider.id, clue.id, "relates_to");
 
-    vi.mocked(loadStarterProject).mockResolvedValue({
+    mockRouteProject({
       ...project,
       entities: {
         [hero.id]: hero,
@@ -941,7 +988,7 @@ describe("App project commands", () => {
 
   it("changes graph focus depth and persists the browser preference", async () => {
     const fixture = createFocusDepthProject();
-    vi.mocked(loadStarterProject).mockResolvedValue(fixture.project);
+    mockRouteProject(fixture.project);
 
     render(<App />);
 
@@ -982,7 +1029,7 @@ describe("App project commands", () => {
   it("restores graph focus depth from browser storage", async () => {
     const fixture = createFocusDepthProject();
     window.localStorage.setItem("storyteller.graphFocusDepth", "3");
-    vi.mocked(loadStarterProject).mockResolvedValue(fixture.project);
+    mockRouteProject(fixture.project);
 
     render(<App />);
 
@@ -994,7 +1041,7 @@ describe("App project commands", () => {
   });
 
   it("creates state-backed game nodes in a Game Story project", async () => {
-    vi.mocked(loadStarterProject).mockResolvedValue(createBlankProject("Loaded Project", "game_story"));
+    mockRouteProject(createBlankProject("Loaded Project", "game_story"));
     render(<App />);
 
     await waitFor(() => expect(screen.getByText("Loaded Project")).toBeInTheDocument());
@@ -1037,7 +1084,7 @@ describe("App project commands", () => {
 
   it("filters Story Flow to game nodes and opens the optional preview tools", async () => {
     const fixture = createGameStoryFixture();
-    vi.mocked(loadStarterProject).mockResolvedValue(fixture.project);
+    mockRouteProject(fixture.project);
 
     render(<App />);
 
@@ -1075,7 +1122,7 @@ describe("App project commands", () => {
 
   it("keeps World and Story Flow node positions independent", async () => {
     const fixture = createGameStoryFixture();
-    vi.mocked(loadStarterProject).mockResolvedValue(fixture.project);
+    mockRouteProject(fixture.project);
 
     render(<App />);
 
@@ -1130,7 +1177,7 @@ describe("App project commands", () => {
       },
       { startNodeId: start.id }
     );
-    vi.mocked(loadStarterProject).mockResolvedValue(project);
+    mockRouteProject(project);
 
     render(<App />);
 
@@ -1148,7 +1195,7 @@ describe("App project commands", () => {
   });
 
   it("creates new items only in the active graph by default", async () => {
-    vi.mocked(loadStarterProject).mockResolvedValue(setProjectModeInProject(createBlankProject("Independent Items"), "game_story"));
+    mockRouteProject(setProjectModeInProject(createBlankProject("Independent Items"), "game_story"));
 
     render(<App />);
 
@@ -1180,7 +1227,7 @@ describe("App project commands", () => {
 
   it("toggles item visibility between Story Flow, World, and both graphs", async () => {
     const fixture = createGameStoryFixture();
-    vi.mocked(loadStarterProject).mockResolvedValue(fixture.project);
+    mockRouteProject(fixture.project);
 
     render(<App />);
 
@@ -1213,7 +1260,7 @@ describe("App project commands", () => {
   it("shares ordinary story items into Story Flow without treating them as playable game nodes", async () => {
     window.history.pushState({}, "", "/project/browser-shared-items");
     const fixture = createGameStoryFixture();
-    vi.mocked(loadStarterProject).mockResolvedValue(fixture.project);
+    mockRouteProject(fixture.project, "browser-shared-items");
 
     render(<App />);
 
@@ -1240,7 +1287,7 @@ describe("App project commands", () => {
 
   it("links world-building items to game story nodes with trigger cross-links", async () => {
     const fixture = createGameStoryFixture();
-    vi.mocked(loadStarterProject).mockResolvedValue(fixture.project);
+    mockRouteProject(fixture.project);
 
     render(<App />);
 
@@ -1269,7 +1316,7 @@ describe("App project commands", () => {
 
   it("opens the optional RPG sidebar to inspect continuity issues", async () => {
     const fixture = createGameStoryFixture({ includeLonelyScene: true });
-    vi.mocked(loadStarterProject).mockResolvedValue(fixture.project);
+    mockRouteProject(fixture.project);
 
     render(<App />);
 
@@ -1301,7 +1348,7 @@ describe("App project commands", () => {
     before.timeline = { order: 1, effects: [] };
     meeting.timeline = { order: 2, effects: [] };
 
-    vi.mocked(loadStarterProject).mockResolvedValue({
+    mockRouteProject({
       ...project,
       entities: {
         [source.id]: source,
@@ -1541,7 +1588,6 @@ function createFocusDepthProject() {
     factionLink
   };
 }
-
 function createGameStoryFixture(options: { includeLonelyScene?: boolean } = {}) {
   let project = setProjectModeInProject(createBlankProject("Game Flow Project"), "game_story");
   project = addGameStateVariableToProject(project, "flag");
@@ -1607,4 +1653,5 @@ function createGameStoryFixture(options: { includeLonelyScene?: boolean } = {}) 
     branch
   };
 }
+
 

@@ -177,8 +177,9 @@ describe("starter project loader", () => {
       ])
     );
     expect(project.entities["scene-murder-victim-found"].graphPresence).toBe("story_flow");
-    expect(project.entities["item-locker-12-key"].graphPresence).toBe("both");
+    expect(project.entities["item-locker-12-key"].graphPresence).toBe("world");
     expect(project.storyFlowLayout["scene-murder-victim-found"]).toEqual({ x: -720, y: 0 });
+    expect(project.storyFlowLayout["item-locker-12-key"]).toBeUndefined();
     expect(getGameContinuityIssues(project)).toEqual([]);
   });
 });

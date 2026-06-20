@@ -13,7 +13,7 @@
   "privateInfo": "Rowan hid the key after realizing he was being watched. Silas knows the backup hiding place because Rowan asked him what parts of the signal room still stayed dry.",
   "createdAt": "2026-06-07T00:00:00.000Z",
   "updatedAt": "2026-06-07T00:00:00.000Z",
-  "graphPresence": "both"
+  "graphPresence": "world"
 }
 ---
 ## Planning Notes

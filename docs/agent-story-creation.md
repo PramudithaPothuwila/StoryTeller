@@ -6,7 +6,8 @@ conversation with the user.
 
 The project folder is the working story bible. The agent should use it to create
 and revise story structure: characters, locations, items, factions, events,
-notes, custom types, and the relationships between them.
+world rules, notes, custom types, game-story nodes, and the relationships
+between them.
 
 ## When To Use StoryTeller
 
@@ -82,8 +83,8 @@ Custom entity types may create additional folders under `entities/`, such as
 
 The agent should treat these files as the source of truth:
 
-- `storyteller.project.json`: project title, type catalogs, graph layout, and
-  entity index.
+- `storyteller.project.json`: project title, mode, type catalogs, timeline
+  lanes, graph layouts, and entity index.
 - `graph/relationships.json`: all graph relationships.
 - `entities/<type>/<id>.md`: one Markdown file per entity, with JSON
   frontmatter followed by body notes.
@@ -94,15 +95,22 @@ Prefer two-space indentation and ISO timestamps, such as
 
 ## Manifest File
 
-`storyteller.project.json` uses `schemaVersion: 2`.
+`storyteller.project.json` uses `schemaVersion: 5`. Older project shapes are
+migrated by the app on load, but agents should write the current version.
 
 Important fields:
 
 - `title`: project title.
 - `updatedAt`: ISO timestamp for the last project update.
+- `projectMode`: either `story` or `game_story`.
+- `gameStory`: required when `projectMode` is `game_story`; may be omitted for
+  normal story projects.
 - `itemTypes`: available entity types.
 - `linkTypes`: available relationship types.
+- `timelineLaneNames`: timeline lane labels. Use at least `["Track 1"]`.
 - `graphLayout`: map of entity IDs to graph coordinates.
+- `storyFlowLayout`: map of game-story entity IDs to story-flow graph
+  coordinates. Use `{}` for normal story projects.
 - `entityIndex`: list of every entity file in the project.
 
 When adding an entity, update all of these:
@@ -110,6 +118,8 @@ When adding an entity, update all of these:
 - Add the entity Markdown file.
 - Add an `entityIndex` entry.
 - Add a `graphLayout` entry.
+- If the entity has `graphPresence` of `story_flow` or `both`, add a
+  `storyFlowLayout` entry too.
 - Update the manifest `updatedAt`.
 
 Entity index entry format:
@@ -151,7 +161,8 @@ Each entity file is Markdown with JSON frontmatter:
   "publicInfo": "Known as the fastest bridge-runner in the Glass Quarter.",
   "privateInfo": "Her birthmark is a star map key.",
   "createdAt": "2026-06-06T10:30:00.000Z",
-  "updatedAt": "2026-06-06T10:30:00.000Z"
+  "updatedAt": "2026-06-06T10:30:00.000Z",
+  "graphPresence": "world"
 }
 ---
 ## Wants
@@ -170,15 +181,19 @@ Required entity metadata:
 - `privateInfo`: author-only secrets, twists, or future reveals.
 - `createdAt`: ISO timestamp.
 - `updatedAt`: ISO timestamp.
+- `graphPresence`: `world`, `story_flow`, or `both`.
 
 Event entities may also include `timeline` metadata:
 
 ```json
 "timeline": {
   "order": 1,
+  "track": 0,
   "effects": []
 }
 ```
+
+`track` is optional and defaults to `0`, the first timeline lane.
 
 Use the Markdown body for richer planning notes: wants, fears, scene goals,
 voice notes, clues, unresolved questions, revision concerns, or chapter beats.
@@ -200,6 +215,45 @@ type:
 - `note`: themes, act plans, open questions, tone references, rules,
   constraints, and unresolved decisions.
 
+For projects with `projectMode: "game_story"`, the app also expects these
+built-in game-story item types:
+
+- `scene`: playable scenes, story beats, or decision nodes.
+- `quest`: objective structures with success/failure conditions.
+- `dialogue`: conversation nodes with lines, responses, and variants.
+- `ending`: terminal or outcome nodes.
+
+Use these exact built-in catalog values when adding game-story item types to a
+manifest:
+
+- `scene`: label `Scene`, color `#dc2626`, icon `calendar-days`, built-in.
+- `quest`: label `Quest`, color `#0891b2`, icon `flag`, built-in.
+- `dialogue`: label `Dialogue`, color `#7c3aed`, icon `users`, built-in.
+- `ending`: label `Ending`, color `#d97706`, icon `sparkles`, built-in.
+
+Game-story entities should have `graphPresence` of `story_flow` or `both` and a
+`gameStory` metadata object. Use `both` when the node should appear in the world
+graph and story-flow graph; use `story_flow` when it is only a playable-flow
+node.
+
+Minimal game-story entity metadata:
+
+```json
+"gameStory": {
+  "role": "scene",
+  "status": "draft",
+  "criticalPath": true,
+  "entryConditions": [],
+  "exitEffects": []
+}
+```
+
+Use `role` values of `scene`, `quest`, `dialogue`, or `ending`. Dialogue nodes
+may also include `dialogue: { "lines": [], "responses": [], "variants": [] }`.
+Quest nodes may also include `quest` metadata with objectives, success/failure
+conditions, rewards, and consequences. Keep condition and effect variable IDs in
+sync with `gameStory.stateVariables` in the manifest.
+
 ## Built-In Relationship Types
 
 Use the relationship types already listed in the manifest. Common built-in IDs:
@@ -216,6 +270,38 @@ Use the relationship types already listed in the manifest. Common built-in IDs:
 - `governs`
 - `known_by`
 - `exception_to`
+
+For `game_story` projects, these built-in game-story link types are also
+available:
+
+- `branches_to`
+- `requires`
+- `unlocks`
+- `triggers`
+
+Use these exact built-in catalog values when adding game-story link types to a
+manifest:
+
+- `branches_to`: label `Branches to`, color `#dc2626`, icon `git-branch`,
+  direction `directed`, built-in.
+- `requires`: label `Requires`, color `#7c3aed`, icon `key`, direction
+  `directed`, built-in.
+- `unlocks`: label `Unlocks`, color `#0891b2`, icon `sparkles`, direction
+  `directed`, built-in.
+- `triggers`: label `Triggers`, color `#f59e0b`, icon `sparkles`, direction
+  `directed`, built-in.
+
+Game-story branch relationships may include `gameStory` metadata:
+
+```json
+"gameStory": {
+  "choiceText": "Follow the drag marks toward the signal room",
+  "requirements": [],
+  "effects": [],
+  "consequenceNotes": "",
+  "priority": 0
+}
+```
 
 Custom link types may also exist, such as `protects`, `owes`, `betrays`, or
 `decodes`. If a needed relationship type is missing, either use `relates_to` or
@@ -247,7 +333,7 @@ Basic format:
 
 ```json
 {
-  "schemaVersion": 2,
+  "schemaVersion": 5,
   "relationships": [
     {
       "id": "link-mara-crown",
@@ -383,9 +469,10 @@ Start with this manifest template and change the title and timestamp:
 
 ```json
 {
-  "schemaVersion": 2,
+  "schemaVersion": 5,
   "title": "Untitled Story",
   "updatedAt": "2026-06-06T10:30:00.000Z",
+  "projectMode": "story",
   "itemTypes": [
     {
       "id": "character",
@@ -427,6 +514,13 @@ Start with this manifest template and change the title and timestamp:
       "label": "Faction",
       "color": "#15803d",
       "icon": "flag",
+      "builtIn": true
+    },
+    {
+      "id": "world_rule",
+      "label": "World Rule",
+      "color": "#0e7490",
+      "icon": "scroll-text",
       "builtIn": true
     }
   ],
@@ -502,9 +596,37 @@ Start with this manifest template and change the title and timestamp:
       "icon": "flag",
       "direction": "directed",
       "builtIn": true
+    },
+    {
+      "id": "governs",
+      "label": "Governs",
+      "color": "#0e7490",
+      "icon": "scroll-text",
+      "direction": "directed",
+      "builtIn": true
+    },
+    {
+      "id": "known_by",
+      "label": "Known by",
+      "color": "#0f766e",
+      "icon": "users",
+      "direction": "directed",
+      "builtIn": true
+    },
+    {
+      "id": "exception_to",
+      "label": "Exception to",
+      "color": "#b45309",
+      "icon": "git-branch",
+      "direction": "directed",
+      "builtIn": true
     }
   ],
+  "timelineLaneNames": [
+    "Track 1"
+  ],
   "graphLayout": {},
+  "storyFlowLayout": {},
   "entityIndex": []
 }
 ```
@@ -513,10 +635,30 @@ Create this empty relationship file:
 
 ```json
 {
-  "schemaVersion": 2,
+  "schemaVersion": 5,
   "relationships": []
 }
 ```
+
+If the user is building an interactive game story, set the manifest to
+`"projectMode": "game_story"` instead of `story`, add this top-level metadata,
+and include the game-story built-in item and link types listed above:
+
+```json
+"gameStory": {
+  "stateVariables": [],
+  "validation": {
+    "checkUnreachableNodes": true,
+    "checkInvalidStateReferences": true,
+    "checkDialogueDeadEnds": true
+  }
+}
+```
+
+When a start node exists, set `gameStory.startNodeId` to a `scene`, `quest`,
+`dialogue`, or `ending` entity that is visible in the story-flow graph. Add every
+game-story node to `storyFlowLayout` unless its `graphPresence` is only `world`.
+Use `branches_to` relationships for playable choices between game-story nodes.
 
 Then ask the user for:
 

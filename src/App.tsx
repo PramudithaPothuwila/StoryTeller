@@ -38,7 +38,7 @@ import {
   UserPlus
 } from "lucide-react";
 import { FormEvent, ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { BrowserRouter, Link, Navigate, Route, Routes, useNavigate, useParams } from "react-router-dom";
+import { BrowserRouter, Link, Navigate, Route, Routes, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { AgentPanel } from "./components/AgentPanel";
 import { CloudConflictDialog } from "./components/CloudDialogs";
 import { DetailInspector } from "./components/DetailInspector";
@@ -208,6 +208,7 @@ export function App() {
 
 function StoryAppRoutes() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [cloudUser, setCloudUser] = useState<CloudUser | null>(null);
   const [cloudAgentSettings, setCloudAgentSettings] = useState<AgentSettings>(() => ({ ...DEFAULT_AGENT_SETTINGS }));
   const [cloudProjects, setCloudProjects] = useState<CloudProjectSummary[]>([]);
@@ -608,6 +609,7 @@ function StoryAppRoutes() {
               cloudProjectsLoading={cloudProjectsLoading}
               cloudUser={cloudUser}
               recentProjects={recentProjects}
+              restoreProjectId={searchParams.get("restoreProject")}
               onCreateCloudProject={handleCreateCloudProject}
               onDeleteCloudProject={handleDeleteCloudProject}
               onImportBackup={() => backupInputRef.current?.click()}
@@ -641,6 +643,7 @@ function StoryAppRoutes() {
             <WorkspaceRoute
               cloudUser={cloudUser}
               cloudAgentSettings={cloudAgentSettings}
+              recentProjects={recentProjects}
               workspaceSeeds={workspaceSeeds}
               onCloudProjectSaved={handleCloudProjectSaved}
               onRecentProjectChanged={rememberRecentProject}
@@ -656,6 +659,7 @@ function StoryAppRoutes() {
 interface WorkspaceRouteProps {
   cloudUser: CloudUser | null;
   cloudAgentSettings: AgentSettings;
+  recentProjects: RecentProjectCard[];
   workspaceSeeds: Record<string, WorkspaceProjectSeed>;
   onCloudProjectSaved: (project: CloudProjectSummary) => void;
   onRecentProjectChanged: (project: RecentProjectCard) => void;
@@ -664,12 +668,19 @@ interface WorkspaceRouteProps {
 function WorkspaceRoute({
   cloudUser,
   cloudAgentSettings,
+  recentProjects,
   workspaceSeeds,
   onCloudProjectSaved,
   onRecentProjectChanged
 }: WorkspaceRouteProps) {
   const { projectId } = useParams();
-  const seed = projectId ? workspaceSeeds[projectId] : undefined;
+  const seed = projectId
+    ? (workspaceSeeds[projectId] ?? workspaceSeedFromRecentProject(projectId, recentProjects))
+    : undefined;
+
+  if (projectId && isLocalProjectRouteId(projectId) && !seed) {
+    return <Navigate to={`/?restoreProject=${encodeURIComponent(projectId)}`} replace />;
+  }
 
   return (
     <ReactFlowProvider>
@@ -690,6 +701,7 @@ interface HomePageProps {
   cloudProjectsLoading: boolean;
   cloudUser: CloudUser | null;
   recentProjects: RecentProjectCard[];
+  restoreProjectId: string | null;
   onCreateCloudProject: (projectMode: ProjectMode) => Promise<void>;
   onDeleteCloudProject: (id: string) => Promise<void>;
   onImportBackup: () => void;
@@ -706,6 +718,7 @@ function HomePage({
   cloudProjectsLoading,
   cloudUser,
   recentProjects,
+  restoreProjectId,
   onCreateCloudProject,
   onDeleteCloudProject,
   onImportBackup,
@@ -718,6 +731,9 @@ function HomePage({
 }: HomePageProps) {
   const [newProjectDialogOpen, setNewProjectDialogOpen] = useState(false);
   const [newProjectMode, setNewProjectMode] = useState<ProjectMode>("story");
+  const restoreProject = restoreProjectId
+    ? recentProjects.find((project) => project.id === restoreProjectId)
+    : undefined;
 
   function handleCreateLocalProject() {
     setNewProjectDialogOpen(false);
@@ -758,6 +774,23 @@ function HomePage({
           Import Backup
         </button>
       </section>
+
+      {restoreProjectId ? (
+        <section className="project-home__section" aria-labelledby="restore-project-title">
+          <div className="project-home__section-heading">
+            <div>
+              <h2 id="restore-project-title">Restore Local Project</h2>
+            </div>
+          </div>
+          <p className="project-home__empty">
+            {restoreProject?.project
+              ? "This local project URL was restored from your recent browser snapshot. Open it below to continue."
+              : restoreProject
+                ? "This local project URL no longer has a browser snapshot. Open the folder again or import a backup to continue."
+                : "This local project URL is only available in the browser where it was opened. Open the folder again or import a backup to continue."}
+          </p>
+        </section>
+      ) : null}
 
       {newProjectDialogOpen ? (
         <div className="modal-backdrop" role="presentation">
@@ -2475,6 +2508,29 @@ function upsertRecentProject(projects: RecentProjectCard[], project: RecentProje
   return [project, ...projects.filter((currentProject) => currentProject.id !== project.id)]
     .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
     .slice(0, 12);
+}
+
+function workspaceSeedFromRecentProject(
+  projectId: string,
+  recentProjects: RecentProjectCard[]
+): WorkspaceProjectSeed | undefined {
+  const recentProject = recentProjects.find((project) => project.id === projectId);
+
+  if (!recentProject?.project) {
+    return undefined;
+  }
+
+  return {
+    id: recentProject.id,
+    project: recentProject.project,
+    status:
+      recentProject.source === "backup"
+        ? "Recent backup restored"
+        : recentProject.source === "folder"
+          ? "Recent folder snapshot restored"
+          : "Recent project restored",
+    storageMode: "local"
+  };
 }
 
 function isRecentProjectCard(value: unknown): value is RecentProjectCard {

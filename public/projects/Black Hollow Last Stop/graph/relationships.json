@@ -282,38 +282,6 @@
       }
     },
     {
-      "id": "link-quest-requires-key",
-      "sourceId": "quest-prove-station-staged",
-      "targetId": "item-locker-12-key",
-      "type": "requires",
-      "label": "Needs Locker 12 key",
-      "notes": "The clean evidence route requires getting Silas to reveal where Rowan left the key.",
-      "timelineVersions": [],
-      "gameStory": {
-        "choiceText": "",
-        "requirements": [],
-        "effects": [],
-        "consequenceNotes": "World-graph reminder that the branch is gated by trust.",
-        "priority": 0
-      }
-    },
-    {
-      "id": "link-signal-unlocks-confront",
-      "sourceId": "scene-search-signal-room",
-      "targetId": "dialogue-confront-evelyn-park",
-      "type": "unlocks",
-      "label": "Unlocks the redevelopment confrontation",
-      "notes": "Whether or not the ledger is found, the signal room gives enough structure for a confrontation scene.",
-      "timelineVersions": [],
-      "gameStory": {
-        "choiceText": "",
-        "requirements": [],
-        "effects": [],
-        "consequenceNotes": "Structural link for the Story Flow graph; branch links carry the actual choices.",
-        "priority": 0
-      }
-    },
-    {
       "id": "link-arden-rowan-case",
       "sourceId": "character-detective-arden-pike",
       "targetId": "character-rowan-ellis",
