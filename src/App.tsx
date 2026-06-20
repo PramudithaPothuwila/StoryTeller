@@ -2300,14 +2300,6 @@ function StoryWorkspace({
           >
             <Save aria-hidden="true" />
           </HeaderIconButton>
-          <HeaderIconButton
-            label="Export Backup"
-            shortcut={`${modifierShortcutLabel}+E`}
-            ariaKeyShortcuts="Control+E Meta+E"
-            onClick={handleExportBackup}
-          >
-            <Download aria-hidden="true" />
-          </HeaderIconButton>
           <HeaderIconButton label="Export Runtime" onClick={handleExportRuntime}>
             <Download aria-hidden="true" />
           </HeaderIconButton>
@@ -2377,6 +2369,7 @@ function StoryWorkspace({
           onDefaultRelationshipTypeChange={setDefaultRelationshipType}
           onDeleteItemType={handleDeleteItemType}
           onDeleteLinkType={handleDeleteLinkType}
+          onExportBackup={handleExportBackup}
           onProjectTitleChange={handleProjectTitleChange}
           onUpdateItemType={handleUpdateItemType}
           onUpdateLinkType={handleUpdateLinkType}

@@ -2246,6 +2246,10 @@ a.toolbar-button {
   font-weight: 800;
 }
 
+.settings-action-button {
+  width: fit-content;
+}
+
 .depth-toggle {
   display: inline-flex;
   width: fit-content;

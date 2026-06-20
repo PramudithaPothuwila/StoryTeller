@@ -439,7 +439,7 @@ describe("App project commands", () => {
     expect(screen.queryByRole("button", { name: "Open Project" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Select Folder" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Save Project" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Export Backup" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Export Backup" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Export Runtime" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Guide" })).toHaveAttribute("title", "Guide (?)");
     expect(screen.getByRole("button", { name: "Open Settings" })).toHaveAttribute("title", "Open Settings (Esc)");
@@ -825,6 +825,11 @@ describe("App project commands", () => {
     expect(screen.queryByLabelText("Agent base URL")).not.toBeInTheDocument();
     expect(screen.queryByRole("group", { name: "Project mode" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Game Story" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Export Backup" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Export Backup" }));
+    expect(createProjectBundle).toHaveBeenCalledWith(expect.objectContaining({ title: "Loaded Project" }));
+    expect(anchorClickSpy).toHaveBeenCalledTimes(1);
 
     fireEvent.change(screen.getByLabelText("Project title"), { target: { value: "Settings Project" } });
     expect(screen.getByText("Settings Project")).toBeInTheDocument();

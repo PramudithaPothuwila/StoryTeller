@@ -1,4 +1,4 @@
-import { ArrowLeft, Plus, Trash2 } from "lucide-react";
+import { ArrowLeft, Download, Plus, Trash2 } from "lucide-react";
 import { ReactNode, useState } from "react";
 import { iconForName, iconOptions } from "../data/icons";
 import { isItemTypeInUse, isLinkTypeInUse } from "../data/story";
@@ -13,6 +13,7 @@ interface SettingsPageProps {
   onDefaultRelationshipTypeChange: (type: LinkTypeId) => void;
   onDeleteItemType: (typeId: string) => void;
   onDeleteLinkType: (typeId: string) => void;
+  onExportBackup: () => void;
   onProjectTitleChange: (title: string) => void;
   onUpdateItemType: (typeId: string, patch: Partial<ItemTypeDefinition>) => void;
   onUpdateLinkType: (typeId: string, patch: Partial<LinkTypeDefinition>) => void;
@@ -27,6 +28,7 @@ export function SettingsPage({
   onDefaultRelationshipTypeChange,
   onDeleteItemType,
   onDeleteLinkType,
+  onExportBackup,
   onProjectTitleChange,
   onUpdateItemType,
   onUpdateLinkType
@@ -76,6 +78,15 @@ export function SettingsPage({
               </option>
             ))}
           </select>
+        </section>
+
+        <section className="settings-panel" aria-labelledby="backup-settings-title">
+          <h2 id="backup-settings-title">Backup</h2>
+          <p className="settings-help-text">Download a portable .storyteller.json copy of this project.</p>
+          <button type="button" className="text-tool-button settings-action-button" onClick={onExportBackup}>
+            <Download aria-hidden="true" />
+            Export Backup
+          </button>
         </section>
 
         <section className="settings-panel settings-panel--wide" aria-labelledby="type-settings-title">
