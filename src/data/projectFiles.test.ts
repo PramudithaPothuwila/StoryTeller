@@ -37,10 +37,16 @@ describe("project file model", () => {
     expect(files["storyteller.project.json"]).toBeTruthy();
     expect(files["graph/relationships.json"]).toBeTruthy();
     expect(files["graph/gameplay-transitions.json"]).toBeTruthy();
+    expect(files["runtime/facts.json"]).toBeTruthy();
+    expect(files["runtime/evidence.json"]).toBeTruthy();
+    expect(files["runtime/character-knowledge.json"]).toBeTruthy();
+    expect(files["runtime/contradictions.json"]).toBeTruthy();
+    expect(files["runtime/theory-rules.json"]).toBeTruthy();
     expect(Object.keys(files).some((path) => path.startsWith("entities/character/"))).toBe(true);
     expect(JSON.parse(files["storyteller.project.json"]).schemaVersion).toBe(7);
     expect(JSON.parse(files["storyteller.project.json"]).projectMode).toBe("story");
-    expect(JSON.parse(files["storyteller.project.json"]).runtime).toEqual(project.runtime);
+    expect(JSON.parse(files["storyteller.project.json"]).runtime).toBeUndefined();
+    expect(JSON.parse(files["runtime/facts.json"]).facts).toEqual(project.runtime.facts);
     expect(JSON.parse(files["storyteller.project.json"]).timelineLaneNames).toEqual(project.timelineLaneNames);
     expect(Object.keys(restoredProject.entities)).toHaveLength(Object.keys(project.entities).length);
     expect(restoredProject.relationships).toHaveLength(project.relationships.length);
@@ -332,11 +338,21 @@ describe("project file model", () => {
           files
         })
     } as File);
+    const directory = createMemoryDirectoryHandle();
+    await writeProjectToDirectory(project, directory.handle);
+    const restoredFromDirectory = await readProjectFromDirectory(directory.handle);
     const manifest = JSON.parse(files["storyteller.project.json"]);
 
     expect(manifest.schemaVersion).toBe(7);
     expect(manifest.projectMode).toBe("game_story");
-    expect(manifest.runtime.facts[0].id).toBe("fact-ally-offer");
+    expect(manifest.runtime).toBeUndefined();
+    expect(JSON.parse(files["runtime/facts.json"]).facts[0].id).toBe("fact-ally-offer");
+    expect(JSON.parse(files["runtime/evidence.json"]).evidence[0].id).toBe("evidence-ally-token");
+    expect(JSON.parse(files["runtime/character-knowledge.json"]).characterKnowledge[0].id).toBe("knowledge-ally");
+    expect(JSON.parse(files["runtime/contradictions.json"]).contradictionRules[0].id).toBe("contradiction-ally");
+    expect(JSON.parse(files["runtime/theory-rules.json"]).theoryRules[0].id).toBe("theory-alliance");
+    expect(directory.hasFile("runtime/facts.json")).toBe(true);
+    expect(directory.hasFile("runtime/evidence.json")).toBe(true);
     expect(manifest.gameStory.startNodeId).toBe(start.id);
     expect(manifest.storyFlowLayout).toEqual(project.storyFlowLayout);
     expect(restoredFromFiles.gameStory?.stateVariables[0].id).toBe("met-ally");
@@ -351,6 +367,8 @@ describe("project file model", () => {
     expect(restoredFromBundle.storyFlowLayout).toEqual(project.storyFlowLayout);
     expect(restoredFromBundle.runtime.characterKnowledge[0].belief).toBe("believes_true");
     expect(restoredFromBundle.gameplayTransitions[0].choice.text).toBe("Accept the offer");
+    expect(restoredFromDirectory.runtime.facts[0].id).toBe("fact-ally-offer");
+    expect(restoredFromDirectory.runtime.theoryRules[0].conclusion).toBe("The ally is trustworthy.");
   });
 
   it("removes stale entity markdown files when saving a folder project", async () => {
