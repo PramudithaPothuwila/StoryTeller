@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { BUILT_IN_TRIGGER_LINK_TYPE_ID, BUILT_IN_WORLD_RULE_TYPE_ID } from "../types";
 import { projectFromFiles } from "./projectFiles";
-import { getGameContinuityIssues } from "./story";
+import { getGameContinuityIssues, migrateProjectShape } from "./story";
 import { DEFAULT_STARTER_PROJECT_ID, getStarterProjects, loadStarterProject } from "./starterProject";
 
 describe("starter project loader", () => {
@@ -152,18 +152,45 @@ describe("starter project loader", () => {
     expect(project.gameStory?.stateVariables.map((variable) => variable.id)).toEqual(
       expect.arrayContaining(["recognized-body-dump", "found-locker-key", "read-signal-ledger"])
     );
-    expect(project.relationships).toEqual(
+    expect(project.gameplayTransitions).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          sourceId: "dialogue-confront-evelyn-park",
-          targetId: "ending-true-route",
-          type: "branches_to"
+          id: "branch-confront-to-true-route",
+          sourceNodeId: "dialogue-confront-evelyn-park",
+          targetNodeId: "ending-true-route",
+          choice: expect.objectContaining({ text: "Present the ledger and the drag-route proof" }),
+          presentation: expect.objectContaining({ priority: 1 })
         }),
         expect.objectContaining({
-          sourceId: "dialogue-confront-evelyn-park",
-          targetId: "ending-false-frame",
-          type: "branches_to"
-        }),
+          id: "branch-confront-to-false-frame",
+          sourceNodeId: "dialogue-confront-evelyn-park",
+          targetNodeId: "ending-false-frame"
+        })
+      ])
+    );
+    expect(project.gameplayTransitions.find((transition) => transition.id === "branch-silas-trust-to-signal")).toEqual(
+      expect.objectContaining({
+        requirements: {
+          all: [
+            expect.objectContaining({
+              variableId: "recognized-body-dump",
+              operator: "equals",
+              value: true
+            })
+          ]
+        },
+        effects: expect.arrayContaining([
+          expect.objectContaining({ variableId: "trust-silas", operation: "set", value: "Trusted" }),
+          expect.objectContaining({ variableId: "found-locker-key", operation: "set", value: true })
+        ])
+      })
+    );
+    expect(project.relationships.some((relationship) => relationship.type === "branches_to")).toBe(false);
+    expect(migrateProjectShape(project).gameplayTransitions.map((transition) => transition.id)).toEqual(
+      project.gameplayTransitions.map((transition) => transition.id)
+    );
+    expect(project.relationships).toEqual(
+      expect.arrayContaining([
         expect.objectContaining({
           sourceId: "event-murder-victim-found",
           targetId: "scene-murder-victim-found",

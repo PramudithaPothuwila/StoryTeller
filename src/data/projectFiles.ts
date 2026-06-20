@@ -1,5 +1,6 @@
 import {
   GameStoryProjectMetadata,
+  GameplayTransition,
   ItemTypeDefinition,
   LinkTypeDefinition,
   ProjectMode,
@@ -12,6 +13,7 @@ import { migrateProjectShape } from "./story";
 
 const MANIFEST_PATH = "storyteller.project.json";
 const RELATIONSHIPS_PATH = "graph/relationships.json";
+const GAMEPLAY_TRANSITIONS_PATH = "graph/gameplay-transitions.json";
 const BUNDLE_KIND = "storyteller.project.bundle";
 
 interface ProjectManifestV1 {
@@ -104,9 +106,34 @@ interface ProjectManifestV5 {
   }>;
 }
 
+interface ProjectManifestV6 {
+  schemaVersion: 6;
+  title: string;
+  updatedAt: string;
+  projectMode: ProjectMode;
+  gameStory?: GameStoryProjectMetadata;
+  itemTypes: ItemTypeDefinition[];
+  linkTypes: LinkTypeDefinition[];
+  timelineLaneNames?: string[];
+  graphLayout: StoryProject["layout"];
+  storyFlowLayout: StoryProject["storyFlowLayout"];
+  entityIndex: Array<{
+    id: string;
+    type: string;
+    title: string;
+    updatedAt: string;
+    path: string;
+  }>;
+}
+
 interface RelationshipsFile {
-  schemaVersion: 1 | 2 | 3 | 4 | 5;
+  schemaVersion: 1 | 2 | 3 | 4 | 5 | 6;
   relationships: StoryRelationship[];
+}
+
+interface GameplayTransitionsFile {
+  schemaVersion: 6;
+  gameplayTransitions: GameplayTransition[];
 }
 
 interface ProjectBundle {
@@ -115,22 +142,29 @@ interface ProjectBundle {
   files: Record<string, string>;
 }
 
-type ProjectManifest = ProjectManifestV1 | ProjectManifestV2 | ProjectManifestV3 | ProjectManifestV4 | ProjectManifestV5;
+type ProjectManifest =
+  | ProjectManifestV1
+  | ProjectManifestV2
+  | ProjectManifestV3
+  | ProjectManifestV4
+  | ProjectManifestV5
+  | ProjectManifestV6;
 
 export function buildProjectFiles(project: StoryProject): Record<string, string> {
   const files: Record<string, string> = {};
-  const entities = Object.values(project.entities);
-  const manifest: ProjectManifestV5 = {
+  const projectForFiles = migrateProjectShape(project);
+  const entities = Object.values(projectForFiles.entities);
+  const manifest: ProjectManifestV6 = {
     schemaVersion: STORY_PROJECT_SCHEMA_VERSION,
-    title: project.title,
-    updatedAt: project.updatedAt,
-    projectMode: project.projectMode,
-    gameStory: project.gameStory,
-    itemTypes: project.itemTypes,
-    linkTypes: project.linkTypes,
-    timelineLaneNames: project.timelineLaneNames,
-    graphLayout: project.layout,
-    storyFlowLayout: project.storyFlowLayout,
+    title: projectForFiles.title,
+    updatedAt: projectForFiles.updatedAt,
+    projectMode: projectForFiles.projectMode,
+    gameStory: projectForFiles.gameStory,
+    itemTypes: projectForFiles.itemTypes,
+    linkTypes: projectForFiles.linkTypes,
+    timelineLaneNames: projectForFiles.timelineLaneNames,
+    graphLayout: projectForFiles.layout,
+    storyFlowLayout: projectForFiles.storyFlowLayout,
     entityIndex: entities.map((entity) => ({
       id: entity.id,
       type: entity.type,
@@ -141,11 +175,16 @@ export function buildProjectFiles(project: StoryProject): Record<string, string>
   };
   const relationships: RelationshipsFile = {
     schemaVersion: STORY_PROJECT_SCHEMA_VERSION,
-    relationships: project.relationships
+    relationships: projectForFiles.relationships
+  };
+  const gameplayTransitions: GameplayTransitionsFile = {
+    schemaVersion: STORY_PROJECT_SCHEMA_VERSION,
+    gameplayTransitions: projectForFiles.gameplayTransitions
   };
 
   files[MANIFEST_PATH] = prettyJson(manifest);
   files[RELATIONSHIPS_PATH] = prettyJson(relationships);
+  files[GAMEPLAY_TRANSITIONS_PATH] = prettyJson(gameplayTransitions);
 
   for (const entity of entities) {
     files[entityPath(entity)] = serializeEntityMarkdown(entity);
@@ -168,13 +207,18 @@ export function projectFromFiles(files: Record<string, string>): StoryProject {
     manifest.schemaVersion !== 2 &&
     manifest.schemaVersion !== 3 &&
     manifest.schemaVersion !== 4 &&
-    manifest.schemaVersion !== 5
+    manifest.schemaVersion !== 5 &&
+    manifest.schemaVersion !== 6
   ) {
     throw new Error("Unsupported or invalid StoryTeller project manifest");
   }
 
   const relationshipText = files[RELATIONSHIPS_PATH] ?? prettyJson({ schemaVersion: manifest.schemaVersion, relationships: [] });
   const relationshipFile = parseJson<RelationshipsFile>(relationshipText, "relationships file");
+  const gameplayTransitionFile =
+    manifest.schemaVersion === 6 && files[GAMEPLAY_TRANSITIONS_PATH]
+      ? parseJson<GameplayTransitionsFile>(files[GAMEPLAY_TRANSITIONS_PATH], "gameplay transitions file")
+      : { schemaVersion: 6 as const, gameplayTransitions: [] };
   const entities: StoryProject["entities"] = {};
 
   for (const indexedEntity of manifest.entityIndex) {
@@ -194,39 +238,50 @@ export function projectFromFiles(files: Record<string, string>): StoryProject {
     updatedAt: manifest.updatedAt,
     projectMode:
       manifest.schemaVersion === 3 || manifest.schemaVersion === 4 || manifest.schemaVersion === 5
+        || manifest.schemaVersion === 6
         ? manifest.projectMode
         : undefined,
     gameStory:
       manifest.schemaVersion === 3 || manifest.schemaVersion === 4 || manifest.schemaVersion === 5
+        || manifest.schemaVersion === 6
         ? manifest.gameStory
         : undefined,
     itemTypes:
       manifest.schemaVersion === 2 ||
       manifest.schemaVersion === 3 ||
       manifest.schemaVersion === 4 ||
-      manifest.schemaVersion === 5
+      manifest.schemaVersion === 5 ||
+      manifest.schemaVersion === 6
         ? manifest.itemTypes
         : undefined,
     linkTypes:
       manifest.schemaVersion === 2 ||
       manifest.schemaVersion === 3 ||
       manifest.schemaVersion === 4 ||
-      manifest.schemaVersion === 5
+      manifest.schemaVersion === 5 ||
+      manifest.schemaVersion === 6
         ? manifest.linkTypes
         : undefined,
     timelineLaneNames:
       manifest.schemaVersion === 2 ||
       manifest.schemaVersion === 3 ||
       manifest.schemaVersion === 4 ||
-      manifest.schemaVersion === 5
+      manifest.schemaVersion === 5 ||
+      manifest.schemaVersion === 6
         ? manifest.timelineLaneNames
         : undefined,
     entities,
     relationships: (relationshipFile.relationships ?? []).filter(
       (relationship) => entities[relationship.sourceId] && entities[relationship.targetId]
     ),
+    gameplayTransitions: (gameplayTransitionFile.gameplayTransitions ?? []).filter(
+      (transition) => entities[transition.sourceNodeId] && entities[transition.targetNodeId]
+    ),
     layout: manifest.graphLayout ?? {},
-    storyFlowLayout: manifest.schemaVersion === 4 || manifest.schemaVersion === 5 ? manifest.storyFlowLayout : undefined
+    storyFlowLayout:
+      manifest.schemaVersion === 4 || manifest.schemaVersion === 5 || manifest.schemaVersion === 6
+        ? manifest.storyFlowLayout
+        : undefined
   });
 }
 
@@ -303,6 +358,16 @@ export async function readProjectFromDirectory(directoryHandle: FileSystemDirect
     [RELATIONSHIPS_PATH]: await readTextPath(directoryHandle, RELATIONSHIPS_PATH)
   };
 
+  if (manifest.schemaVersion === 6) {
+    try {
+      files[GAMEPLAY_TRANSITIONS_PATH] = await readTextPath(directoryHandle, GAMEPLAY_TRANSITIONS_PATH);
+    } catch (error) {
+      if (!isMissingPathError(error)) {
+        throw error;
+      }
+    }
+  }
+
   for (const indexedEntity of manifest.entityIndex) {
     files[indexedEntity.path] = await readTextPath(directoryHandle, indexedEntity.path);
   }
@@ -322,7 +387,8 @@ async function readExistingProjectManifest(directoryHandle: FileSystemDirectoryH
       manifest.schemaVersion === 2 ||
       manifest.schemaVersion === 3 ||
       manifest.schemaVersion === 4 ||
-      manifest.schemaVersion === 5) &&
+      manifest.schemaVersion === 5 ||
+      manifest.schemaVersion === 6) &&
       Array.isArray(manifest.entityIndex)
       ? manifest
       : null;

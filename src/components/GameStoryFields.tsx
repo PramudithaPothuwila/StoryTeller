@@ -41,7 +41,11 @@ const conditionOperators: GameStateCondition["operator"][] = [
   "equals",
   "not_equals",
   "greater_than",
+  "greater_than_or_equal",
   "less_than",
+  "less_than_or_equal",
+  "contains",
+  "exists",
   "has",
   "not_has"
 ];

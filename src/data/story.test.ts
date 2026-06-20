@@ -13,6 +13,7 @@ import {
   deleteEmptyTimelineTrackFromProject,
   entityVisibleInGraph,
   ensureEventTimeline,
+  evaluateGameStateConditions,
   getGameContinuityIssues,
   getGameStoryNodes,
   getGameStoryTriggerRelationships,
@@ -193,11 +194,11 @@ describe("story world rules", () => {
 });
 
 describe("game story mode", () => {
-  it("upgrades projects to schema v5 and installs game story catalogs only when enabled", () => {
+  it("upgrades projects to schema v6 and installs game story catalogs only when enabled", () => {
     const storyProject = createBlankProject("Story");
     const gameProject = setProjectModeInProject(storyProject, "game_story");
 
-    expect(storyProject.schemaVersion).toBe(5);
+    expect(storyProject.schemaVersion).toBe(6);
     expect(storyProject.storyFlowLayout).toEqual({});
     expect(storyProject.projectMode).toBe("story");
     expect(storyProject.itemTypes.some((type) => type.id === "scene")).toBe(false);
@@ -234,7 +235,7 @@ describe("game story mode", () => {
       }
     });
 
-    expect(migrated.schemaVersion).toBe(5);
+    expect(migrated.schemaVersion).toBe(6);
     expect(migrated.layout[start.id]).toEqual({ x: 10, y: 20 });
     expect(migrated.entities[start.id].graphPresence).toBe("both");
     expect(migrated.entities[character.id].graphPresence).toBe("world");
@@ -407,6 +408,95 @@ describe("game story mode", () => {
         "Quest has no objectives"
       ])
     );
+  });
+
+  it("evaluates nested condition groups with all, any, and not", () => {
+    let project = setProjectModeInProject(createBlankProject("Nested Conditions"), "game_story");
+    project = addGameStateVariableToProject(project, "flag");
+    project = updateGameStateVariableInProject(project, project.gameStory!.stateVariables[0].id, {
+      id: "knows-truth",
+      label: "Knows Truth",
+      defaultValue: false
+    });
+    project = addGameStateVariableToProject(project, "number");
+    project = updateGameStateVariableInProject(project, project.gameStory!.stateVariables[1].id, {
+      id: "evidence-pressure",
+      label: "Evidence Pressure",
+      defaultValue: 0
+    });
+
+    expect(
+      evaluateGameStateConditions(
+        project,
+        {
+          all: [
+            { ...createGameStateCondition("knows-truth"), value: true },
+            {
+              any: [
+                { ...createGameStateCondition("evidence-pressure"), operator: "greater_than_or_equal", value: 3 },
+                { not: { ...createGameStateCondition("knows-truth"), value: false } }
+              ]
+            }
+          ]
+        },
+        {
+          "knows-truth": true,
+          "evidence-pressure": 2
+        }
+      )
+    ).toBe(true);
+  });
+
+  it("validates variable value types and invalid effect operations", () => {
+    let project = setProjectModeInProject(createBlankProject("State Validation"), "game_story");
+    project = addGameStateVariableToProject(project, "flag");
+    project = updateGameStateVariableInProject(project, project.gameStory!.stateVariables[0].id, {
+      id: "has-key",
+      label: "Has Key",
+      defaultValue: false
+    });
+    project = addGameStateVariableToProject(project, "enum");
+    project = updateGameStateVariableInProject(project, project.gameStory!.stateVariables[1].id, {
+      id: "trust-silas",
+      label: "Trust Silas",
+      defaultValue: "unknown",
+      enumOptions: ["unknown", "trusted"]
+    });
+    const start = createStoryEntity("scene", project.itemTypes, "Start", "story_flow");
+    const ending = createStoryEntity("ending", project.itemTypes, "Ending", "story_flow");
+
+    project = updateGameStoryProjectMetadata(
+      {
+        ...project,
+        entities: {
+          [start.id]: start,
+          [ending.id]: ending
+        },
+        gameplayTransitions: [
+          {
+            id: "transition-invalid",
+            sourceNodeId: start.id,
+            targetNodeId: ending.id,
+            choice: { text: "Invalid choice" },
+            requirements: {
+              all: [
+                { ...createGameStateCondition("has-key"), value: "true" },
+                { ...createGameStateCondition("trust-silas"), value: "alienated" }
+              ]
+            },
+            effects: [{ ...createGameStateEffect("has-key"), operation: "increment", value: 1 }],
+            presentation: { priority: 0 },
+            authorNotes: { purpose: "" },
+            metadata: {}
+          }
+        ]
+      },
+      { startNodeId: start.id }
+    );
+
+    const issueTitles = getGameContinuityIssues(project).map((issue) => issue.title);
+
+    expect(issueTitles).toContain("Invalid state value");
   });
 });
 
