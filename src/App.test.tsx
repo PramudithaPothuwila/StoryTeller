@@ -440,6 +440,7 @@ describe("App project commands", () => {
     expect(screen.getByRole("button", { name: "Select Folder" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Save Project" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Export Backup" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Export Runtime" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Guide" })).toHaveAttribute("title", "Guide (?)");
     expect(screen.getByRole("button", { name: "Open Settings" })).toHaveAttribute("title", "Open Settings (Esc)");
     expect(screen.getByRole("button", { name: "Save Project" })).toHaveAttribute("title", "Save Project (Ctrl+S)");

@@ -101,6 +101,7 @@ import {
   readProjectFromDirectory,
   writeProjectToDirectory
 } from "./data/projectFiles";
+import { createRuntimeBundleBlob } from "./runtime/export";
 import {
   CloudProjectConflictError,
   CloudProjectSummary,
@@ -1840,6 +1841,15 @@ function StoryWorkspace({
     URL.revokeObjectURL(url);
   }, [project]);
 
+  const downloadRuntimeBundle = useCallback(() => {
+    const url = URL.createObjectURL(createRuntimeBundleBlob(project));
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `${project.title.trim() || "storyteller"}.storyruntime.json`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  }, [project]);
+
   const handleSelectProjectFolder = useCallback(async () => {
     if (!hasFolderProjectSupport()) {
       setStatus(FOLDER_ACCESS_UNAVAILABLE_MESSAGE);
@@ -1924,6 +1934,11 @@ function StoryWorkspace({
     downloadProjectBackup();
     setStatus("Backup exported");
   }, [downloadProjectBackup]);
+
+  const handleExportRuntime = useCallback(() => {
+    downloadRuntimeBundle();
+    setStatus("Runtime exported");
+  }, [downloadRuntimeBundle]);
 
   const handleSaveToCloud = useCallback(async () => {
     if (!cloudUser) {
@@ -2223,6 +2238,7 @@ function StoryWorkspace({
     handleDeleteEntity,
     handleDeleteRelationship,
     handleExportBackup,
+    handleExportRuntime,
     handleGraphFocusDepthChange,
     handleGraphViewChange,
     handleSaveProject,
@@ -2290,6 +2306,9 @@ function StoryWorkspace({
             ariaKeyShortcuts="Control+E Meta+E"
             onClick={handleExportBackup}
           >
+            <Download aria-hidden="true" />
+          </HeaderIconButton>
+          <HeaderIconButton label="Export Runtime" onClick={handleExportRuntime}>
             <Download aria-hidden="true" />
           </HeaderIconButton>
           <HeaderIconButton label="Rulebook" shortcut="R" ariaKeyShortcuts="R" onClick={handleOpenRulebook}>
