@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { createBlankProject } from "./story";
+import { createBlankProject, createStoryEntity } from "./story";
 import { openCloudProject, requestAgentPlan, serializeCloudProject } from "./cloudProjects";
 
 const { supabaseClientMock, projectsQueryMock } = vi.hoisted(() => {
@@ -80,6 +80,8 @@ describe("cloud project storage", () => {
 
   it("invokes the cloud agent function with project and prompt", async () => {
     const project = createBlankProject("Agent Cloud");
+    const hero = createStoryEntity("character", project.itemTypes, "Cloud Hero");
+    project.entities[hero.id] = hero;
     supabaseClientMock.functions.invoke.mockResolvedValue({
       data: {
         output_text: "{\"summary\":\"Done\",\"assumptions\":[],\"changes\":[],\"followUpQuestions\":[]}"
@@ -91,7 +93,11 @@ describe("cloud project storage", () => {
 
     expect(supabaseClientMock.functions.invoke).toHaveBeenCalledWith("agent", {
       body: {
-        project,
+        project: expect.objectContaining({
+          title: "Agent Cloud",
+          entities: [expect.objectContaining({ id: hero.id, title: "Cloud Hero" })],
+          relationships: []
+        }),
         prompt: "Add a rival."
       }
     });

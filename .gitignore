@@ -3,3 +3,4 @@ dist/
 *.local
 dev-server.*.log
 npm-debug.log*
+supabase/functions/.env

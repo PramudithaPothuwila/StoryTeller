@@ -1,4 +1,5 @@
 import { createClient, Session, SupabaseClient, User } from "@supabase/supabase-js";
+import { buildAgentProjectContext } from "./agent";
 import { migrateProjectShape } from "./story";
 import { StoryProject } from "../types";
 
@@ -274,7 +275,7 @@ export async function requestAgentPlan(project: StoryProject, prompt: string): P
   const client = requireSupabaseClient();
   const { data, error } = await client.functions.invoke("agent", {
     body: {
-      project,
+      project: buildAgentProjectContext(project),
       prompt
     }
   });

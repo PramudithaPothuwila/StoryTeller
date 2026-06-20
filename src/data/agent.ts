@@ -154,7 +154,7 @@ export const AGENT_SYSTEM_PROMPT = [
   "For game-story projects, use graphPresence to place each item in the world graph, story_flow graph, or both."
 ].join("\n");
 
-export const DEFAULT_NVIDIA_AGENT_MODEL = "nvidia/llama-3.1-nemotron-nano-8b-v1";
+export const DEFAULT_NVIDIA_AGENT_MODEL = "meta/llama-3.2-1b-instruct";
 
 export const AGENT_RESPONSE_FORMAT = {
   type: "json_schema",
@@ -289,7 +289,11 @@ function parseChatCompletionPayload(parsed: Record<string, unknown>): AgentChang
     const content = choice.message.content;
 
     if (typeof content === "string" && content.trim()) {
-      return normalizeAgentChangePlan(JSON.parse(cleanJsonText(content)));
+      try {
+        return normalizeAgentChangePlan(JSON.parse(cleanJsonText(content)));
+      } catch (error) {
+        throw new Error(`The agent returned non-JSON content instead of a change plan: ${excerptForError(content)}`);
+      }
     }
   }
 
@@ -834,6 +838,11 @@ function cleanJsonText(value: string): string {
   }
 
   return cleaned;
+}
+
+function excerptForError(value: string): string {
+  const singleLine = value.replace(/\s+/g, " ").trim();
+  return singleLine.length > 180 ? `${singleLine.slice(0, 180)}...` : singleLine;
 }
 
 function validateEventReference(project: StoryProject, eventId: string, label: string, errors: string[]) {

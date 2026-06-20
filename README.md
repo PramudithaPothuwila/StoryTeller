@@ -66,14 +66,30 @@ supabase secrets set NVIDIA_API_KEY=nvapi_your-key
 Optional backend-only overrides:
 
 ```sh
-supabase secrets set NVIDIA_MODEL=nvidia/llama-3.1-nemotron-nano-8b-v1
+supabase secrets set NVIDIA_MODEL=meta/llama-3.2-1b-instruct
 supabase secrets set NVIDIA_BASE_URL=https://integrate.api.nvidia.com/v1
 ```
+
+The Edge Function uses the OpenAI-compatible SDK client with `NVIDIA_BASE_URL`
+pointing at NVIDIA's API.
 
 For local Supabase, use the project-local CLI:
 
 ```sh
 npx supabase status
+```
+
+Create a local function env file from the example:
+
+```sh
+cp supabase/.env.example supabase/.env.local
+```
+
+Then set `NVIDIA_API_KEY` in `supabase/.env.local` and serve functions with
+that file:
+
+```sh
+npx supabase functions serve --env-file supabase/.env.local
 ```
 
 The local agent function is served from:

@@ -205,4 +205,18 @@ describe("agent project helpers", () => {
     expect(plan.summary).toBe("Add a rival.");
     expect(plan.changes[0].operation).toBe("create_entity");
   });
+
+  it("reports non-JSON chat completion output clearly", () => {
+    expect(() =>
+      parseAgentResponsePayload({
+        choices: [
+          {
+            message: {
+              content: "Here is the detailed thinking plan for the provided schema."
+            }
+          }
+        ]
+      })
+    ).toThrow(/agent returned non-JSON content/i);
+  });
 });
