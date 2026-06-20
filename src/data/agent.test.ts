@@ -11,7 +11,7 @@ import {
 } from "./agent";
 
 describe("agent project helpers", () => {
-  it("builds a compact schema v6 project context with structured metadata", () => {
+  it("builds a compact schema v7 project context with structured metadata", () => {
     let project = setProjectModeInProject(createBlankProject("Agent Context"), "game_story");
     const character = createStoryEntity("character", project.itemTypes, "Mara Vale");
     character.bodyMarkdown = "A".repeat(900);
@@ -46,8 +46,9 @@ describe("agent project helpers", () => {
 
     const context = buildAgentProjectContext(project);
 
-    expect(context.schemaVersion).toBe(6);
+    expect(context.schemaVersion).toBe(7);
     expect(context.projectMode).toBe("game_story");
+    expect(context.runtime).toEqual(project.runtime);
     expect(context.itemTypes.some((type) => type.id === "scene")).toBe(true);
     expect(context.linkTypes.some((type) => type.id === "branches_to")).toBe(true);
     expect(context.gameStory).toBeTruthy();
@@ -156,7 +157,7 @@ describe("agent project helpers", () => {
 
     const result = applyAgentChangePlan(project, plan);
 
-    expect(result.project.schemaVersion).toBe(6);
+    expect(result.project.schemaVersion).toBe(7);
     expect(result.project.entities["character-rival"].title).toBe("Rival");
     expect(result.project.relationships.some((relationship) => relationship.id === "link-hero-rival")).toBe(true);
     expect(result.project.relationships.some((relationship) => relationship.startsAtEventId === event.id)).toBe(true);

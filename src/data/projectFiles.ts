@@ -7,7 +7,8 @@ import {
   STORY_PROJECT_SCHEMA_VERSION,
   StoryEntity,
   StoryProject,
-  StoryRelationship
+  StoryRelationship,
+  StoryRuntimeMetadata
 } from "../types";
 import { migrateProjectShape } from "./story";
 
@@ -126,13 +127,34 @@ interface ProjectManifestV6 {
   }>;
 }
 
+interface ProjectManifestV7 {
+  schemaVersion: 7;
+  title: string;
+  updatedAt: string;
+  projectMode: ProjectMode;
+  gameStory?: GameStoryProjectMetadata;
+  runtime: StoryRuntimeMetadata;
+  itemTypes: ItemTypeDefinition[];
+  linkTypes: LinkTypeDefinition[];
+  timelineLaneNames?: string[];
+  graphLayout: StoryProject["layout"];
+  storyFlowLayout: StoryProject["storyFlowLayout"];
+  entityIndex: Array<{
+    id: string;
+    type: string;
+    title: string;
+    updatedAt: string;
+    path: string;
+  }>;
+}
+
 interface RelationshipsFile {
-  schemaVersion: 1 | 2 | 3 | 4 | 5 | 6;
+  schemaVersion: 1 | 2 | 3 | 4 | 5 | 6 | 7;
   relationships: StoryRelationship[];
 }
 
 interface GameplayTransitionsFile {
-  schemaVersion: 6;
+  schemaVersion: 6 | 7;
   gameplayTransitions: GameplayTransition[];
 }
 
@@ -148,18 +170,20 @@ type ProjectManifest =
   | ProjectManifestV3
   | ProjectManifestV4
   | ProjectManifestV5
-  | ProjectManifestV6;
+  | ProjectManifestV6
+  | ProjectManifestV7;
 
 export function buildProjectFiles(project: StoryProject): Record<string, string> {
   const files: Record<string, string> = {};
   const projectForFiles = migrateProjectShape(project);
   const entities = Object.values(projectForFiles.entities);
-  const manifest: ProjectManifestV6 = {
+  const manifest: ProjectManifestV7 = {
     schemaVersion: STORY_PROJECT_SCHEMA_VERSION,
     title: projectForFiles.title,
     updatedAt: projectForFiles.updatedAt,
     projectMode: projectForFiles.projectMode,
     gameStory: projectForFiles.gameStory,
+    runtime: projectForFiles.runtime,
     itemTypes: projectForFiles.itemTypes,
     linkTypes: projectForFiles.linkTypes,
     timelineLaneNames: projectForFiles.timelineLaneNames,
@@ -208,7 +232,8 @@ export function projectFromFiles(files: Record<string, string>): StoryProject {
     manifest.schemaVersion !== 3 &&
     manifest.schemaVersion !== 4 &&
     manifest.schemaVersion !== 5 &&
-    manifest.schemaVersion !== 6
+    manifest.schemaVersion !== 6 &&
+    manifest.schemaVersion !== 7
   ) {
     throw new Error("Unsupported or invalid StoryTeller project manifest");
   }
@@ -216,7 +241,7 @@ export function projectFromFiles(files: Record<string, string>): StoryProject {
   const relationshipText = files[RELATIONSHIPS_PATH] ?? prettyJson({ schemaVersion: manifest.schemaVersion, relationships: [] });
   const relationshipFile = parseJson<RelationshipsFile>(relationshipText, "relationships file");
   const gameplayTransitionFile =
-    manifest.schemaVersion === 6 && files[GAMEPLAY_TRANSITIONS_PATH]
+    manifest.schemaVersion >= 6 && files[GAMEPLAY_TRANSITIONS_PATH]
       ? parseJson<GameplayTransitionsFile>(files[GAMEPLAY_TRANSITIONS_PATH], "gameplay transitions file")
       : { schemaVersion: 6 as const, gameplayTransitions: [] };
   const entities: StoryProject["entities"] = {};
@@ -238,20 +263,22 @@ export function projectFromFiles(files: Record<string, string>): StoryProject {
     updatedAt: manifest.updatedAt,
     projectMode:
       manifest.schemaVersion === 3 || manifest.schemaVersion === 4 || manifest.schemaVersion === 5
-        || manifest.schemaVersion === 6
+        || manifest.schemaVersion === 6 || manifest.schemaVersion === 7
         ? manifest.projectMode
         : undefined,
     gameStory:
       manifest.schemaVersion === 3 || manifest.schemaVersion === 4 || manifest.schemaVersion === 5
-        || manifest.schemaVersion === 6
+        || manifest.schemaVersion === 6 || manifest.schemaVersion === 7
         ? manifest.gameStory
         : undefined,
+    runtime: manifest.schemaVersion === 7 ? manifest.runtime : undefined,
     itemTypes:
       manifest.schemaVersion === 2 ||
       manifest.schemaVersion === 3 ||
       manifest.schemaVersion === 4 ||
       manifest.schemaVersion === 5 ||
-      manifest.schemaVersion === 6
+      manifest.schemaVersion === 6 ||
+      manifest.schemaVersion === 7
         ? manifest.itemTypes
         : undefined,
     linkTypes:
@@ -259,7 +286,8 @@ export function projectFromFiles(files: Record<string, string>): StoryProject {
       manifest.schemaVersion === 3 ||
       manifest.schemaVersion === 4 ||
       manifest.schemaVersion === 5 ||
-      manifest.schemaVersion === 6
+      manifest.schemaVersion === 6 ||
+      manifest.schemaVersion === 7
         ? manifest.linkTypes
         : undefined,
     timelineLaneNames:
@@ -267,7 +295,8 @@ export function projectFromFiles(files: Record<string, string>): StoryProject {
       manifest.schemaVersion === 3 ||
       manifest.schemaVersion === 4 ||
       manifest.schemaVersion === 5 ||
-      manifest.schemaVersion === 6
+      manifest.schemaVersion === 6 ||
+      manifest.schemaVersion === 7
         ? manifest.timelineLaneNames
         : undefined,
     entities,
@@ -279,7 +308,7 @@ export function projectFromFiles(files: Record<string, string>): StoryProject {
     ),
     layout: manifest.graphLayout ?? {},
     storyFlowLayout:
-      manifest.schemaVersion === 4 || manifest.schemaVersion === 5 || manifest.schemaVersion === 6
+      manifest.schemaVersion === 4 || manifest.schemaVersion === 5 || manifest.schemaVersion === 6 || manifest.schemaVersion === 7
         ? manifest.storyFlowLayout
         : undefined
   });
@@ -358,7 +387,7 @@ export async function readProjectFromDirectory(directoryHandle: FileSystemDirect
     [RELATIONSHIPS_PATH]: await readTextPath(directoryHandle, RELATIONSHIPS_PATH)
   };
 
-  if (manifest.schemaVersion === 6) {
+  if (manifest.schemaVersion >= 6) {
     try {
       files[GAMEPLAY_TRANSITIONS_PATH] = await readTextPath(directoryHandle, GAMEPLAY_TRANSITIONS_PATH);
     } catch (error) {
@@ -388,7 +417,8 @@ async function readExistingProjectManifest(directoryHandle: FileSystemDirectoryH
       manifest.schemaVersion === 3 ||
       manifest.schemaVersion === 4 ||
       manifest.schemaVersion === 5 ||
-      manifest.schemaVersion === 6) &&
+      manifest.schemaVersion === 6 ||
+      manifest.schemaVersion === 7) &&
       Array.isArray(manifest.entityIndex)
       ? manifest
       : null;

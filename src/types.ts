@@ -1,7 +1,7 @@
 export const BUILT_IN_EVENT_TYPE_ID = "event";
 export const BUILT_IN_WORLD_RULE_TYPE_ID = "world_rule";
 export const BUILT_IN_TRIGGER_LINK_TYPE_ID = "triggers";
-export const STORY_PROJECT_SCHEMA_VERSION = 6;
+export const STORY_PROJECT_SCHEMA_VERSION = 7;
 
 export type ItemTypeId = string;
 export type LinkTypeId = string;
@@ -324,6 +324,75 @@ export interface AiProposal {
   metadata?: Record<string, unknown>;
 }
 
+export type StoryRuntimeTruthState = "true" | "false" | "ambiguous" | "unknown";
+export type StoryRuntimeEvidenceReliability = "confirmed" | "unverified" | "misleading";
+export type StoryRuntimePlayerVisibility = "hidden" | "discoverable" | "revealed";
+export type StoryRuntimeKnowledgeState = "knows" | "suspects" | "does_not_know";
+export type StoryRuntimeBeliefState = "believes_true" | "believes_false" | "uncertain" | "unaware";
+export type StoryRuntimeRuleSeverity = "warning" | "error";
+
+export interface StoryRuntimeFact {
+  id: string;
+  statement: string;
+  truth: StoryRuntimeTruthState;
+  subjectEntityId?: string;
+  objectEntityId?: string;
+  sourceEntityIds: string[];
+  tags: string[];
+  notes: string;
+}
+
+export interface StoryRuntimeEvidence {
+  id: string;
+  label: string;
+  description: string;
+  entityId?: string;
+  factIds: string[];
+  reliability: StoryRuntimeEvidenceReliability;
+  playerVisibility: StoryRuntimePlayerVisibility;
+  discoveredByCharacterIds: string[];
+  notes: string;
+}
+
+export interface StoryRuntimeCharacterKnowledge {
+  id: string;
+  characterId: string;
+  factId: string;
+  knowledge: StoryRuntimeKnowledgeState;
+  belief: StoryRuntimeBeliefState;
+  evidenceIds: string[];
+  updatedAt?: string;
+  notes: string;
+}
+
+export interface StoryRuntimeContradictionRule {
+  id: string;
+  label: string;
+  factIds: string[];
+  severity: StoryRuntimeRuleSeverity;
+  resolution: string;
+  notes: string;
+}
+
+export interface StoryRuntimeTheoryRule {
+  id: string;
+  label: string;
+  requiredEvidenceIds: string[];
+  supportingFactIds: string[];
+  contradictingFactIds: string[];
+  conclusion: string;
+  playerVisibility: StoryRuntimePlayerVisibility;
+  notes: string;
+}
+
+export interface StoryRuntimeMetadata {
+  facts: StoryRuntimeFact[];
+  evidence: StoryRuntimeEvidence[];
+  characterKnowledge: StoryRuntimeCharacterKnowledge[];
+  contradictionRules: StoryRuntimeContradictionRule[];
+  theoryRules: StoryRuntimeTheoryRule[];
+}
+
 export interface StoryProject {
   schemaVersion: typeof STORY_PROJECT_SCHEMA_VERSION;
   title: string;
@@ -338,6 +407,7 @@ export interface StoryProject {
   gameplayTransitions: GameplayTransition[];
   designConstraints: DesignConstraint[];
   aiProposals: AiProposal[];
+  runtime: StoryRuntimeMetadata;
   layout: Record<string, Point>;
   storyFlowLayout: Record<string, Point>;
 }

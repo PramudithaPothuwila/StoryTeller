@@ -38,8 +38,9 @@ describe("project file model", () => {
     expect(files["graph/relationships.json"]).toBeTruthy();
     expect(files["graph/gameplay-transitions.json"]).toBeTruthy();
     expect(Object.keys(files).some((path) => path.startsWith("entities/character/"))).toBe(true);
-    expect(JSON.parse(files["storyteller.project.json"]).schemaVersion).toBe(6);
+    expect(JSON.parse(files["storyteller.project.json"]).schemaVersion).toBe(7);
     expect(JSON.parse(files["storyteller.project.json"]).projectMode).toBe("story");
+    expect(JSON.parse(files["storyteller.project.json"]).runtime).toEqual(project.runtime);
     expect(JSON.parse(files["storyteller.project.json"]).timelineLaneNames).toEqual(project.timelineLaneNames);
     expect(Object.keys(restoredProject.entities)).toHaveLength(Object.keys(project.entities).length);
     expect(restoredProject.relationships).toHaveLength(project.relationships.length);
@@ -48,7 +49,7 @@ describe("project file model", () => {
     expect(restoredProject.timelineLaneNames).toEqual(project.timelineLaneNames);
   });
 
-  it("migrates v1 project files to schema v6 with built-in type catalogs", () => {
+  it("migrates v1 project files to schema v7 with built-in type catalogs", () => {
     const entity = {
       id: "character-1",
       type: "character",
@@ -86,7 +87,14 @@ describe("project file model", () => {
 
     const project = projectFromFiles(files);
 
-    expect(project.schemaVersion).toBe(6);
+    expect(project.schemaVersion).toBe(7);
+    expect(project.runtime).toEqual({
+      facts: [],
+      evidence: [],
+      characterKnowledge: [],
+      contradictionRules: [],
+      theoryRules: []
+    });
     expect(project.entities[entity.id].graphPresence).toBe("world");
     expect(project.projectMode).toBe("story");
     expect(project.itemTypes.some((type) => type.id === "character")).toBe(true);
@@ -203,7 +211,7 @@ describe("project file model", () => {
     expect(restoredFromBundle.entities[rule.id].worldRule).toEqual(rule.worldRule);
   });
 
-  it("round-trips schema v6 game story metadata and layouts through folder files and bundles", async () => {
+  it("round-trips schema v7 runtime and game story metadata through folder files and bundles", async () => {
     let project = setProjectModeInProject(createBlankProject("Branching Game"), "game_story");
     project = addGameStateVariableToProject(project, "flag");
     const variable = project.gameStory!.stateVariables[0];
@@ -237,6 +245,66 @@ describe("project file model", () => {
     project = updateGameStoryProjectMetadata(
       {
         ...project,
+        runtime: {
+          ...project.runtime,
+          facts: [
+            {
+              id: "fact-ally-offer",
+              statement: "The ally offer is genuine.",
+              truth: "true",
+              subjectEntityId: start.id,
+              sourceEntityIds: [start.id],
+              tags: ["route"],
+              notes: ""
+            }
+          ],
+          evidence: [
+            {
+              id: "evidence-ally-token",
+              label: "Ally token",
+              description: "The ally offers a marked token.",
+              entityId: start.id,
+              factIds: ["fact-ally-offer"],
+              reliability: "confirmed",
+              playerVisibility: "discoverable",
+              discoveredByCharacterIds: [],
+              notes: ""
+            }
+          ],
+          characterKnowledge: [
+            {
+              id: "knowledge-ally",
+              characterId: start.id,
+              factId: "fact-ally-offer",
+              knowledge: "suspects",
+              belief: "believes_true",
+              evidenceIds: ["evidence-ally-token"],
+              notes: ""
+            }
+          ],
+          contradictionRules: [
+            {
+              id: "contradiction-ally",
+              label: "Ally cannot be both false and genuine",
+              factIds: ["fact-ally-offer"],
+              severity: "warning",
+              resolution: "Pick one route state.",
+              notes: ""
+            }
+          ],
+          theoryRules: [
+            {
+              id: "theory-alliance",
+              label: "Alliance route can be inferred",
+              requiredEvidenceIds: ["evidence-ally-token"],
+              supportingFactIds: ["fact-ally-offer"],
+              contradictingFactIds: [],
+              conclusion: "The ally is trustworthy.",
+              playerVisibility: "hidden",
+              notes: ""
+            }
+          ]
+        },
         entities: {
           [start.id]: start,
           [ending.id]: ending
@@ -266,11 +334,13 @@ describe("project file model", () => {
     } as File);
     const manifest = JSON.parse(files["storyteller.project.json"]);
 
-    expect(manifest.schemaVersion).toBe(6);
+    expect(manifest.schemaVersion).toBe(7);
     expect(manifest.projectMode).toBe("game_story");
+    expect(manifest.runtime.facts[0].id).toBe("fact-ally-offer");
     expect(manifest.gameStory.startNodeId).toBe(start.id);
     expect(manifest.storyFlowLayout).toEqual(project.storyFlowLayout);
     expect(restoredFromFiles.gameStory?.stateVariables[0].id).toBe("met-ally");
+    expect(restoredFromFiles.runtime.evidence[0].playerVisibility).toBe("discoverable");
     expect(restoredFromFiles.entities[start.id].graphPresence).toBe("world");
     expect(restoredFromFiles.storyFlowLayout).toEqual(project.storyFlowLayout);
     expect(restoredFromFiles.entities[start.id].gameStory?.dialogue?.responses[0].targetNodeId).toBe(ending.id);
@@ -279,6 +349,7 @@ describe("project file model", () => {
     expect(restoredFromFiles.gameplayTransitions[0].choice.text).toBe("Accept the offer");
     expect(restoredFromBundle.projectMode).toBe("game_story");
     expect(restoredFromBundle.storyFlowLayout).toEqual(project.storyFlowLayout);
+    expect(restoredFromBundle.runtime.characterKnowledge[0].belief).toBe("believes_true");
     expect(restoredFromBundle.gameplayTransitions[0].choice.text).toBe("Accept the offer");
   });
 

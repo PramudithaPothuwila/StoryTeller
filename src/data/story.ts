@@ -36,6 +36,18 @@ import {
   StoryEntity,
   StoryProject,
   StoryRelationship,
+  StoryRuntimeBeliefState,
+  StoryRuntimeCharacterKnowledge,
+  StoryRuntimeContradictionRule,
+  StoryRuntimeEvidence,
+  StoryRuntimeEvidenceReliability,
+  StoryRuntimeFact,
+  StoryRuntimeKnowledgeState,
+  StoryRuntimeMetadata,
+  StoryRuntimePlayerVisibility,
+  StoryRuntimeRuleSeverity,
+  StoryRuntimeTheoryRule,
+  StoryRuntimeTruthState,
   TimelineEffect,
   TimelineEffectDraft,
   WorldRuleMetadata
@@ -248,6 +260,26 @@ export function normalizeGameStoryProjectMetadata(
       ...defaultGameStoryValidationSettings(),
       ...(metadata?.validation ?? {})
     }
+  };
+}
+
+export function defaultStoryRuntimeMetadata(): StoryRuntimeMetadata {
+  return {
+    facts: [],
+    evidence: [],
+    characterKnowledge: [],
+    contradictionRules: [],
+    theoryRules: []
+  };
+}
+
+export function normalizeStoryRuntimeMetadata(metadata: Partial<StoryRuntimeMetadata> | undefined): StoryRuntimeMetadata {
+  return {
+    facts: (metadata?.facts ?? []).map(normalizeStoryRuntimeFact),
+    evidence: (metadata?.evidence ?? []).map(normalizeStoryRuntimeEvidence),
+    characterKnowledge: (metadata?.characterKnowledge ?? []).map(normalizeStoryRuntimeCharacterKnowledge),
+    contradictionRules: (metadata?.contradictionRules ?? []).map(normalizeStoryRuntimeContradictionRule),
+    theoryRules: (metadata?.theoryRules ?? []).map(normalizeStoryRuntimeTheoryRule)
   };
 }
 
@@ -470,6 +502,7 @@ export function createBlankProject(title = "Untitled Story", projectMode: Projec
     gameplayTransitions: [],
     designConstraints: [],
     aiProposals: [],
+    runtime: defaultStoryRuntimeMetadata(),
     layout: {},
     storyFlowLayout: {}
   };
@@ -1161,6 +1194,7 @@ export function migrateProjectShape(project: unknown): StoryProject {
     gameplayTransitions: [],
     designConstraints: value.designConstraints ?? [],
     aiProposals: value.aiProposals ?? [],
+    runtime: normalizeStoryRuntimeMetadata(value.runtime),
     layout,
     storyFlowLayout: value.storyFlowLayout ?? {}
   };
@@ -1288,6 +1322,74 @@ export function normalizeGameplayTransition(transition: Partial<GameplayTransiti
       legacyNotes: normalizeRuleText(transition.authorNotes?.legacyNotes, "")
     },
     metadata: isRecord(transition.metadata) ? transition.metadata : {}
+  };
+}
+
+export function normalizeStoryRuntimeFact(fact: Partial<StoryRuntimeFact>): StoryRuntimeFact {
+  return {
+    id: normalizeOptionalId(fact.id) ?? makeId("fact"),
+    statement: normalizeRuleText(fact.statement, ""),
+    truth: isStoryRuntimeTruthState(fact.truth) ? fact.truth : "unknown",
+    subjectEntityId: normalizeOptionalId(fact.subjectEntityId),
+    objectEntityId: normalizeOptionalId(fact.objectEntityId),
+    sourceEntityIds: normalizeStringArray(fact.sourceEntityIds),
+    tags: normalizeStringArray(fact.tags),
+    notes: normalizeRuleText(fact.notes, "")
+  };
+}
+
+export function normalizeStoryRuntimeEvidence(evidence: Partial<StoryRuntimeEvidence>): StoryRuntimeEvidence {
+  return {
+    id: normalizeOptionalId(evidence.id) ?? makeId("evidence"),
+    label: normalizeRuleText(evidence.label, ""),
+    description: normalizeRuleText(evidence.description, ""),
+    entityId: normalizeOptionalId(evidence.entityId),
+    factIds: normalizeStringArray(evidence.factIds),
+    reliability: isStoryRuntimeEvidenceReliability(evidence.reliability) ? evidence.reliability : "unverified",
+    playerVisibility: isStoryRuntimePlayerVisibility(evidence.playerVisibility) ? evidence.playerVisibility : "hidden",
+    discoveredByCharacterIds: normalizeStringArray(evidence.discoveredByCharacterIds),
+    notes: normalizeRuleText(evidence.notes, "")
+  };
+}
+
+export function normalizeStoryRuntimeCharacterKnowledge(
+  knowledge: Partial<StoryRuntimeCharacterKnowledge>
+): StoryRuntimeCharacterKnowledge {
+  return {
+    id: normalizeOptionalId(knowledge.id) ?? makeId("knowledge"),
+    characterId: normalizeOptionalId(knowledge.characterId) ?? "",
+    factId: normalizeOptionalId(knowledge.factId) ?? "",
+    knowledge: isStoryRuntimeKnowledgeState(knowledge.knowledge) ? knowledge.knowledge : "does_not_know",
+    belief: isStoryRuntimeBeliefState(knowledge.belief) ? knowledge.belief : "unaware",
+    evidenceIds: normalizeStringArray(knowledge.evidenceIds),
+    updatedAt: normalizeOptionalId(knowledge.updatedAt),
+    notes: normalizeRuleText(knowledge.notes, "")
+  };
+}
+
+export function normalizeStoryRuntimeContradictionRule(
+  rule: Partial<StoryRuntimeContradictionRule>
+): StoryRuntimeContradictionRule {
+  return {
+    id: normalizeOptionalId(rule.id) ?? makeId("contradiction"),
+    label: normalizeRuleText(rule.label, ""),
+    factIds: normalizeStringArray(rule.factIds),
+    severity: isStoryRuntimeRuleSeverity(rule.severity) ? rule.severity : "warning",
+    resolution: normalizeRuleText(rule.resolution, ""),
+    notes: normalizeRuleText(rule.notes, "")
+  };
+}
+
+export function normalizeStoryRuntimeTheoryRule(rule: Partial<StoryRuntimeTheoryRule>): StoryRuntimeTheoryRule {
+  return {
+    id: normalizeOptionalId(rule.id) ?? makeId("theory"),
+    label: normalizeRuleText(rule.label, ""),
+    requiredEvidenceIds: normalizeStringArray(rule.requiredEvidenceIds),
+    supportingFactIds: normalizeStringArray(rule.supportingFactIds),
+    contradictingFactIds: normalizeStringArray(rule.contradictingFactIds),
+    conclusion: normalizeRuleText(rule.conclusion, ""),
+    playerVisibility: isStoryRuntimePlayerVisibility(rule.playerVisibility) ? rule.playerVisibility : "hidden",
+    notes: normalizeRuleText(rule.notes, "")
   };
 }
 
@@ -2525,12 +2627,42 @@ function isGameQuestType(value: unknown): value is GameQuestMetadata["questType"
   return value === "main" || value === "side" || value === "companion" || value === "faction" || value === "hidden";
 }
 
+function isStoryRuntimeTruthState(value: unknown): value is StoryRuntimeTruthState {
+  return value === "true" || value === "false" || value === "ambiguous" || value === "unknown";
+}
+
+function isStoryRuntimeEvidenceReliability(value: unknown): value is StoryRuntimeEvidenceReliability {
+  return value === "confirmed" || value === "unverified" || value === "misleading";
+}
+
+function isStoryRuntimePlayerVisibility(value: unknown): value is StoryRuntimePlayerVisibility {
+  return value === "hidden" || value === "discoverable" || value === "revealed";
+}
+
+function isStoryRuntimeKnowledgeState(value: unknown): value is StoryRuntimeKnowledgeState {
+  return value === "knows" || value === "suspects" || value === "does_not_know";
+}
+
+function isStoryRuntimeBeliefState(value: unknown): value is StoryRuntimeBeliefState {
+  return value === "believes_true" || value === "believes_false" || value === "uncertain" || value === "unaware";
+}
+
+function isStoryRuntimeRuleSeverity(value: unknown): value is StoryRuntimeRuleSeverity {
+  return value === "warning" || value === "error";
+}
+
 function normalizeOptionalId(value: string | undefined): string | undefined {
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
 
-function normalizeStringArray(values: string[] | undefined): string[] {
-  return (values ?? []).map((value) => value.trim()).filter(Boolean);
+function normalizeStringArray(values: unknown): string[] {
+  if (!Array.isArray(values)) {
+    return [];
+  }
+
+  return values
+    .map((value) => (typeof value === "string" ? value.trim() : ""))
+    .filter(Boolean);
 }
 
 function mergeTypeCatalog<T extends { id: string; builtIn: boolean }>(defaults: T[], incoming: T[]): T[] {

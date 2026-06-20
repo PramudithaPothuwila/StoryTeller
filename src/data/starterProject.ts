@@ -52,7 +52,7 @@ export async function loadStarterProject(
     )
   };
 
-  if (manifest.schemaVersion === 6) {
+  if (manifest.schemaVersion && manifest.schemaVersion >= 6) {
     files[STARTER_PROJECT_GAMEPLAY_TRANSITIONS] = await fetchStarterFile(
       fetchProject,
       starterProject.root,
