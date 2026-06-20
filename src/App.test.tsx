@@ -194,7 +194,25 @@ vi.mock("./data/starterProject", async () => {
 
   return {
     createLoadingProject: () => story.createBlankProject("Loading Story..."),
-    loadStarterProject: vi.fn(async () => story.createBlankProject("Loaded Project"))
+    getStarterProjects: vi.fn(() => [
+      {
+        id: "black-hollow-last-stop",
+        title: "Black Hollow: Last Stop",
+        root: "/projects/Black Hollow Last Stop",
+        projectMode: "game_story"
+      },
+      {
+        id: "the-crown-beneath-glass",
+        title: "The Crown Beneath Glass",
+        root: "/projects/The Crown Beneath Glass",
+        projectMode: "story"
+      }
+    ]),
+    loadStarterProject: vi.fn(async (_fetchProject?: typeof fetch, starterProjectId = "black-hollow-last-stop") =>
+      starterProjectId === "the-crown-beneath-glass"
+        ? story.createBlankProject("The Crown Beneath Glass", "story")
+        : story.createBlankProject("Black Hollow: Last Stop", "game_story")
+    )
   };
 });
 
@@ -746,13 +764,33 @@ describe("App project commands", () => {
     fireEvent.click(screen.getByRole("button", { name: "New Project" }));
     const dialog = await screen.findByRole("dialog", { name: "New Project" });
     expect(within(dialog).getByRole("group", { name: "New project mode" })).toBeInTheDocument();
+    expect(within(dialog).getByRole("group", { name: "New project contents" })).toBeInTheDocument();
     expect(within(dialog).getByRole("button", { name: "Story" })).toHaveAttribute("aria-pressed", "true");
     expect(within(dialog).getByRole("button", { name: "Game Story" })).toHaveAttribute("aria-pressed", "false");
+    expect(within(dialog).getByRole("button", { name: "Empty" })).toHaveAttribute("aria-pressed", "true");
+    expect(within(dialog).getByRole("button", { name: "Sample" })).toHaveAttribute("aria-pressed", "false");
     fireEvent.click(within(dialog).getByRole("button", { name: "Local Project" }));
 
     await waitFor(() => expect(screen.getByText("Untitled Story")).toBeInTheDocument());
+    expect(loadStarterProject).not.toHaveBeenCalled();
     expect(screen.queryByRole("button", { name: "Branching RPG" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Switch to Game Story" })).not.toBeInTheDocument();
+  });
+
+  it("creates a Story sample project from the New Project dialog", async () => {
+    window.history.pushState({}, "", "/");
+    vi.mocked(loadStarterProject).mockResolvedValueOnce(createBlankProject("The Crown Beneath Glass", "story"));
+    render(<App />);
+
+    fireEvent.click(screen.getByRole("button", { name: "New Project" }));
+    const dialog = await screen.findByRole("dialog", { name: "New Project" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Sample" }));
+    expect(within(dialog).getByText("Uses The Crown Beneath Glass.")).toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Local Project" }));
+
+    await waitFor(() => expect(loadStarterProject).toHaveBeenCalledWith(undefined, "the-crown-beneath-glass"));
+    await waitFor(() => expect(window.location.pathname).toMatch(/^\/project\/browser-/));
+    expect(screen.getByText("The Crown Beneath Glass")).toBeInTheDocument();
   });
 
   it("creates browser projects without requiring folder access", async () => {
@@ -784,6 +822,24 @@ describe("App project commands", () => {
     expect(screen.getByRole("button", { name: "Branching RPG" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Add Scene" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Add Character" })).not.toBeInTheDocument();
+  });
+
+  it("creates a Game Story sample project from the New Project dialog", async () => {
+    window.history.pushState({}, "", "/");
+    vi.mocked(loadStarterProject).mockResolvedValueOnce(createBlankProject("Black Hollow: Last Stop", "game_story"));
+    render(<App />);
+
+    fireEvent.click(screen.getByRole("button", { name: "New Project" }));
+    const dialog = await screen.findByRole("dialog", { name: "New Project" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Game Story" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Sample" }));
+    expect(within(dialog).getByText("Uses Black Hollow: Last Stop.")).toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Local Project" }));
+
+    await waitFor(() => expect(loadStarterProject).toHaveBeenCalledWith(undefined, "black-hollow-last-stop"));
+    await waitFor(() => expect(window.location.pathname).toMatch(/^\/project\/browser-/));
+    expect(screen.getByText("Black Hollow: Last Stop")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Switch to Game Story" })).toHaveClass("is-active");
   });
 
   it("selects a project folder and saves the current project into it", async () => {
@@ -1488,6 +1544,30 @@ describe("App project commands", () => {
         })
       )
     );
+  });
+
+  it("creates a sample cloud project from the New Project dialog", async () => {
+    window.history.pushState({}, "", "/");
+    vi.mocked(getCurrentCloudUser).mockResolvedValue({ id: "user-a", email: "ada@example.com" });
+    vi.mocked(loadStarterProject).mockResolvedValueOnce(createBlankProject("The Crown Beneath Glass", "story"));
+
+    render(<App />);
+
+    await waitFor(() => expect(screen.getByRole("link", { name: "Account" })).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "New Project" }));
+
+    const dialog = await screen.findByRole("dialog", { name: "New Project" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Sample" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Cloud Project" }));
+
+    await waitFor(() => expect(loadStarterProject).toHaveBeenCalledWith(undefined, "the-crown-beneath-glass"));
+    expect(createCloudProject).toHaveBeenCalledWith(
+      expect.objectContaining({
+        projectMode: "story",
+        title: "The Crown Beneath Glass"
+      })
+    );
+    expect(screen.getByText("The Crown Beneath Glass")).toBeInTheDocument();
   });
 
   it("imports a backup as a new cloud project", async () => {

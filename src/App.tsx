@@ -87,7 +87,7 @@ import {
   updateEntityInProject,
   updateRelationshipInProject
 } from "./data/story";
-import { createLoadingProject, loadStarterProject } from "./data/starterProject";
+import { createLoadingProject, getStarterProjects, loadStarterProject } from "./data/starterProject";
 import {
   createProjectBundle,
   hasFolderProjectSupport,
@@ -151,6 +151,7 @@ type GraphFocusDepth = 1 | 2 | 3 | 4 | "all";
 type GraphView = "world" | "story_flow";
 type ActivePage = "workspace" | "settings";
 type RecentProjectSource = "folder" | "backup" | "browser";
+type NewProjectContents = "empty" | "sample";
 
 interface WorkspaceProjectSeed {
   id: string;
@@ -364,19 +365,26 @@ function StoryAppRoutes() {
     void refreshCloudProjects();
   }, [refreshCloudProjects]);
 
-  const handleNewBrowserProject = useCallback((projectMode: ProjectMode) => {
-    const project = createBlankProject("Untitled Story", projectMode);
-    const id = createLocalProjectRouteId("browser");
+  const handleNewBrowserProject = useCallback(async (projectMode: ProjectMode, contents: NewProjectContents) => {
+    try {
+      const project =
+        contents === "sample"
+          ? await loadStarterProject(undefined, starterProjectIdForMode(projectMode))
+          : createBlankProject("Untitled Story", projectMode);
+      const id = createLocalProjectRouteId("browser");
 
-    openWorkspaceSeed(
-      {
-        id,
-        project,
-        status: "New browser project",
-        storageMode: "local"
-      },
-      "browser"
-    );
+      openWorkspaceSeed(
+        {
+          id,
+          project,
+          status: contents === "sample" ? "Sample project created" : "New browser project",
+          storageMode: "local"
+        },
+        "browser"
+      );
+    } catch (error) {
+      setRouteStatus(sampleProjectErrorMessage(error));
+    }
   }, [openWorkspaceSeed]);
 
   const handleOpenFolderProject = useCallback(async () => {
@@ -504,27 +512,31 @@ function StoryAppRoutes() {
     [cloudUser, navigate, openWorkspaceSeed]
   );
 
-  const handleCreateCloudProject = useCallback(async (projectMode: ProjectMode) => {
+  const handleCreateCloudProject = useCallback(async (projectMode: ProjectMode, contents: NewProjectContents) => {
     if (!cloudUser) {
       navigate("/auth");
       return;
     }
 
     try {
-      const savedProject = await createCloudProject(createBlankProject("Untitled Story", projectMode));
+      const project =
+        contents === "sample"
+          ? await loadStarterProject(undefined, starterProjectIdForMode(projectMode))
+          : createBlankProject("Untitled Story", projectMode);
+      const savedProject = await createCloudProject(project);
       setCloudProjects((projects) => upsertCloudProjectSummary(projects, savedProject));
       openWorkspaceSeed(
         {
           id: savedProject.id,
           project: savedProject.project,
-          status: "Cloud project created",
+          status: contents === "sample" ? "Sample cloud project created" : "Cloud project created",
           cloudProjectId: savedProject.id,
           cloudVersion: savedProject.version,
           storageMode: "cloud"
         }
       );
     } catch (error) {
-      setRouteStatus((error as Error).message);
+      setRouteStatus(contents === "sample" ? sampleProjectErrorMessage(error) : (error as Error).message);
     }
   }, [cloudUser, navigate, openWorkspaceSeed]);
 
@@ -610,6 +622,7 @@ function StoryAppRoutes() {
               cloudUser={cloudUser}
               recentProjects={recentProjects}
               restoreProjectId={searchParams.get("restoreProject")}
+              status={routeStatus}
               onCreateCloudProject={handleCreateCloudProject}
               onDeleteCloudProject={handleDeleteCloudProject}
               onImportBackup={() => backupInputRef.current?.click()}
@@ -702,10 +715,11 @@ interface HomePageProps {
   cloudUser: CloudUser | null;
   recentProjects: RecentProjectCard[];
   restoreProjectId: string | null;
-  onCreateCloudProject: (projectMode: ProjectMode) => Promise<void>;
+  status: string;
+  onCreateCloudProject: (projectMode: ProjectMode, contents: NewProjectContents) => Promise<void>;
   onDeleteCloudProject: (id: string) => Promise<void>;
   onImportBackup: () => void;
-  onNewProject: (projectMode: ProjectMode) => void;
+  onNewProject: (projectMode: ProjectMode, contents: NewProjectContents) => Promise<void>;
   onOpenCloudProject: (id: string) => Promise<void>;
   onOpenFolder: () => Promise<void>;
   onOpenRecentProject: (project: RecentProjectCard) => void;
@@ -719,6 +733,7 @@ function HomePage({
   cloudUser,
   recentProjects,
   restoreProjectId,
+  status,
   onCreateCloudProject,
   onDeleteCloudProject,
   onImportBackup,
@@ -731,18 +746,20 @@ function HomePage({
 }: HomePageProps) {
   const [newProjectDialogOpen, setNewProjectDialogOpen] = useState(false);
   const [newProjectMode, setNewProjectMode] = useState<ProjectMode>("story");
+  const [newProjectContents, setNewProjectContents] = useState<NewProjectContents>("empty");
+  const sampleProject = starterProjectForMode(newProjectMode);
   const restoreProject = restoreProjectId
     ? recentProjects.find((project) => project.id === restoreProjectId)
     : undefined;
 
-  function handleCreateLocalProject() {
+  async function handleCreateLocalProject() {
     setNewProjectDialogOpen(false);
-    onNewProject(newProjectMode);
+    await onNewProject(newProjectMode, newProjectContents);
   }
 
   async function handleCreateCloudProject() {
     setNewProjectDialogOpen(false);
-    await onCreateCloudProject(newProjectMode);
+    await onCreateCloudProject(newProjectMode, newProjectContents);
   }
 
   return (
@@ -774,6 +791,7 @@ function HomePage({
           Import Backup
         </button>
       </section>
+      {status !== "Ready" ? <p className="project-home__status">{status}</p> : null}
 
       {restoreProjectId ? (
         <section className="project-home__section" aria-labelledby="restore-project-title">
@@ -828,8 +846,34 @@ function HomePage({
                   </button>
                 </div>
               </div>
+              <div className="settings-control-group">
+                <span>Contents</span>
+                <div className="mode-toggle" role="group" aria-label="New project contents">
+                  <button
+                    type="button"
+                    className={newProjectContents === "empty" ? "is-active" : ""}
+                    aria-pressed={newProjectContents === "empty"}
+                    onClick={() => setNewProjectContents("empty")}
+                  >
+                    <FilePlus2 aria-hidden="true" />
+                    Empty
+                  </button>
+                  <button
+                    type="button"
+                    className={newProjectContents === "sample" ? "is-active" : ""}
+                    aria-pressed={newProjectContents === "sample"}
+                    onClick={() => setNewProjectContents("sample")}
+                  >
+                    <FolderOpen aria-hidden="true" />
+                    Sample
+                  </button>
+                </div>
+                {newProjectContents === "sample" ? (
+                  <p className="settings-help-text">Uses {sampleProject.title}.</p>
+                ) : null}
+              </div>
               <div className="new-project-choice-grid">
-                <button type="button" className="primary-action" onClick={handleCreateLocalProject}>
+                <button type="button" className="primary-action" onClick={() => void handleCreateLocalProject()}>
                   <FilePlus2 aria-hidden="true" />
                   Local Project
                 </button>
@@ -2502,6 +2546,26 @@ function writeStoredRecentProjects(projects: RecentProjectCard[]) {
   } catch {
     // Browser storage is a convenience cache only; project files and cloud rows remain canonical.
   }
+}
+
+function starterProjectForMode(projectMode: ProjectMode) {
+  const starterProject = getStarterProjects().find((project) => project.projectMode === projectMode);
+
+  if (!starterProject) {
+    throw new Error(`No sample project is available for ${projectMode === "game_story" ? "Game Story" : "Story"} mode.`);
+  }
+
+  return starterProject;
+}
+
+function starterProjectIdForMode(projectMode: ProjectMode): string {
+  return starterProjectForMode(projectMode).id;
+}
+
+function sampleProjectErrorMessage(error: unknown): string {
+  const message = error instanceof Error ? error.message : "Could not load the sample project.";
+
+  return `Could not create the sample project. ${message}`;
 }
 
 function upsertRecentProject(projects: RecentProjectCard[], project: RecentProjectCard): RecentProjectCard[] {
