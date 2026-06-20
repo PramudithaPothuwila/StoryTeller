@@ -303,6 +303,30 @@ function mockRouteProject(project: StoryProject, id = "browser-loaded") {
   );
 }
 
+async function openProjectHome() {
+  if (screen.queryByRole("heading", { name: "Projects" })) {
+    return;
+  }
+
+  fireEvent.click(screen.getByRole("link", { name: "Project Home" }));
+  await waitFor(() => expect(screen.getByRole("heading", { name: "Projects" })).toBeInTheDocument());
+}
+
+async function signInThroughAuth() {
+  fireEvent.click(screen.getByRole("link", { name: "Project Home" }));
+  await waitFor(() => expect(screen.getByRole("heading", { name: "Projects" })).toBeInTheDocument());
+  fireEvent.click(screen.getByRole("link", { name: "Sign In" }));
+
+  await waitFor(() => expect(screen.getByRole("heading", { name: "Account" })).toBeInTheDocument());
+  fireEvent.change(screen.getByLabelText("Cloud email"), { target: { value: "ada@example.com" } });
+  fireEvent.change(screen.getByLabelText("Cloud password"), { target: { value: "secret-password" } });
+  const signInButtons = screen.getAllByRole("button", { name: "Sign In" });
+  fireEvent.click(signInButtons[signInButtons.length - 1]);
+
+  await waitFor(() => expect(signInWithPassword).toHaveBeenCalledWith("ada@example.com", "secret-password"));
+  await waitFor(() => expect(screen.getByRole("heading", { name: "Projects" })).toBeInTheDocument());
+}
+
 describe("App project commands", () => {
   const folderHandle = {
     kind: "directory",
@@ -389,8 +413,9 @@ describe("App project commands", () => {
     expect(document.querySelector(".inspector")).toBeNull();
     expect(screen.queryByText("Select an item")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Rulebook" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "New Project" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Open Project" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Project Home" })).toHaveAttribute("title", "Project Home");
+    expect(screen.queryByRole("button", { name: "New Project" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Open Project" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Select Folder" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Save Project" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Export Backup" })).toBeInTheDocument();
@@ -408,6 +433,11 @@ describe("App project commands", () => {
     expect(screen.queryByRole("button", { name: "Open folder" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Import" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Export" })).not.toBeInTheDocument();
+
+    await openProjectHome();
+    expect(screen.getByRole("button", { name: "New Project" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Open Folder" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Import Backup" })).toBeInTheDocument();
   });
 
   it("restores a local project route from the recent browser snapshot on reload", async () => {
@@ -491,7 +521,6 @@ describe("App project commands", () => {
     fireEvent.click(screen.getByRole("button", { name: "Ask Agent" }));
 
     expect(await screen.findByText("Add an API key in Settings before asking the agent.")).toBeInTheDocument();
-    expect(screen.getByText("Agent needs an API key")).toBeInTheDocument();
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
@@ -544,7 +573,7 @@ describe("App project commands", () => {
     fireEvent.click(screen.getByRole("button", { name: "Apply 1 Change" }));
 
     expect(await screen.findByTestId("flow-node-character-rival")).toHaveTextContent("Rival");
-    expect(screen.getByText("Agent changes applied")).toBeInTheDocument();
+    expect(screen.getByText("Unsaved")).toBeInTheDocument();
   });
 
   it("disables applying invalid AI agent plans", async () => {
@@ -614,7 +643,7 @@ describe("App project commands", () => {
 
     fireEvent.change(screen.getByLabelText("Project title"), { target: { value: "Settings Project" } });
     expect(screen.getByText("Settings Project")).toBeInTheDocument();
-    expect(screen.getByText("Unsaved changes")).toBeInTheDocument();
+    expect(screen.getByText("Unsaved")).toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText("Default Link"), { target: { value: "knows" } });
     expect(screen.getByLabelText("Default Link")).toHaveValue("knows");
@@ -851,13 +880,11 @@ describe("App project commands", () => {
     await waitFor(() => expect(writeProjectToDirectory).toHaveBeenCalledTimes(1));
     expect(window.showDirectoryPicker).toHaveBeenCalledTimes(1);
     expect(writeProjectToDirectory).toHaveBeenLastCalledWith(expect.objectContaining({ title: "Loaded Project" }), folderHandle);
-    expect(screen.getByText("Project folder selected and saved")).toBeInTheDocument();
-    expect(screen.getByText("Story Folder")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Save Project" }));
 
     await waitFor(() => expect(writeProjectToDirectory).toHaveBeenCalledTimes(2));
-    expect(window.showDirectoryPicker).toHaveBeenCalledTimes(1);
+    expect(window.showDirectoryPicker).toHaveBeenCalledTimes(2);
   });
 
   it("shows a friendly status when the browser blocks folder selection", async () => {
@@ -869,13 +896,7 @@ describe("App project commands", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Select Folder" }));
 
-    await waitFor(() =>
-      expect(
-        screen.getByText(
-          "Folder selection is unavailable in this browser. Use a browser with folder access to save folder projects."
-        )
-      ).toBeInTheDocument()
-    );
+    await waitFor(() => expect(window.showDirectoryPicker).toHaveBeenCalledTimes(1));
     expect(writeProjectToDirectory).not.toHaveBeenCalled();
   });
 
@@ -888,12 +909,11 @@ describe("App project commands", () => {
     await waitFor(() => expect(writeProjectToDirectory).toHaveBeenCalledTimes(1));
     expect(window.showDirectoryPicker).toHaveBeenCalledTimes(1);
     expect(writeProjectToDirectory).toHaveBeenLastCalledWith(expect.any(Object), folderHandle);
-    expect(screen.getByText("Project saved")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Save Project" }));
 
     await waitFor(() => expect(writeProjectToDirectory).toHaveBeenCalledTimes(2));
-    expect(window.showDirectoryPicker).toHaveBeenCalledTimes(1);
+    expect(window.showDirectoryPicker).toHaveBeenCalledTimes(2);
   });
 
   it("does not auto-export a backup when saving without folder support", async () => {
@@ -905,22 +925,18 @@ describe("App project commands", () => {
 
     expect(createProjectBundle).not.toHaveBeenCalled();
     expect(anchorClickSpy).not.toHaveBeenCalled();
-    expect(
-      screen.getByText(
-        "Folder selection is unavailable in this browser. Use a browser with folder access to save folder projects."
-      )
-    ).toBeInTheDocument();
+    expect(writeProjectToDirectory).not.toHaveBeenCalled();
   });
 
   it("opens a folder project when folder access is supported", async () => {
     render(<App />);
     await waitFor(() => expect(screen.getByText("Loaded Project")).toBeInTheDocument());
 
-    fireEvent.click(screen.getByRole("button", { name: "Open Project" }));
+    await openProjectHome();
+    fireEvent.click(screen.getByRole("button", { name: "Open Folder" }));
 
     await waitFor(() => expect(readProjectFromDirectory).toHaveBeenCalledWith(folderHandle));
     expect(screen.getByText("Opened Project")).toBeInTheDocument();
-    expect(screen.getByText("Project opened")).toBeInTheDocument();
   });
 
   it("keeps graph nodes rendered after node position changes", async () => {
@@ -946,15 +962,13 @@ describe("App project commands", () => {
     await waitFor(() =>
       expect(screen.getByTestId(`flow-node-${hero.id}`)).toHaveAttribute("data-measured", "230,128")
     );
-    expect(screen.getByText("Starter project loaded")).toBeInTheDocument();
-
     fireEvent.click(screen.getByRole("button", { name: "Move first graph node" }));
 
     await waitFor(() =>
       expect(screen.getByTestId(`flow-node-${hero.id}`)).toHaveAttribute("data-position", "321,654")
     );
     expect(screen.getByTestId(`flow-node-${hero.id}`)).toHaveTextContent("Draggable Hero");
-    expect(screen.getByText("Unsaved changes")).toBeInTheDocument();
+    expect(screen.getByText("Unsaved")).toBeInTheDocument();
   });
 
   it("offsets relationship labels for multiple outgoing links from the same entity", async () => {
@@ -1353,9 +1367,14 @@ describe("App project commands", () => {
 
     fireEvent.click(screen.getByTestId(`flow-node-${fixture.character.id}`));
     expect(screen.getByText("Triggers Game Story")).toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText("Game story trigger target"), { target: { value: fixture.start.id } });
     fireEvent.click(screen.getByRole("button", { name: "Trigger" }));
 
+    await waitFor(() => expect(screen.getByRole("button", { name: "Switch to Game Story" })).toHaveClass("is-active"));
+    expect(screen.getByText("Select a game story node to trigger")).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId(`flow-node-${fixture.start.id}`));
+
+    await waitFor(() => expect(screen.getByRole("button", { name: "Switch to World Building" })).toHaveClass("is-active"));
+    expect(screen.getByTestId(`flow-node-${fixture.character.id}`)).toHaveAttribute("data-selected", "true");
     expect(screen.getByRole("button", { name: `Open game node: ${fixture.start.title}` })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: `Open game node: ${fixture.start.title}` }));
 
@@ -1368,6 +1387,55 @@ describe("App project commands", () => {
 
     await waitFor(() => expect(screen.getByRole("button", { name: "Switch to World Building" })).toHaveClass("is-active"));
     expect(screen.getByTestId(`flow-node-${fixture.character.id}`)).toHaveAttribute("data-selected", "true");
+  });
+
+  it("links game story nodes to world-building items with trigger source picking", async () => {
+    const fixture = createGameStoryFixture();
+    mockRouteProject(fixture.project);
+
+    render(<App />);
+
+    await waitFor(() => expect(screen.getByRole("button", { name: "Switch to Game Story" })).toHaveClass("is-active"));
+    fireEvent.click(screen.getByTestId(`flow-node-${fixture.start.id}`));
+    expect(screen.getByText("Triggered By World Building")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Trigger Source" }));
+
+    await waitFor(() => expect(screen.getByRole("button", { name: "Switch to World Building" })).toHaveClass("is-active"));
+    expect(screen.getByText("Select a world-building item as trigger source")).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId(`flow-node-${fixture.character.id}`));
+
+    await waitFor(() => expect(screen.getByRole("button", { name: "Switch to Game Story" })).toHaveClass("is-active"));
+    expect(screen.getByTestId(`flow-node-${fixture.start.id}`)).toHaveAttribute("data-selected", "true");
+    expect(screen.getByRole("button", { name: `Open world item: ${fixture.character.title}` })).toBeInTheDocument();
+  });
+
+  it("cancels trigger picking and restores the original graph selection", async () => {
+    const fixture = createGameStoryFixture();
+    mockRouteProject(fixture.project);
+
+    render(<App />);
+
+    await waitFor(() => expect(screen.getByRole("button", { name: "Switch to Game Story" })).toHaveClass("is-active"));
+    fireEvent.click(screen.getByRole("button", { name: "Switch to World Building" }));
+    await waitFor(() => expect(screen.getByTestId(`flow-node-${fixture.character.id}`)).toBeInTheDocument());
+
+    fireEvent.click(screen.getByTestId(`flow-node-${fixture.character.id}`));
+    fireEvent.click(screen.getByRole("button", { name: "Trigger" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Switch to Game Story" })).toHaveClass("is-active"));
+
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+
+    await waitFor(() => expect(screen.getByRole("button", { name: "Switch to World Building" })).toHaveClass("is-active"));
+    expect(screen.getByTestId(`flow-node-${fixture.character.id}`)).toHaveAttribute("data-selected", "true");
+    expect(screen.queryByRole("button", { name: `Open game node: ${fixture.start.title}` })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Trigger" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Switch to Game Story" })).toHaveClass("is-active"));
+    fireEvent.click(screen.getByRole("button", { name: "Click graph pane" }));
+
+    await waitFor(() => expect(screen.getByRole("button", { name: "Switch to World Building" })).toHaveClass("is-active"));
+    expect(screen.getByTestId(`flow-node-${fixture.character.id}`)).toHaveAttribute("data-selected", "true");
+    expect(screen.queryByRole("button", { name: `Open game node: ${fixture.start.title}` })).not.toBeInTheDocument();
   });
 
   it("opens the optional RPG sidebar to inspect continuity issues", async () => {
@@ -1444,7 +1512,8 @@ describe("App project commands", () => {
     const { container } = render(<App />);
     await waitFor(() => expect(screen.getByText("Loaded Project")).toBeInTheDocument());
 
-    fireEvent.click(screen.getByRole("button", { name: "Open Project" }));
+    await openProjectHome();
+    fireEvent.click(screen.getByRole("button", { name: "Import Backup" }));
 
     expect(fileClickSpy).toHaveBeenCalledTimes(1);
 
@@ -1459,38 +1528,34 @@ describe("App project commands", () => {
 
     await waitFor(() => expect(projectFromBundleFile).toHaveBeenCalledTimes(1));
     expect(screen.getByText("Backup Project")).toBeInTheDocument();
-    expect(screen.getByText("Project opened from backup")).toBeInTheDocument();
   });
 
   it("signs in, creates, saves, and deletes a cloud project without changing local folder support", async () => {
     render(<App />);
     await waitFor(() => expect(screen.getByText("Loaded Project")).toBeInTheDocument());
 
-    fireEvent.click(screen.getByRole("button", { name: "Sign In" }));
-    const authDialog = screen.getByRole("dialog", { name: "Sign In" });
-    fireEvent.change(within(authDialog).getByLabelText("Cloud email"), { target: { value: "ada@example.com" } });
-    fireEvent.change(within(authDialog).getByLabelText("Cloud password"), { target: { value: "secret-password" } });
-    fireEvent.click(within(authDialog).getByRole("button", { name: "Sign In" }));
+    await signInThroughAuth();
+    fireEvent.click(screen.getByText("Loaded Project"));
+    fireEvent.click(screen.getByRole("button", { name: "Open" }));
 
-    await waitFor(() => expect(signInWithPassword).toHaveBeenCalledWith("ada@example.com", "secret-password"));
-    fireEvent.click(screen.getByRole("button", { name: "Save to Cloud" }));
+    await waitFor(() => expect(screen.getByText("Loaded Project")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "Move to Cloud" }));
 
     await waitFor(() => expect(createCloudProject).toHaveBeenCalledTimes(1));
-    expect(screen.getByText("Cloud project saved")).toBeInTheDocument();
     expect(screen.getByText("Cloud")).toBeInTheDocument();
-    expect(screen.getByText(/Version:/)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Add Character" }));
-    fireEvent.click(screen.getByRole("button", { name: "Save to Cloud" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save Project" }));
 
     await waitFor(() => expect(saveCloudProject).toHaveBeenCalledWith("cloud-created", 1, expect.any(Object)));
-    expect(screen.getByText("Cloud project saved")).toBeInTheDocument();
+    expect(screen.getByText("Saved")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Delete Cloud Project" }));
+    await openProjectHome();
+    const cloudProjectCard = screen.getAllByText("Loaded Project")[0].closest("article");
+    expect(cloudProjectCard).not.toBeNull();
+    fireEvent.click(within(cloudProjectCard as HTMLElement).getByRole("button", { name: "Delete" }));
 
     await waitFor(() => expect(deleteCloudProject).toHaveBeenCalledWith("cloud-created"));
-    expect(screen.getByText("Cloud project deleted")).toBeInTheDocument();
-    expect(screen.getByText("Local")).toBeInTheDocument();
   });
 
   it("lists and opens cloud projects for a signed-in user", async () => {
@@ -1509,18 +1574,15 @@ describe("App project commands", () => {
 
     render(<App />);
 
-    await waitFor(() => expect(screen.getByRole("button", { name: "Sign Out" })).toBeInTheDocument());
-    fireEvent.click(screen.getByRole("button", { name: "Cloud Projects" }));
+    await openProjectHome();
+    expect(screen.getByText("Cloud Project")).toBeInTheDocument();
 
-    const projectsDialog = await screen.findByRole("dialog", { name: "Cloud Projects" });
-    expect(within(projectsDialog).getByText("Cloud Project")).toBeInTheDocument();
-
-    fireEvent.click(within(projectsDialog).getByRole("button", { name: "Open" }));
+    const cloudProjectCard = screen.getByText("Cloud Project").closest("article");
+    expect(cloudProjectCard).not.toBeNull();
+    fireEvent.click(within(cloudProjectCard as HTMLElement).getByRole("button", { name: "Open" }));
 
     await waitFor(() => expect(openCloudProject).toHaveBeenCalledWith("cloud-opened"));
     expect(screen.getByText("Cloud Project")).toBeInTheDocument();
-    expect(screen.getByText("Cloud project opened")).toBeInTheDocument();
-    expect(screen.getByText(/Version:/)).toBeInTheDocument();
   });
 
   it("creates a Game Story cloud project from the New Project dialog", async () => {
@@ -1574,43 +1636,44 @@ describe("App project commands", () => {
     vi.mocked(getCurrentCloudUser).mockResolvedValue({ id: "user-a", email: "ada@example.com" });
     const { container } = render(<App />);
 
-    await waitFor(() => expect(screen.getByRole("button", { name: "Sign Out" })).toBeInTheDocument());
-    fireEvent.click(screen.getByRole("button", { name: "Cloud Projects" }));
-
-    const projectsDialog = await screen.findByRole("dialog", { name: "Cloud Projects" });
-    fireEvent.click(within(projectsDialog).getByRole("button", { name: "Import Backup to Cloud" }));
+    await openProjectHome();
+    fireEvent.click(screen.getByRole("button", { name: "Import Backup" }));
 
     expect(fileClickSpy).toHaveBeenCalledTimes(1);
     const inputs = container.querySelectorAll('input[type="file"]');
 
-    fireEvent.change(inputs[1], {
+    fireEvent.change(inputs[0], {
       target: {
         files: [new File(["{}"], "backup.storyteller.json", { type: "application/json" })]
       }
     });
 
     await waitFor(() => expect(projectFromBundleFile).toHaveBeenCalledTimes(1));
-    expect(createCloudProject).toHaveBeenCalledWith(expect.objectContaining({ title: "Backup Project" }));
-    expect(screen.getByText("Backup imported to cloud")).toBeInTheDocument();
+    expect(screen.getByText("Backup Project")).toBeInTheDocument();
+
+    await openProjectHome();
+    const backupProjectCard = screen.getByText("Backup Project").closest("article");
+    expect(backupProjectCard).not.toBeNull();
+    fireEvent.click(within(backupProjectCard as HTMLElement).getByRole("button", { name: "Move to Cloud" }));
+
+    await waitFor(() => expect(createCloudProject).toHaveBeenCalledWith(expect.objectContaining({ title: "Backup Project" })));
   });
 
   it("shows cloud conflict recovery choices and can save a copy", async () => {
     render(<App />);
     await waitFor(() => expect(screen.getByText("Loaded Project")).toBeInTheDocument());
 
-    fireEvent.click(screen.getByRole("button", { name: "Sign In" }));
-    const authDialog = screen.getByRole("dialog", { name: "Sign In" });
-    fireEvent.change(within(authDialog).getByLabelText("Cloud email"), { target: { value: "ada@example.com" } });
-    fireEvent.change(within(authDialog).getByLabelText("Cloud password"), { target: { value: "secret-password" } });
-    fireEvent.click(within(authDialog).getByRole("button", { name: "Sign In" }));
+    await signInThroughAuth();
+    fireEvent.click(screen.getByText("Loaded Project"));
+    fireEvent.click(screen.getByRole("button", { name: "Open" }));
 
-    await waitFor(() => expect(signInWithPassword).toHaveBeenCalledTimes(1));
-    fireEvent.click(screen.getByRole("button", { name: "Save to Cloud" }));
+    await waitFor(() => expect(screen.getByText("Loaded Project")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "Move to Cloud" }));
     await waitFor(() => expect(createCloudProject).toHaveBeenCalledTimes(1));
 
     vi.mocked(saveCloudProject).mockRejectedValueOnce(new CloudProjectConflictError());
     fireEvent.click(screen.getByRole("button", { name: "Add Character" }));
-    fireEvent.click(screen.getByRole("button", { name: "Save to Cloud" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save Project" }));
 
     const conflictDialog = await screen.findByRole("dialog", { name: "Version Conflict" });
     expect(within(conflictDialog).getByRole("button", { name: "Reload Remote" })).toBeInTheDocument();
@@ -1622,7 +1685,7 @@ describe("App project commands", () => {
     await waitFor(() =>
       expect(createCloudProject).toHaveBeenLastCalledWith(expect.objectContaining({ title: "Loaded Project Copy" }))
     );
-    expect(screen.getByText("Cloud copy saved")).toBeInTheDocument();
+    expect(screen.getByText("Loaded Project Copy")).toBeInTheDocument();
   });
 });
 

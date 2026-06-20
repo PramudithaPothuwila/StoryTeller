@@ -70,8 +70,11 @@ import {
   findLinkType,
   getGameContinuityIssues,
   getGameStoryNodes,
+  getGameStoryTriggerRelationships,
   getTimelineEvents,
+  getWorldTriggerRelationships,
   isRelationshipActiveAt,
+  isGameStoryNodeEntity,
   isGameStoryLinkType,
   moveTimelineEventInProject,
   nextEntityPosition,
@@ -149,9 +152,17 @@ interface EntityGraphFocus {
 
 type GraphFocusDepth = 1 | 2 | 3 | 4 | "all";
 type GraphView = "world" | "story_flow";
+type TriggerPickMode = "game_target" | "world_source";
 type ActivePage = "workspace" | "settings";
 type RecentProjectSource = "folder" | "backup" | "browser";
 type NewProjectContents = "empty" | "sample";
+
+interface TriggerPickState {
+  mode: TriggerPickMode;
+  fixedEntityId: string;
+  restoreGraphView: GraphView;
+  restoreSelection: Selection | null;
+}
 
 interface WorkspaceProjectSeed {
   id: string;
@@ -1169,6 +1180,7 @@ function StoryWorkspace({
   const [selectedTimelineEventId, setSelectedTimelineEventId] = useState<string | null>(null);
   const [timelineCollapsed, setTimelineCollapsed] = useState(false);
   const [graphView, setGraphView] = useState<GraphView>("world");
+  const [triggerPick, setTriggerPick] = useState<TriggerPickState | null>(null);
   const [activeGameTool, setActiveGameTool] = useState<GameToolTab>("state");
   const cloudSettingsUserRef = useRef<string | null>(null);
   const graphFocus = useMemo(
@@ -1273,6 +1285,7 @@ function StoryWorkspace({
         setCloudSyncStatus(seed.storageMode === "cloud" ? "saved" : cloudUser ? "idle" : "signed_out");
         setSelection(nextSelection);
         setGraphView(nextGraphView);
+        setTriggerPick(null);
         setFlowNodes(projectNodes(seed.project, nextSelection, nextGraphFocus, nextGraphView));
         setSelectedTimelineEventId(null);
         setIsDirty(false);
@@ -1304,6 +1317,7 @@ function StoryWorkspace({
           setCloudSyncStatus("saved");
           setSelection(nextSelection);
           setGraphView(nextGraphView);
+          setTriggerPick(null);
           setFlowNodes(projectNodes(loadedProject.project, nextSelection, nextGraphFocus, nextGraphView));
           setSelectedTimelineEventId(null);
           setIsDirty(false);
@@ -1329,6 +1343,7 @@ function StoryWorkspace({
         setProject(starterProject);
         setSelection(nextSelection);
         setGraphView(nextGraphView);
+        setTriggerPick(null);
         setFlowNodes(projectNodes(starterProject, nextSelection, nextGraphFocus, nextGraphView));
         setSelectedTimelineEventId(null);
         setIsDirty(false);
@@ -1342,6 +1357,7 @@ function StoryWorkspace({
         setProject(blankProject);
         setSelection(null);
         setGraphView("world");
+        setTriggerPick(null);
         setFlowNodes(projectNodes(blankProject, null, null, "world"));
         setStatus((error as Error).message);
       }
@@ -1367,6 +1383,7 @@ function StoryWorkspace({
   useEffect(() => {
     if (project.projectMode !== "game_story") {
       setGameToolsOpen(false);
+      setTriggerPick(null);
     }
   }, [project.projectMode]);
 
@@ -1437,6 +1454,12 @@ function StoryWorkspace({
   ]
     .filter(Boolean)
     .join(" ");
+  const triggerPickPrompt =
+    triggerPick?.mode === "game_target"
+      ? "Select a game story node to trigger"
+      : triggerPick?.mode === "world_source"
+        ? "Select a world-building item as trigger source"
+        : null;
 
   const markProjectChanged = useCallback((nextProject: StoryProject) => {
     setProject(nextProject);
@@ -1468,6 +1491,7 @@ function StoryWorkspace({
       setCloudSyncStatus(options.storageMode === "cloud" ? "saved" : cloudUser ? "idle" : "signed_out");
       setSelection(nextSelection);
       setGraphView(nextGraphView);
+      setTriggerPick(null);
       setFlowNodes(projectNodes(loadedProject, nextSelection, nextGraphFocus, nextGraphView));
       setSelectedTimelineEventId(null);
       setIsDirty(false);
@@ -1476,7 +1500,7 @@ function StoryWorkspace({
     [cloudUser]
   );
 
-  const handleGraphViewChange = useCallback((nextGraphView: GraphView) => {
+  const applyGraphView = useCallback((nextGraphView: GraphView) => {
     setGraphView(nextGraphView);
 
     if (nextGraphView === "story_flow") {
@@ -1486,9 +1510,33 @@ function StoryWorkspace({
     }
   }, []);
 
+  const restoreTriggerPick = useCallback(() => {
+    if (!triggerPick) {
+      return;
+    }
+
+    applyGraphView(triggerPick.restoreGraphView);
+    setSelection(triggerPick.restoreSelection);
+    setTriggerPick(null);
+  }, [applyGraphView, triggerPick]);
+
+  const handleCancelTriggerPick = useCallback(() => {
+    restoreTriggerPick();
+    setStatus(isDirty ? "Unsaved changes" : "Ready");
+  }, [isDirty, restoreTriggerPick]);
+
+  const handleGraphViewChange = useCallback(
+    (nextGraphView: GraphView) => {
+      setTriggerPick(null);
+      applyGraphView(nextGraphView);
+    },
+    [applyGraphView]
+  );
+
   const handleSelectEntityInGraph = useCallback(
     (id: string, nextGraphView: GraphView) => {
       setActivePage("workspace");
+      setTriggerPick(null);
       handleGraphViewChange(nextGraphView);
       setSelection({ kind: "entity", id });
     },
@@ -1600,6 +1648,26 @@ function StoryWorkspace({
     [markProjectChanged, project]
   );
 
+  const handleStartTriggerPick = useCallback(
+    (mode: TriggerPickMode, fixedEntityId: string) => {
+      if (project.projectMode !== "game_story" || !project.entities[fixedEntityId]) {
+        return;
+      }
+
+      const nextGraphView = mode === "game_target" ? "story_flow" : "world";
+      setActivePage("workspace");
+      setTriggerPick({
+        mode,
+        fixedEntityId,
+        restoreGraphView: graphView,
+        restoreSelection: selection
+      });
+      applyGraphView(nextGraphView);
+      setStatus(mode === "game_target" ? "Select a game story node to trigger" : "Select a world-building item as trigger source");
+    },
+    [applyGraphView, graphView, project, selection]
+  );
+
   const handleCreateTriggerLink = useCallback(
     (sourceId: string, targetId: string) => {
       if (!project.entities[sourceId] || !project.entities[targetId] || sourceId === targetId) {
@@ -1625,6 +1693,48 @@ function StoryWorkspace({
       });
     },
     [markProjectChanged, project]
+  );
+
+  const handleNodeClick = useCallback(
+    (id: string) => {
+      if (!triggerPick) {
+        setSelection({ kind: "entity", id });
+        return;
+      }
+
+      const pickedEntity = project.entities[id];
+
+      if (!pickedEntity) {
+        return;
+      }
+
+      if (triggerPick.mode === "game_target") {
+        const linkedTargetIds = new Set(
+          getWorldTriggerRelationships(project, triggerPick.fixedEntityId).map((relationship) => relationship.targetId)
+        );
+
+        if (!isGameStoryNodeEntity(pickedEntity) || linkedTargetIds.has(id)) {
+          setStatus("Select an unlinked game story node");
+          return;
+        }
+
+        handleCreateTriggerLink(triggerPick.fixedEntityId, id);
+      } else {
+        const linkedSourceIds = new Set(
+          getGameStoryTriggerRelationships(project, triggerPick.fixedEntityId).map((relationship) => relationship.sourceId)
+        );
+
+        if (!entityVisibleInGraph(pickedEntity, "world") || isGameStoryNodeEntity(pickedEntity) || linkedSourceIds.has(id)) {
+          setStatus("Select an unlinked world-building item");
+          return;
+        }
+
+        handleCreateTriggerLink(id, triggerPick.fixedEntityId);
+      }
+
+      restoreTriggerPick();
+    },
+    [handleCreateTriggerLink, project, restoreTriggerPick, triggerPick]
   );
 
   const handleDeleteEntity = useCallback(
@@ -2119,6 +2229,14 @@ function StoryWorkspace({
                 onGraphFocusDepthChange={handleGraphFocusDepthChange}
                 onGraphViewChange={handleGraphViewChange}
               />
+              {triggerPickPrompt ? (
+                <div className="graph-pick-prompt" role="status">
+                  <span>{triggerPickPrompt}</span>
+                  <button type="button" className="text-tool-button" onClick={handleCancelTriggerPick}>
+                    Cancel
+                  </button>
+                </div>
+              ) : null}
               <ReactFlow
                 nodes={flowNodes}
                 edges={edges}
@@ -2128,9 +2246,16 @@ function StoryWorkspace({
                 fitViewOptions={{ padding: 0.25 }}
                 onNodesChange={handleNodesChange}
                 onConnect={handleConnect}
-                onNodeClick={(_, node) => setSelection({ kind: "entity", id: node.id })}
+                onNodeClick={(_, node) => handleNodeClick(node.id)}
                 onEdgeClick={(_, edge) => setSelection({ kind: "relationship", id: edge.id })}
-                onPaneClick={() => setSelection(null)}
+                onPaneClick={() => {
+                  if (triggerPick) {
+                    handleCancelTriggerPick();
+                    return;
+                  }
+
+                  setSelection(null);
+                }}
               >
                 <Background color="#c8d1cd" gap={22} size={1.2} variant={BackgroundVariant.Dots} />
                 <MiniMap pannable zoomable nodeStrokeWidth={3} />
@@ -2160,7 +2285,7 @@ function StoryWorkspace({
             <DetailInspector
               project={project}
               selection={selection}
-              onCreateTriggerLink={handleCreateTriggerLink}
+              onStartTriggerPick={handleStartTriggerPick}
               onEntityChange={handleEntityChange}
               onRelationshipChange={handleRelationshipChange}
               onSelectEntityInGraph={handleSelectEntityInGraph}

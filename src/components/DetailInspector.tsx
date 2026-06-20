@@ -31,7 +31,7 @@ import { WorldRuleFields } from "./WorldRuleFields";
 interface DetailInspectorProps {
   project: StoryProject;
   selection: Selection | null;
-  onCreateTriggerLink: (sourceId: string, targetId: string) => void;
+  onStartTriggerPick: (mode: "game_target" | "world_source", fixedEntityId: string) => void;
   onEntityChange: (id: string, patch: Partial<StoryEntity>) => void;
   onRelationshipChange: (id: string, patch: Partial<StoryRelationship>) => void;
   onSelectEntityInGraph: (id: string, graphView: "world" | "story_flow") => void;
@@ -43,7 +43,7 @@ interface DetailInspectorProps {
 export function DetailInspector({
   project,
   selection,
-  onCreateTriggerLink,
+  onStartTriggerPick,
   onEntityChange,
   onRelationshipChange,
   onSelectEntityInGraph,
@@ -155,7 +155,7 @@ export function DetailInspector({
             <TriggeredByWorldBuilding
               project={project}
               entity={selectedEntity}
-              onCreateTriggerLink={onCreateTriggerLink}
+              onStartTriggerPick={onStartTriggerPick}
               onDeleteRelationship={onDeleteRelationship}
               onSelectEntityInGraph={onSelectEntityInGraph}
             />
@@ -163,7 +163,7 @@ export function DetailInspector({
             <TriggersGameStory
               project={project}
               entity={selectedEntity}
-              onCreateTriggerLink={onCreateTriggerLink}
+              onStartTriggerPick={onStartTriggerPick}
               onDeleteRelationship={onDeleteRelationship}
               onSelectEntityInGraph={onSelectEntityInGraph}
             />
@@ -238,7 +238,7 @@ export function DetailInspector({
 interface TriggerLinksProps {
   project: StoryProject;
   entity: StoryEntity;
-  onCreateTriggerLink: (sourceId: string, targetId: string) => void;
+  onStartTriggerPick: (mode: "game_target" | "world_source", fixedEntityId: string) => void;
   onDeleteRelationship: (id: string) => void;
   onSelectEntityInGraph: (id: string, graphView: "world" | "story_flow") => void;
 }
@@ -246,22 +246,13 @@ interface TriggerLinksProps {
 function TriggersGameStory({
   project,
   entity,
-  onCreateTriggerLink,
+  onStartTriggerPick,
   onDeleteRelationship,
   onSelectEntityInGraph
 }: TriggerLinksProps) {
   const triggerLinks = getWorldTriggerRelationships(project, entity.id);
   const linkedTargetIds = new Set(triggerLinks.map((relationship) => relationship.targetId));
   const targetOptions = getGameStoryNodes(project).filter((node) => !linkedTargetIds.has(node.id));
-  const [targetId, setTargetId] = useState(targetOptions[0]?.id ?? "");
-
-  useEffect(() => {
-    setTargetId((currentTargetId) =>
-      currentTargetId && targetOptions.some((node) => node.id === currentTargetId)
-        ? currentTargetId
-        : targetOptions[0]?.id ?? ""
-    );
-  }, [targetOptions]);
 
   return (
     <section className="game-subsection">
@@ -281,23 +272,12 @@ function TriggersGameStory({
       />
 
       <div className="game-condition-row">
-        <select
-          aria-label="Game story trigger target"
-          value={targetId}
-          onChange={(event) => setTargetId(event.target.value)}
-        >
-          <option value="">Choose game node</option>
-          {targetOptions.map((node) => (
-            <option key={node.id} value={node.id}>
-              {node.title}
-            </option>
-          ))}
-        </select>
+        {!targetOptions.length ? <p className="game-empty-note">All game story nodes are already linked.</p> : null}
         <button
           type="button"
           className="text-tool-button"
-          disabled={!targetId}
-          onClick={() => onCreateTriggerLink(entity.id, targetId)}
+          disabled={!targetOptions.length}
+          onClick={() => onStartTriggerPick("game_target", entity.id)}
         >
           <Plus aria-hidden="true" />
           Trigger
@@ -310,7 +290,7 @@ function TriggersGameStory({
 function TriggeredByWorldBuilding({
   project,
   entity,
-  onCreateTriggerLink,
+  onStartTriggerPick,
   onDeleteRelationship,
   onSelectEntityInGraph
 }: TriggerLinksProps) {
@@ -320,15 +300,6 @@ function TriggeredByWorldBuilding({
     .filter((candidate) => entityVisibleInGraph(candidate, "world"))
     .filter((candidate) => !isGameStoryNodeEntity(candidate))
     .filter((candidate) => !linkedSourceIds.has(candidate.id));
-  const [sourceId, setSourceId] = useState(sourceOptions[0]?.id ?? "");
-
-  useEffect(() => {
-    setSourceId((currentSourceId) =>
-      currentSourceId && sourceOptions.some((source) => source.id === currentSourceId)
-        ? currentSourceId
-        : sourceOptions[0]?.id ?? ""
-    );
-  }, [sourceOptions]);
 
   return (
     <section className="game-subsection">
@@ -348,23 +319,12 @@ function TriggeredByWorldBuilding({
       />
 
       <div className="game-condition-row">
-        <select
-          aria-label="World building trigger source"
-          value={sourceId}
-          onChange={(event) => setSourceId(event.target.value)}
-        >
-          <option value="">Choose world item</option>
-          {sourceOptions.map((source) => (
-            <option key={source.id} value={source.id}>
-              {source.title}
-            </option>
-          ))}
-        </select>
+        {!sourceOptions.length ? <p className="game-empty-note">All world-building items are already linked.</p> : null}
         <button
           type="button"
           className="text-tool-button"
-          disabled={!sourceId}
-          onClick={() => onCreateTriggerLink(sourceId, entity.id)}
+          disabled={!sourceOptions.length}
+          onClick={() => onStartTriggerPick("world_source", entity.id)}
         >
           <Plus aria-hidden="true" />
           Trigger Source

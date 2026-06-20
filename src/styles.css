@@ -1071,6 +1071,26 @@ a.toolbar-button {
   scrollbar-width: none;
 }
 
+.graph-pick-prompt {
+  position: absolute;
+  z-index: 6;
+  top: 70px;
+  left: 50%;
+  display: flex;
+  max-width: calc(100% - 28px);
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid rgba(217, 225, 222, 0.92);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 12px 30px rgba(23, 32, 31, 0.12);
+  color: var(--ink);
+  font-size: 0.86rem;
+  font-weight: 850;
+  transform: translateX(-50%);
+}
+
 .graph-toolbar::-webkit-scrollbar {
   display: none;
 }
