@@ -20,7 +20,7 @@ describe("runtime export", () => {
     expect(bundle.schemaVersion).toBe(STORY_RUNTIME_SCHEMA_VERSION);
     expect(bundle.sourceProject).toEqual({
       title: "Blank Runtime",
-      schemaVersion: 6,
+      schemaVersion: 7,
       projectMode: "story",
       updatedAt: project.updatedAt
     });
@@ -29,7 +29,7 @@ describe("runtime export", () => {
     expect(bundle.evidence).toEqual([]);
     expect(bundle.manifest.capabilities).toEqual(["semantic_graph"]);
     expect(bundle.validation).toEqual([]);
-    expect(project.schemaVersion).toBe(6);
+    expect(project.schemaVersion).toBe(7);
   });
 
   it("exports characters, world rules, evidence, relationships, and timeline data with source IDs", () => {

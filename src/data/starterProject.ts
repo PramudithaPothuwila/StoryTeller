@@ -5,6 +5,13 @@ import { ProjectMode, StoryProject } from "../types";
 const STARTER_PROJECT_MANIFEST = "storyteller.project.json";
 const STARTER_PROJECT_RELATIONSHIPS = "graph/relationships.json";
 const STARTER_PROJECT_GAMEPLAY_TRANSITIONS = "graph/gameplay-transitions.json";
+const STARTER_PROJECT_RUNTIME_FILES = [
+  "runtime/facts.json",
+  "runtime/evidence.json",
+  "runtime/character-knowledge.json",
+  "runtime/contradictions.json",
+  "runtime/theory-rules.json"
+];
 export const DEFAULT_STARTER_PROJECT_ID = "the-crown-beneath-glass";
 
 export interface StarterProjectSummary {
@@ -52,12 +59,22 @@ export async function loadStarterProject(
     )
   };
 
-  if (manifest.schemaVersion === 6) {
+  if (manifest.schemaVersion && manifest.schemaVersion >= 6) {
     files[STARTER_PROJECT_GAMEPLAY_TRANSITIONS] = await fetchStarterFile(
       fetchProject,
       starterProject.root,
       STARTER_PROJECT_GAMEPLAY_TRANSITIONS
     );
+  }
+
+  if (manifest.schemaVersion && manifest.schemaVersion >= 7) {
+    for (const runtimePath of STARTER_PROJECT_RUNTIME_FILES) {
+      const runtimeFile = await fetchOptionalStarterFile(fetchProject, starterProject.root, runtimePath);
+
+      if (runtimeFile !== null) {
+        files[runtimePath] = runtimeFile;
+      }
+    }
   }
 
   for (const indexedEntity of manifest.entityIndex ?? []) {
@@ -81,6 +98,20 @@ export function createLoadingProject(): StoryProject {
 
 async function fetchStarterFile(fetchProject: typeof fetch, root: string, path: string): Promise<string> {
   const response = await fetchProject(starterProjectUrl(root, path));
+
+  if (!response.ok) {
+    throw new Error(`Could not load starter project file ${path}: ${response.status}`);
+  }
+
+  return response.text();
+}
+
+async function fetchOptionalStarterFile(fetchProject: typeof fetch, root: string, path: string): Promise<string | null> {
+  const response = await fetchProject(starterProjectUrl(root, path));
+
+  if (response.status === 404) {
+    return null;
+  }
 
   if (!response.ok) {
     throw new Error(`Could not load starter project file ${path}: ${response.status}`);

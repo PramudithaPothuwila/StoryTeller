@@ -193,12 +193,139 @@ describe("story world rules", () => {
   });
 });
 
+describe("runtime authoring metadata", () => {
+  it("creates blank schema v7 projects with empty runtime defaults", () => {
+    const project = createBlankProject("Runtime Ready");
+
+    expect(project.schemaVersion).toBe(7);
+    expect(project.runtime).toEqual({
+      facts: [],
+      evidence: [],
+      characterKnowledge: [],
+      contradictionRules: [],
+      theoryRules: []
+    });
+  });
+
+  it("migrates v6 projects to v7 without losing existing story data", () => {
+    const timestamp = "2026-01-01T00:00:00.000Z";
+    const character = createStoryEntity("character", [], "Mara");
+    const migrated = migrateProjectShape({
+      schemaVersion: 6,
+      title: "Legacy Runtime",
+      updatedAt: timestamp,
+      projectMode: "story",
+      entities: {
+        [character.id]: character
+      },
+      relationships: [],
+      gameplayTransitions: [],
+      designConstraints: [{ id: "constraint-tone", category: "Tone", rule: "No slapstick", severity: "required" }],
+      aiProposals: [{ id: "proposal-1", status: "approved", createdAt: timestamp, summary: "Keep noir tone." }],
+      layout: {
+        [character.id]: { x: 10, y: 20 }
+      },
+      storyFlowLayout: {}
+    });
+
+    expect(migrated.schemaVersion).toBe(7);
+    expect(migrated.entities[character.id].title).toBe("Mara");
+    expect(migrated.designConstraints[0].rule).toBe("No slapstick");
+    expect(migrated.aiProposals[0].summary).toBe("Keep noir tone.");
+    expect(migrated.runtime).toEqual({
+      facts: [],
+      evidence: [],
+      characterKnowledge: [],
+      contradictionRules: [],
+      theoryRules: []
+    });
+  });
+
+  it("normalizes runtime truth, knowledge, belief, and player visibility separately", () => {
+    const migrated = migrateProjectShape({
+      schemaVersion: 7,
+      title: "Runtime Data",
+      updatedAt: "2026-01-01T00:00:00.000Z",
+      projectMode: "story",
+      entities: {},
+      relationships: [],
+      gameplayTransitions: [],
+      layout: {},
+      storyFlowLayout: {},
+      runtime: {
+        facts: [
+          {
+            id: "fact-ledger-forged",
+            statement: "The ledger was forged.",
+            truth: "true",
+            subjectEntityId: "item-ledger",
+            sourceEntityIds: ["item-ledger"],
+            tags: ["mystery"]
+          }
+        ],
+        evidence: [
+          {
+            id: "evidence-ink",
+            label: "Moonlit ink",
+            description: "The ink only appears under moonlight.",
+            factIds: ["fact-ledger-forged"],
+            reliability: "confirmed",
+            playerVisibility: "discoverable"
+          }
+        ],
+        characterKnowledge: [
+          {
+            id: "knowledge-mara-ledger",
+            characterId: "character-mara",
+            factId: "fact-ledger-forged",
+            knowledge: "knows",
+            belief: "believes_false",
+            evidenceIds: ["evidence-ink"]
+          }
+        ],
+        contradictionRules: [
+          {
+            id: "contradiction-ledger",
+            label: "Ledger testimony conflict",
+            factIds: ["fact-ledger-forged", "fact-ledger-authentic"],
+            severity: "error",
+            resolution: "Only one ledger origin can be canon."
+          }
+        ],
+        theoryRules: [
+          {
+            id: "theory-forgery",
+            label: "Player can accuse the forger",
+            requiredEvidenceIds: ["evidence-ink"],
+            supportingFactIds: ["fact-ledger-forged"],
+            contradictingFactIds: ["fact-ledger-authentic"],
+            conclusion: "The ledger is forged.",
+            playerVisibility: "hidden"
+          }
+        ]
+      }
+    });
+
+    expect(migrated.runtime.facts[0]).toEqual(
+      expect.objectContaining({ truth: "true", sourceEntityIds: ["item-ledger"], tags: ["mystery"] })
+    );
+    expect(migrated.runtime.evidence[0]).toEqual(
+      expect.objectContaining({ reliability: "confirmed", playerVisibility: "discoverable" })
+    );
+    expect(migrated.runtime.characterKnowledge[0]).toEqual(
+      expect.objectContaining({ knowledge: "knows", belief: "believes_false", evidenceIds: ["evidence-ink"] })
+    );
+    expect(migrated.runtime.contradictionRules[0].severity).toBe("error");
+    expect(migrated.runtime.theoryRules[0].playerVisibility).toBe("hidden");
+  });
+});
+
 describe("game story mode", () => {
-  it("upgrades projects to schema v6 and installs game story catalogs only when enabled", () => {
+  it("upgrades projects to schema v7 and installs game story catalogs only when enabled", () => {
     const storyProject = createBlankProject("Story");
     const gameProject = setProjectModeInProject(storyProject, "game_story");
 
-    expect(storyProject.schemaVersion).toBe(6);
+    expect(storyProject.schemaVersion).toBe(7);
     expect(storyProject.storyFlowLayout).toEqual({});
     expect(storyProject.projectMode).toBe("story");
     expect(storyProject.itemTypes.some((type) => type.id === "scene")).toBe(false);
@@ -235,7 +362,7 @@ describe("game story mode", () => {
       }
     });
 
-    expect(migrated.schemaVersion).toBe(6);
+    expect(migrated.schemaVersion).toBe(7);
     expect(migrated.layout[start.id]).toEqual({ x: 10, y: 20 });
     expect(migrated.entities[start.id].graphPresence).toBe("both");
     expect(migrated.entities[character.id].graphPresence).toBe("world");

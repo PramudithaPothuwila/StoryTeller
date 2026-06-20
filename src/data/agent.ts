@@ -121,6 +121,7 @@ interface AgentProjectContext {
   linkTypes: StoryProject["linkTypes"];
   timelineLaneNames: string[];
   gameStory?: StoryProject["gameStory"];
+  runtime: StoryProject["runtime"];
   entities: Array<
     Pick<
       StoryEntity,
@@ -194,6 +195,7 @@ export function buildAgentProjectContext(project: StoryProject): AgentProjectCon
     linkTypes: project.linkTypes,
     timelineLaneNames: project.timelineLaneNames,
     gameStory: project.gameStory,
+    runtime: project.runtime,
     entities: Object.values(project.entities).map((entity) => ({
       id: entity.id,
       type: entity.type,

@@ -7,13 +7,19 @@ import {
   STORY_PROJECT_SCHEMA_VERSION,
   StoryEntity,
   StoryProject,
-  StoryRelationship
+  StoryRelationship,
+  StoryRuntimeMetadata
 } from "../types";
 import { migrateProjectShape } from "./story";
 
 const MANIFEST_PATH = "storyteller.project.json";
 const RELATIONSHIPS_PATH = "graph/relationships.json";
 const GAMEPLAY_TRANSITIONS_PATH = "graph/gameplay-transitions.json";
+const RUNTIME_FACTS_PATH = "runtime/facts.json";
+const RUNTIME_EVIDENCE_PATH = "runtime/evidence.json";
+const RUNTIME_CHARACTER_KNOWLEDGE_PATH = "runtime/character-knowledge.json";
+const RUNTIME_CONTRADICTIONS_PATH = "runtime/contradictions.json";
+const RUNTIME_THEORY_RULES_PATH = "runtime/theory-rules.json";
 const BUNDLE_KIND = "storyteller.project.bundle";
 
 interface ProjectManifestV1 {
@@ -126,14 +132,60 @@ interface ProjectManifestV6 {
   }>;
 }
 
+interface ProjectManifestV7 {
+  schemaVersion: 7;
+  title: string;
+  updatedAt: string;
+  projectMode: ProjectMode;
+  gameStory?: GameStoryProjectMetadata;
+  runtime?: StoryRuntimeMetadata;
+  itemTypes: ItemTypeDefinition[];
+  linkTypes: LinkTypeDefinition[];
+  timelineLaneNames?: string[];
+  graphLayout: StoryProject["layout"];
+  storyFlowLayout: StoryProject["storyFlowLayout"];
+  entityIndex: Array<{
+    id: string;
+    type: string;
+    title: string;
+    updatedAt: string;
+    path: string;
+  }>;
+}
+
 interface RelationshipsFile {
-  schemaVersion: 1 | 2 | 3 | 4 | 5 | 6;
+  schemaVersion: 1 | 2 | 3 | 4 | 5 | 6 | 7;
   relationships: StoryRelationship[];
 }
 
 interface GameplayTransitionsFile {
-  schemaVersion: 6;
+  schemaVersion: 6 | 7;
   gameplayTransitions: GameplayTransition[];
+}
+
+interface RuntimeFactsFile {
+  schemaVersion: 7;
+  facts: StoryRuntimeMetadata["facts"];
+}
+
+interface RuntimeEvidenceFile {
+  schemaVersion: 7;
+  evidence: StoryRuntimeMetadata["evidence"];
+}
+
+interface RuntimeCharacterKnowledgeFile {
+  schemaVersion: 7;
+  characterKnowledge: StoryRuntimeMetadata["characterKnowledge"];
+}
+
+interface RuntimeContradictionsFile {
+  schemaVersion: 7;
+  contradictionRules: StoryRuntimeMetadata["contradictionRules"];
+}
+
+interface RuntimeTheoryRulesFile {
+  schemaVersion: 7;
+  theoryRules: StoryRuntimeMetadata["theoryRules"];
 }
 
 interface ProjectBundle {
@@ -148,13 +200,14 @@ type ProjectManifest =
   | ProjectManifestV3
   | ProjectManifestV4
   | ProjectManifestV5
-  | ProjectManifestV6;
+  | ProjectManifestV6
+  | ProjectManifestV7;
 
 export function buildProjectFiles(project: StoryProject): Record<string, string> {
   const files: Record<string, string> = {};
   const projectForFiles = migrateProjectShape(project);
   const entities = Object.values(projectForFiles.entities);
-  const manifest: ProjectManifestV6 = {
+  const manifest: ProjectManifestV7 = {
     schemaVersion: STORY_PROJECT_SCHEMA_VERSION,
     title: projectForFiles.title,
     updatedAt: projectForFiles.updatedAt,
@@ -185,6 +238,26 @@ export function buildProjectFiles(project: StoryProject): Record<string, string>
   files[MANIFEST_PATH] = prettyJson(manifest);
   files[RELATIONSHIPS_PATH] = prettyJson(relationships);
   files[GAMEPLAY_TRANSITIONS_PATH] = prettyJson(gameplayTransitions);
+  files[RUNTIME_FACTS_PATH] = prettyJson({
+    schemaVersion: STORY_PROJECT_SCHEMA_VERSION,
+    facts: projectForFiles.runtime.facts
+  } satisfies RuntimeFactsFile);
+  files[RUNTIME_EVIDENCE_PATH] = prettyJson({
+    schemaVersion: STORY_PROJECT_SCHEMA_VERSION,
+    evidence: projectForFiles.runtime.evidence
+  } satisfies RuntimeEvidenceFile);
+  files[RUNTIME_CHARACTER_KNOWLEDGE_PATH] = prettyJson({
+    schemaVersion: STORY_PROJECT_SCHEMA_VERSION,
+    characterKnowledge: projectForFiles.runtime.characterKnowledge
+  } satisfies RuntimeCharacterKnowledgeFile);
+  files[RUNTIME_CONTRADICTIONS_PATH] = prettyJson({
+    schemaVersion: STORY_PROJECT_SCHEMA_VERSION,
+    contradictionRules: projectForFiles.runtime.contradictionRules
+  } satisfies RuntimeContradictionsFile);
+  files[RUNTIME_THEORY_RULES_PATH] = prettyJson({
+    schemaVersion: STORY_PROJECT_SCHEMA_VERSION,
+    theoryRules: projectForFiles.runtime.theoryRules
+  } satisfies RuntimeTheoryRulesFile);
 
   for (const entity of entities) {
     files[entityPath(entity)] = serializeEntityMarkdown(entity);
@@ -208,7 +281,8 @@ export function projectFromFiles(files: Record<string, string>): StoryProject {
     manifest.schemaVersion !== 3 &&
     manifest.schemaVersion !== 4 &&
     manifest.schemaVersion !== 5 &&
-    manifest.schemaVersion !== 6
+    manifest.schemaVersion !== 6 &&
+    manifest.schemaVersion !== 7
   ) {
     throw new Error("Unsupported or invalid StoryTeller project manifest");
   }
@@ -216,7 +290,7 @@ export function projectFromFiles(files: Record<string, string>): StoryProject {
   const relationshipText = files[RELATIONSHIPS_PATH] ?? prettyJson({ schemaVersion: manifest.schemaVersion, relationships: [] });
   const relationshipFile = parseJson<RelationshipsFile>(relationshipText, "relationships file");
   const gameplayTransitionFile =
-    manifest.schemaVersion === 6 && files[GAMEPLAY_TRANSITIONS_PATH]
+    manifest.schemaVersion >= 6 && files[GAMEPLAY_TRANSITIONS_PATH]
       ? parseJson<GameplayTransitionsFile>(files[GAMEPLAY_TRANSITIONS_PATH], "gameplay transitions file")
       : { schemaVersion: 6 as const, gameplayTransitions: [] };
   const entities: StoryProject["entities"] = {};
@@ -238,20 +312,22 @@ export function projectFromFiles(files: Record<string, string>): StoryProject {
     updatedAt: manifest.updatedAt,
     projectMode:
       manifest.schemaVersion === 3 || manifest.schemaVersion === 4 || manifest.schemaVersion === 5
-        || manifest.schemaVersion === 6
+        || manifest.schemaVersion === 6 || manifest.schemaVersion === 7
         ? manifest.projectMode
         : undefined,
     gameStory:
       manifest.schemaVersion === 3 || manifest.schemaVersion === 4 || manifest.schemaVersion === 5
-        || manifest.schemaVersion === 6
+        || manifest.schemaVersion === 6 || manifest.schemaVersion === 7
         ? manifest.gameStory
         : undefined,
+    runtime: manifest.schemaVersion === 7 ? runtimeFromFiles(files, manifest.runtime) : undefined,
     itemTypes:
       manifest.schemaVersion === 2 ||
       manifest.schemaVersion === 3 ||
       manifest.schemaVersion === 4 ||
       manifest.schemaVersion === 5 ||
-      manifest.schemaVersion === 6
+      manifest.schemaVersion === 6 ||
+      manifest.schemaVersion === 7
         ? manifest.itemTypes
         : undefined,
     linkTypes:
@@ -259,7 +335,8 @@ export function projectFromFiles(files: Record<string, string>): StoryProject {
       manifest.schemaVersion === 3 ||
       manifest.schemaVersion === 4 ||
       manifest.schemaVersion === 5 ||
-      manifest.schemaVersion === 6
+      manifest.schemaVersion === 6 ||
+      manifest.schemaVersion === 7
         ? manifest.linkTypes
         : undefined,
     timelineLaneNames:
@@ -267,7 +344,8 @@ export function projectFromFiles(files: Record<string, string>): StoryProject {
       manifest.schemaVersion === 3 ||
       manifest.schemaVersion === 4 ||
       manifest.schemaVersion === 5 ||
-      manifest.schemaVersion === 6
+      manifest.schemaVersion === 6 ||
+      manifest.schemaVersion === 7
         ? manifest.timelineLaneNames
         : undefined,
     entities,
@@ -279,7 +357,7 @@ export function projectFromFiles(files: Record<string, string>): StoryProject {
     ),
     layout: manifest.graphLayout ?? {},
     storyFlowLayout:
-      manifest.schemaVersion === 4 || manifest.schemaVersion === 5 || manifest.schemaVersion === 6
+      manifest.schemaVersion === 4 || manifest.schemaVersion === 5 || manifest.schemaVersion === 6 || manifest.schemaVersion === 7
         ? manifest.storyFlowLayout
         : undefined
   });
@@ -358,7 +436,7 @@ export async function readProjectFromDirectory(directoryHandle: FileSystemDirect
     [RELATIONSHIPS_PATH]: await readTextPath(directoryHandle, RELATIONSHIPS_PATH)
   };
 
-  if (manifest.schemaVersion === 6) {
+  if (manifest.schemaVersion >= 6) {
     try {
       files[GAMEPLAY_TRANSITIONS_PATH] = await readTextPath(directoryHandle, GAMEPLAY_TRANSITIONS_PATH);
     } catch (error) {
@@ -366,6 +444,16 @@ export async function readProjectFromDirectory(directoryHandle: FileSystemDirect
         throw error;
       }
     }
+  }
+
+  if (manifest.schemaVersion >= 7) {
+    await readOptionalTextPaths(directoryHandle, files, [
+      RUNTIME_FACTS_PATH,
+      RUNTIME_EVIDENCE_PATH,
+      RUNTIME_CHARACTER_KNOWLEDGE_PATH,
+      RUNTIME_CONTRADICTIONS_PATH,
+      RUNTIME_THEORY_RULES_PATH
+    ]);
   }
 
   for (const indexedEntity of manifest.entityIndex) {
@@ -379,6 +467,57 @@ function entityPath(entity: StoryEntity): string {
   return `entities/${entity.type}/${entity.id}.md`;
 }
 
+function runtimeFromFiles(
+  files: Record<string, string>,
+  manifestRuntime: Partial<StoryRuntimeMetadata> | undefined
+): Partial<StoryRuntimeMetadata> {
+  const facts = files[RUNTIME_FACTS_PATH]
+    ? parseJson<Partial<RuntimeFactsFile>>(files[RUNTIME_FACTS_PATH], "runtime facts file").facts
+    : manifestRuntime?.facts;
+  const evidence = files[RUNTIME_EVIDENCE_PATH]
+    ? parseJson<Partial<RuntimeEvidenceFile>>(files[RUNTIME_EVIDENCE_PATH], "runtime evidence file").evidence
+    : manifestRuntime?.evidence;
+  const characterKnowledge = files[RUNTIME_CHARACTER_KNOWLEDGE_PATH]
+    ? parseJson<Partial<RuntimeCharacterKnowledgeFile>>(
+        files[RUNTIME_CHARACTER_KNOWLEDGE_PATH],
+        "runtime character knowledge file"
+      ).characterKnowledge
+    : manifestRuntime?.characterKnowledge;
+  const contradictionRules = files[RUNTIME_CONTRADICTIONS_PATH]
+    ? parseJson<Partial<RuntimeContradictionsFile>>(
+        files[RUNTIME_CONTRADICTIONS_PATH],
+        "runtime contradictions file"
+      ).contradictionRules
+    : manifestRuntime?.contradictionRules;
+  const theoryRules = files[RUNTIME_THEORY_RULES_PATH]
+    ? parseJson<Partial<RuntimeTheoryRulesFile>>(files[RUNTIME_THEORY_RULES_PATH], "runtime theory rules file").theoryRules
+    : manifestRuntime?.theoryRules;
+
+  return {
+    facts,
+    evidence,
+    characterKnowledge,
+    contradictionRules,
+    theoryRules
+  };
+}
+
+async function readOptionalTextPaths(
+  directoryHandle: FileSystemDirectoryHandle,
+  files: Record<string, string>,
+  paths: string[]
+): Promise<void> {
+  for (const path of paths) {
+    try {
+      files[path] = await readTextPath(directoryHandle, path);
+    } catch (error) {
+      if (!isMissingPathError(error)) {
+        throw error;
+      }
+    }
+  }
+}
+
 async function readExistingProjectManifest(directoryHandle: FileSystemDirectoryHandle): Promise<ProjectManifest | null> {
   try {
     const manifest = parseJson<ProjectManifest>(await readTextPath(directoryHandle, MANIFEST_PATH), "project manifest");
@@ -388,7 +527,8 @@ async function readExistingProjectManifest(directoryHandle: FileSystemDirectoryH
       manifest.schemaVersion === 3 ||
       manifest.schemaVersion === 4 ||
       manifest.schemaVersion === 5 ||
-      manifest.schemaVersion === 6) &&
+      manifest.schemaVersion === 6 ||
+      manifest.schemaVersion === 7) &&
       Array.isArray(manifest.entityIndex)
       ? manifest
       : null;

@@ -73,7 +73,7 @@ describe("cloud project storage", () => {
 
     expect(supabaseClientMock.from).toHaveBeenCalledWith("projects");
     expect(projectsQueryMock.eq).toHaveBeenCalledWith("id", "cloud-project-1");
-    expect(result.project.schemaVersion).toBe(6);
+    expect(result.project.schemaVersion).toBe(7);
     expect(result.project.title).toBe("Legacy Cloud");
     expect(result.version).toBe(7);
   });
