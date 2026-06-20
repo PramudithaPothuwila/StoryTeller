@@ -4,6 +4,7 @@ import { ProjectMode, StoryProject } from "../types";
 
 const STARTER_PROJECT_MANIFEST = "storyteller.project.json";
 const STARTER_PROJECT_RELATIONSHIPS = "graph/relationships.json";
+const STARTER_PROJECT_GAMEPLAY_TRANSITIONS = "graph/gameplay-transitions.json";
 export const DEFAULT_STARTER_PROJECT_ID = "the-crown-beneath-glass";
 
 export interface StarterProjectSummary {
@@ -29,6 +30,7 @@ export const STARTER_PROJECTS: StarterProjectSummary[] = [
 ];
 
 interface StarterProjectManifest {
+  schemaVersion?: number;
   entityIndex?: Array<{
     path?: string;
   }>;
@@ -49,6 +51,14 @@ export async function loadStarterProject(
       STARTER_PROJECT_RELATIONSHIPS
     )
   };
+
+  if (manifest.schemaVersion === 6) {
+    files[STARTER_PROJECT_GAMEPLAY_TRANSITIONS] = await fetchStarterFile(
+      fetchProject,
+      starterProject.root,
+      STARTER_PROJECT_GAMEPLAY_TRANSITIONS
+    );
+  }
 
   for (const indexedEntity of manifest.entityIndex ?? []) {
     if (!indexedEntity.path) {

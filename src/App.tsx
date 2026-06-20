@@ -58,6 +58,7 @@ import {
   createBlankProject,
   createCustomItemType,
   createCustomLinkType,
+  createGameplayTransition,
   createStoryEntity,
   createStoryRelationship,
   deleteEntityFromProject,
@@ -69,6 +70,7 @@ import {
   findItemType,
   findLinkType,
   getGameContinuityIssues,
+  getGameStoryRelationships,
   getGameStoryNodes,
   getGameStoryTriggerRelationships,
   getTimelineEvents,
@@ -1538,9 +1540,13 @@ function StoryWorkspace({
         return;
       }
 
-      const relationshipType = graphView === "story_flow" && project.projectMode === "game_story" ? "branches_to" : defaultRelationshipType;
-      const relationship = createStoryRelationship(project, connection.source, connection.target, relationshipType);
-      const nextEdges = addEdge({ ...connection, id: relationship.id }, edges);
+      const isStoryFlowTransition = graphView === "story_flow" && project.projectMode === "game_story";
+      const relationship = isStoryFlowTransition
+        ? null
+        : createStoryRelationship(project, connection.source, connection.target, defaultRelationshipType);
+      const transition = isStoryFlowTransition ? createGameplayTransition(connection.source, connection.target) : null;
+      const edgeId = relationship?.id ?? transition!.id;
+      const nextEdges = addEdge({ ...connection, id: edgeId }, edges);
 
       if (nextEdges.length === edges.length) {
         return;
@@ -1548,9 +1554,10 @@ function StoryWorkspace({
 
       markProjectChanged({
         ...touchProject(project),
-        relationships: [...project.relationships, relationship]
+        relationships: relationship ? [...project.relationships, relationship] : project.relationships,
+        gameplayTransitions: transition ? [...project.gameplayTransitions, transition] : project.gameplayTransitions
       });
-      setSelection({ kind: "relationship", id: relationship.id });
+      setSelection({ kind: "relationship", id: edgeId });
     },
     [defaultRelationshipType, edges, graphView, markProjectChanged, project]
   );
@@ -2236,7 +2243,7 @@ function StoryWorkspace({
           <strong>{project.title}</strong>
           <div className="topbar-meta">
             <span>{Object.keys(project.entities).length} items</span>
-            <span>{project.relationships.length} links</span>
+            <span>{project.relationships.length + project.gameplayTransitions.length} links</span>
             {project.projectMode === "game_story" ? <span>{continuityIssueCount} issues</span> : null}
             {isDirty ? <span className="topbar-status is-dirty">Unsaved</span> : null}
             {storageMode === "local" ? (
@@ -2563,7 +2570,10 @@ function hasVisibleInspector(project: StoryProject, selection: Selection | null)
   }
 
   if (selection?.kind === "relationship") {
-    return project.relationships.some((relationship) => relationship.id === selection.id);
+    return (
+      project.relationships.some((relationship) => relationship.id === selection.id) ||
+      project.gameplayTransitions.some((transition) => transition.id === selection.id)
+    );
   }
 
   return false;
@@ -2727,14 +2737,18 @@ function graphViewEntityIds(project: StoryProject, graphView: GraphView): Set<st
 function graphViewRelationships(project: StoryProject, graphView: GraphView): StoryRelationship[] {
   const visibleEntityIds = graphViewEntityIds(project, graphView);
 
+  if (graphView === "story_flow") {
+    return getGameStoryRelationships(project).filter(
+      (relationship) => visibleEntityIds.has(relationship.sourceId) && visibleEntityIds.has(relationship.targetId)
+    );
+  }
+
   return project.relationships.filter((relationship) => {
     if (!visibleEntityIds.has(relationship.sourceId) || !visibleEntityIds.has(relationship.targetId)) {
       return false;
     }
 
-    return graphView === "story_flow"
-      ? isGameStoryLinkType(relationship.type) || Boolean(relationship.gameStory)
-      : !isGameStoryLinkType(relationship.type) && !relationship.gameStory;
+    return !isGameStoryLinkType(relationship.type) && !relationship.gameStory;
   });
 }
 
@@ -2842,7 +2856,10 @@ function relationshipLabelOffset(index: number): number {
 
 function outgoingGraphViewTargets(project: StoryProject, entityId: string): string[] {
   const gameNodeIds = new Set(getGameStoryNodes(project).map((entity) => entity.id));
-  const branchTargets = project.relationships
+  const branchTargets = project.gameplayTransitions
+    .filter((transition) => transition.sourceNodeId === entityId)
+    .map((transition) => transition.targetNodeId);
+  const legacyBranchTargets = project.relationships
     .filter((relationship) => relationship.sourceId === entityId && relationship.type === "branches_to")
     .map((relationship) => relationship.targetId);
   const responseTargets =
@@ -2850,7 +2867,7 @@ function outgoingGraphViewTargets(project: StoryProject, entityId: string): stri
       .map((response) => response.targetNodeId)
       .filter((targetId): targetId is string => Boolean(targetId)) ?? [];
 
-  return [...branchTargets, ...responseTargets].filter((targetId) => gameNodeIds.has(targetId));
+  return [...branchTargets, ...legacyBranchTargets, ...responseTargets].filter((targetId) => gameNodeIds.has(targetId));
 }
 
 function relationshipOpacity(active: boolean, fadedByFocus: boolean, connectedToFocus: boolean): number {

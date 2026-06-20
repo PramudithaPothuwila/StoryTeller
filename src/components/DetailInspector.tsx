@@ -16,6 +16,7 @@ import {
   ensureEventTimeline,
   findItemType,
   findLinkType,
+  getGameStoryRelationships,
   getGameStoryNodes,
   getGameStoryTriggerRelationships,
   getWorldTriggerRelationships,
@@ -56,7 +57,9 @@ export function DetailInspector({
   const selectedEntity = selection?.kind === "entity" ? project.entities[selection.id] : null;
   const selectedRelationship =
     selection?.kind === "relationship"
-      ? project.relationships.find((relationship) => relationship.id === selection.id) ?? null
+      ? project.relationships.find((relationship) => relationship.id === selection.id) ??
+        getGameStoryRelationships(project).find((relationship) => relationship.id === selection.id) ??
+        null
       : null;
 
   if (selectedEntity) {

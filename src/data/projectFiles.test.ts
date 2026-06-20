@@ -36,8 +36,9 @@ describe("project file model", () => {
 
     expect(files["storyteller.project.json"]).toBeTruthy();
     expect(files["graph/relationships.json"]).toBeTruthy();
+    expect(files["graph/gameplay-transitions.json"]).toBeTruthy();
     expect(Object.keys(files).some((path) => path.startsWith("entities/character/"))).toBe(true);
-    expect(JSON.parse(files["storyteller.project.json"]).schemaVersion).toBe(5);
+    expect(JSON.parse(files["storyteller.project.json"]).schemaVersion).toBe(6);
     expect(JSON.parse(files["storyteller.project.json"]).projectMode).toBe("story");
     expect(JSON.parse(files["storyteller.project.json"]).timelineLaneNames).toEqual(project.timelineLaneNames);
     expect(Object.keys(restoredProject.entities)).toHaveLength(Object.keys(project.entities).length);
@@ -47,7 +48,7 @@ describe("project file model", () => {
     expect(restoredProject.timelineLaneNames).toEqual(project.timelineLaneNames);
   });
 
-  it("migrates v1 project files to schema v5 with built-in type catalogs", () => {
+  it("migrates v1 project files to schema v6 with built-in type catalogs", () => {
     const entity = {
       id: "character-1",
       type: "character",
@@ -85,7 +86,7 @@ describe("project file model", () => {
 
     const project = projectFromFiles(files);
 
-    expect(project.schemaVersion).toBe(5);
+    expect(project.schemaVersion).toBe(6);
     expect(project.entities[entity.id].graphPresence).toBe("world");
     expect(project.projectMode).toBe("story");
     expect(project.itemTypes.some((type) => type.id === "character")).toBe(true);
@@ -202,7 +203,7 @@ describe("project file model", () => {
     expect(restoredFromBundle.entities[rule.id].worldRule).toEqual(rule.worldRule);
   });
 
-  it("round-trips schema v5 game story metadata and layouts through folder files and bundles", async () => {
+  it("round-trips schema v6 game story metadata and layouts through folder files and bundles", async () => {
     let project = setProjectModeInProject(createBlankProject("Branching Game"), "game_story");
     project = addGameStateVariableToProject(project, "flag");
     const variable = project.gameStory!.stateVariables[0];
@@ -265,7 +266,7 @@ describe("project file model", () => {
     } as File);
     const manifest = JSON.parse(files["storyteller.project.json"]);
 
-    expect(manifest.schemaVersion).toBe(5);
+    expect(manifest.schemaVersion).toBe(6);
     expect(manifest.projectMode).toBe("game_story");
     expect(manifest.gameStory.startNodeId).toBe(start.id);
     expect(manifest.storyFlowLayout).toEqual(project.storyFlowLayout);
@@ -273,9 +274,12 @@ describe("project file model", () => {
     expect(restoredFromFiles.entities[start.id].graphPresence).toBe("world");
     expect(restoredFromFiles.storyFlowLayout).toEqual(project.storyFlowLayout);
     expect(restoredFromFiles.entities[start.id].gameStory?.dialogue?.responses[0].targetNodeId).toBe(ending.id);
-    expect(restoredFromFiles.relationships[0].gameStory?.choiceText).toBe("Accept the offer");
+    expect(JSON.parse(files["graph/gameplay-transitions.json"]).gameplayTransitions[0].choice.text).toBe("Accept the offer");
+    expect(restoredFromFiles.relationships).toEqual([]);
+    expect(restoredFromFiles.gameplayTransitions[0].choice.text).toBe("Accept the offer");
     expect(restoredFromBundle.projectMode).toBe("game_story");
     expect(restoredFromBundle.storyFlowLayout).toEqual(project.storyFlowLayout);
+    expect(restoredFromBundle.gameplayTransitions[0].choice.text).toBe("Accept the offer");
   });
 
   it("removes stale entity markdown files when saving a folder project", async () => {

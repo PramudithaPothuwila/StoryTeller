@@ -1,7 +1,7 @@
 export const BUILT_IN_EVENT_TYPE_ID = "event";
 export const BUILT_IN_WORLD_RULE_TYPE_ID = "world_rule";
 export const BUILT_IN_TRIGGER_LINK_TYPE_ID = "triggers";
-export const STORY_PROJECT_SCHEMA_VERSION = 5;
+export const STORY_PROJECT_SCHEMA_VERSION = 6;
 
 export type ItemTypeId = string;
 export type LinkTypeId = string;
@@ -113,7 +113,11 @@ export type GameStateOperator =
   | "equals"
   | "not_equals"
   | "greater_than"
+  | "greater_than_or_equal"
   | "less_than"
+  | "less_than_or_equal"
+  | "contains"
+  | "exists"
   | "has"
   | "not_has";
 export type GameStateEffectOperation = "set" | "increment" | "decrement" | "add" | "remove";
@@ -132,6 +136,8 @@ export interface GameStateVariableDefinition {
   notes: string;
 }
 
+export type GameplayVariableDefinition = GameStateVariableDefinition;
+
 export interface GameStateCondition {
   id: string;
   variableId: string;
@@ -139,12 +145,27 @@ export interface GameStateCondition {
   value: GameStateValue;
 }
 
-export interface GameStateEffect {
+export type ConditionExpression = GameStateCondition;
+
+export type ConditionGroup =
+  | {
+      all: Array<ConditionGroup | ConditionExpression>;
+    }
+  | {
+      any: Array<ConditionGroup | ConditionExpression>;
+    }
+  | {
+      not: ConditionGroup | ConditionExpression;
+    };
+
+export interface GameplayEffect {
   id: string;
   variableId: string;
   operation: GameStateEffectOperation;
   value: GameStateValue;
 }
+
+export type GameStateEffect = GameplayEffect;
 
 export interface GameStoryValidationSettings {
   checkUnreachableNodes: boolean;
@@ -258,6 +279,51 @@ export interface StoryRelationship {
   gameStory?: GameStoryRelationshipMetadata;
 }
 
+export type SemanticRelationship = StoryRelationship;
+
+export interface GameplayTransitionChoice {
+  text: string;
+  intent?: string;
+}
+
+export interface GameplayTransitionPresentation {
+  priority: number;
+}
+
+export interface GameplayTransitionAuthorNotes {
+  purpose: string;
+  legacyNotes?: string;
+}
+
+export interface GameplayTransition {
+  id: string;
+  sourceNodeId: string;
+  targetNodeId: string;
+  choice: GameplayTransitionChoice;
+  requirements: ConditionGroup;
+  effects: GameplayEffect[];
+  presentation: GameplayTransitionPresentation;
+  authorNotes: GameplayTransitionAuthorNotes;
+  metadata: Record<string, unknown>;
+}
+
+export interface DesignConstraint {
+  id: string;
+  entityId?: string;
+  category: string;
+  rule: string;
+  severity: "required" | "preferred" | "optional";
+  metadata?: Record<string, unknown>;
+}
+
+export interface AiProposal {
+  id: string;
+  status: "proposed" | "approved" | "rejected" | "applied";
+  createdAt: string;
+  summary: string;
+  metadata?: Record<string, unknown>;
+}
+
 export interface StoryProject {
   schemaVersion: typeof STORY_PROJECT_SCHEMA_VERSION;
   title: string;
@@ -268,7 +334,10 @@ export interface StoryProject {
   linkTypes: LinkTypeDefinition[];
   timelineLaneNames: string[];
   entities: Record<string, StoryEntity>;
-  relationships: StoryRelationship[];
+  relationships: SemanticRelationship[];
+  gameplayTransitions: GameplayTransition[];
+  designConstraints: DesignConstraint[];
+  aiProposals: AiProposal[];
   layout: Record<string, Point>;
   storyFlowLayout: Record<string, Point>;
 }
@@ -301,5 +370,6 @@ export interface GamePlaythroughChoice {
   conditions: GameStateCondition[];
   effects: GameStateEffect[];
   relationshipId?: string;
+  transitionId?: string;
   responseId?: string;
 }
