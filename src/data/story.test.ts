@@ -7,8 +7,15 @@ import {
   createBlankProject,
   createGameStateCondition,
   createGameStateEffect,
+  createStoryRuntimeContradictionRule,
+  createStoryRuntimeEvidence,
+  createStoryRuntimeFact,
+  createStoryRuntimeTheoryRule,
   createStoryEntity,
   createStoryRelationship,
+  defaultRuntimeToolsEnabled,
+  deleteRuntimeEvidenceFromProject,
+  deleteRuntimeFactFromProject,
   deleteEntityFromProject,
   deleteEmptyTimelineTrackFromProject,
   entityVisibleInGraph,
@@ -207,6 +214,74 @@ describe("runtime authoring metadata", () => {
     });
   });
 
+  it("defaults runtime tools off for story projects and on for game or runtime-populated projects", () => {
+    const storyProject = createBlankProject("Book Draft", "story");
+    const gameProject = createBlankProject("Playable Story", "game_story");
+    const runtimeProject = {
+      ...storyProject,
+      runtime: {
+        ...storyProject.runtime,
+        facts: [
+          {
+            id: "fact-ledger-forged",
+            statement: "The ledger was forged.",
+            truth: "true" as const,
+            subjectEntityId: "",
+            sourceEntityIds: [],
+            sourceNotes: "",
+            tags: [],
+            notes: ""
+          }
+        ]
+      }
+    };
+
+    expect(defaultRuntimeToolsEnabled(storyProject)).toBe(false);
+    expect(defaultRuntimeToolsEnabled(gameProject)).toBe(true);
+    expect(defaultRuntimeToolsEnabled(runtimeProject)).toBe(true);
+    expect(defaultRuntimeToolsEnabled({ ...runtimeProject, runtimeToolsEnabled: false })).toBe(false);
+  });
+
+  it("creates runtime records with safe editable defaults", () => {
+    expect(createStoryRuntimeFact()).toEqual(
+      expect.objectContaining({
+        id: expect.stringMatching(/^fact-/),
+        statement: "",
+        truth: "unknown",
+        sourceEntityIds: [],
+        sourceNotes: "",
+        tags: [],
+        notes: ""
+      })
+    );
+    expect(createStoryRuntimeEvidence()).toEqual(
+      expect.objectContaining({
+        id: expect.stringMatching(/^evidence-/),
+        label: "",
+        description: "",
+        factIds: [],
+        reliability: "unverified",
+        playerVisibility: "hidden",
+        discoveredByCharacterIds: [],
+        sourceEntityIds: [],
+        sourceNotes: "",
+        notes: ""
+      })
+    );
+    expect(createStoryRuntimeContradictionRule()).toEqual(
+      expect.objectContaining({ id: expect.stringMatching(/^contradiction-/), severity: "warning", factIds: [] })
+    );
+    expect(createStoryRuntimeTheoryRule()).toEqual(
+      expect.objectContaining({
+        id: expect.stringMatching(/^theory-/),
+        requiredEvidenceIds: [],
+        supportingFactIds: [],
+        contradictingFactIds: [],
+        playerVisibility: "hidden"
+      })
+    );
+  });
+
   it("migrates v6 projects to v7 without losing existing story data", () => {
     const timestamp = "2026-01-01T00:00:00.000Z";
     const character = createStoryEntity("character", [], "Mara");
@@ -260,6 +335,7 @@ describe("runtime authoring metadata", () => {
             truth: "true",
             subjectEntityId: "item-ledger",
             sourceEntityIds: ["item-ledger"],
+            sourceNotes: "Draft chapter 3",
             tags: ["mystery"]
           }
         ],
@@ -270,7 +346,9 @@ describe("runtime authoring metadata", () => {
             description: "The ink only appears under moonlight.",
             factIds: ["fact-ledger-forged"],
             reliability: "confirmed",
-            playerVisibility: "discoverable"
+            playerVisibility: "discoverable",
+            sourceEntityIds: ["scene-search-signal-room"],
+            sourceNotes: "Seen during the locker search."
           }
         ],
         characterKnowledge: [
@@ -307,10 +385,20 @@ describe("runtime authoring metadata", () => {
     });
 
     expect(migrated.runtime.facts[0]).toEqual(
-      expect.objectContaining({ truth: "true", sourceEntityIds: ["item-ledger"], tags: ["mystery"] })
+      expect.objectContaining({
+        truth: "true",
+        sourceEntityIds: ["item-ledger"],
+        sourceNotes: "Draft chapter 3",
+        tags: ["mystery"]
+      })
     );
     expect(migrated.runtime.evidence[0]).toEqual(
-      expect.objectContaining({ reliability: "confirmed", playerVisibility: "discoverable" })
+      expect.objectContaining({
+        reliability: "confirmed",
+        playerVisibility: "discoverable",
+        sourceEntityIds: ["scene-search-signal-room"],
+        sourceNotes: "Seen during the locker search."
+      })
     );
     expect(migrated.runtime.characterKnowledge[0]).toEqual(
       expect.objectContaining({ knowledge: "knows", belief: "believes_false", evidenceIds: ["evidence-ink"] })
@@ -421,6 +509,8 @@ describe("runtime authoring metadata", () => {
               reliability: "confirmed",
               playerVisibility: "hidden",
               discoveredByCharacterIds: [character.id, otherCharacter.id],
+              sourceEntityIds: [],
+              sourceNotes: "",
               notes: ""
             }
           ],
@@ -453,6 +543,129 @@ describe("runtime authoring metadata", () => {
       expect.objectContaining({ id: "knowledge-orin", characterId: otherCharacter.id })
     ]);
     expect(deleted.runtime.evidence[0].discoveredByCharacterIds).toEqual([otherCharacter.id]);
+  });
+
+  it("removes deleted fact and evidence references from runtime authoring data", () => {
+    const project = createBlankProject("Runtime Cleanup");
+    const character = createStoryEntity("character", project.itemTypes, "Mara");
+    character.runtimeCharacter = {
+      goals: [],
+      attitude: 0,
+      emotionalState: "",
+      communicationStyle: "",
+      knownFactIds: ["fact-ledger"],
+      believedFactIds: ["fact-ledger"],
+      hiddenFactIds: ["fact-ledger"],
+      deceptionRules: [
+        {
+          id: "deception-ledger",
+          condition: "",
+          deceptionGoal: "",
+          allowedStrategies: ["deflect"],
+          forbiddenFactIds: ["fact-ledger"],
+          revealWhenEvidenceIds: ["evidence-ink"],
+          notes: ""
+        }
+      ],
+      disclosureRules: [
+        {
+          id: "disclosure-ledger",
+          condition: "",
+          revealFactIds: ["fact-ledger"],
+          requiredEvidenceIds: ["evidence-ink"],
+          audience: "",
+          notes: ""
+        }
+      ]
+    };
+
+    const projectWithRuntime = {
+      ...project,
+      entities: {
+        [character.id]: character
+      },
+      runtime: {
+        ...project.runtime,
+        facts: [
+          {
+            id: "fact-ledger",
+            statement: "The ledger was forged.",
+            truth: "true" as const,
+            sourceEntityIds: [],
+            sourceNotes: "",
+            tags: [],
+            notes: ""
+          }
+        ],
+        evidence: [
+          {
+            id: "evidence-ink",
+            label: "Moonlit ink",
+            description: "",
+            factIds: ["fact-ledger"],
+            reliability: "confirmed" as const,
+            playerVisibility: "discoverable" as const,
+            discoveredByCharacterIds: [],
+            sourceEntityIds: [],
+            sourceNotes: "",
+            notes: ""
+          }
+        ],
+        characterKnowledge: [
+          {
+            id: "knowledge-ledger",
+            characterId: character.id,
+            factId: "fact-ledger",
+            knowledge: "knows" as const,
+            belief: "believes_true" as const,
+            evidenceIds: ["evidence-ink"],
+            notes: ""
+          }
+        ],
+        contradictionRules: [
+          {
+            id: "contradiction-ledger",
+            label: "",
+            factIds: ["fact-ledger"],
+            severity: "warning" as const,
+            resolution: "",
+            notes: ""
+          }
+        ],
+        theoryRules: [
+          {
+            id: "theory-ledger",
+            label: "",
+            requiredEvidenceIds: ["evidence-ink"],
+            supportingFactIds: ["fact-ledger"],
+            contradictingFactIds: ["fact-ledger"],
+            conclusion: "",
+            playerVisibility: "hidden" as const,
+            notes: ""
+          }
+        ]
+      }
+    };
+
+    const withoutFact = deleteRuntimeFactFromProject(projectWithRuntime, "fact-ledger");
+
+    expect(withoutFact.runtime.facts).toEqual([]);
+    expect(withoutFact.runtime.evidence[0].factIds).toEqual([]);
+    expect(withoutFact.runtime.characterKnowledge).toEqual([]);
+    expect(withoutFact.runtime.contradictionRules[0].factIds).toEqual([]);
+    expect(withoutFact.runtime.theoryRules[0].supportingFactIds).toEqual([]);
+    expect(withoutFact.runtime.theoryRules[0].contradictingFactIds).toEqual([]);
+    expect(withoutFact.entities[character.id].runtimeCharacter?.knownFactIds).toEqual([]);
+    expect(withoutFact.entities[character.id].runtimeCharacter?.deceptionRules[0].forbiddenFactIds).toEqual([]);
+    expect(withoutFact.entities[character.id].runtimeCharacter?.disclosureRules[0].revealFactIds).toEqual([]);
+
+    const withoutEvidence = deleteRuntimeEvidenceFromProject(projectWithRuntime, "evidence-ink");
+
+    expect(withoutEvidence.runtime.evidence).toEqual([]);
+    expect(withoutEvidence.runtime.characterKnowledge[0].evidenceIds).toEqual([]);
+    expect(withoutEvidence.runtime.theoryRules[0].requiredEvidenceIds).toEqual([]);
+    expect(withoutEvidence.entities[character.id].runtimeCharacter?.deceptionRules[0].revealWhenEvidenceIds).toEqual([]);
+    expect(withoutEvidence.entities[character.id].runtimeCharacter?.disclosureRules[0].requiredEvidenceIds).toEqual([]);
   });
 });
 

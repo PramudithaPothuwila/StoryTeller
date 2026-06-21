@@ -23,6 +23,7 @@
   },
   "graphPresence": "story_flow"
 }
+
 ---
 ## Scene Goals
 - Establish Rowan, the abandoned station, and the immediate contradiction.

@@ -15,7 +15,6 @@ function renderInspector(
       selection={{ kind: "entity", id: entityId }}
       onStartTriggerPick={vi.fn()}
       onEntityChange={vi.fn()}
-      onProjectChange={vi.fn()}
       onRelationshipChange={vi.fn()}
       onSelectEntityInGraph={vi.fn()}
       onTimelineEffect={vi.fn()}
@@ -120,178 +119,31 @@ describe("DetailInspector", () => {
     expect(screen.queryByText("Rule Fields")).not.toBeInTheDocument();
   });
 
-  it("renders character runtime fields only for character entities", () => {
+  it("does not render character runtime fields in the normal inspector", () => {
     const project = createBlankProject("Inspector Test");
     const character = createStoryEntity("character", project.itemTypes, "Mara Vale");
-    const item = createStoryEntity("item", project.itemTypes, "Moonlit Ledger");
     const projectWithEntities = {
       ...project,
       entities: {
-        [character.id]: character,
-        [item.id]: item
+        [character.id]: {
+          ...character,
+          runtimeCharacter: {
+            goals: ["Find the ledger"],
+            attitude: 10,
+            emotionalState: "Focused",
+            communicationStyle: "Precise",
+            knownFactIds: [],
+            believedFactIds: [],
+            hiddenFactIds: [],
+            deceptionRules: [],
+            disclosureRules: []
+          }
+        }
       }
     };
 
-    const { rerender } = renderInspector(projectWithEntities, character.id);
-
-    expect(screen.getByText("Character Knowledge & Belief")).toBeInTheDocument();
-
-    rerender(
-      <DetailInspector
-        project={projectWithEntities}
-        selection={{ kind: "entity", id: item.id }}
-        onStartTriggerPick={vi.fn()}
-        onEntityChange={vi.fn()}
-        onProjectChange={vi.fn()}
-        onRelationshipChange={vi.fn()}
-        onSelectEntityInGraph={vi.fn()}
-        onTimelineEffect={vi.fn()}
-        onDeleteEntity={vi.fn()}
-        onDeleteRelationship={vi.fn()}
-      />
-    );
+    renderInspector(projectWithEntities, character.id);
 
     expect(screen.queryByText("Character Knowledge & Belief")).not.toBeInTheDocument();
-  });
-
-  it("updates character runtime metadata from the panel", () => {
-    const project = createBlankProject("Inspector Test");
-    const character = createStoryEntity("character", project.itemTypes, "Mara Vale");
-    const onEntityChange = vi.fn();
-    const projectWithCharacter = {
-      ...project,
-      runtime: {
-        ...project.runtime,
-        facts: [
-          {
-            id: "fact-ledger-forged",
-            statement: "The ledger was forged.",
-            truth: "true" as const,
-            sourceEntityIds: [],
-            tags: [],
-            notes: ""
-          }
-        ]
-      },
-      entities: {
-        [character.id]: character
-      }
-    };
-
-    renderInspector(projectWithCharacter, character.id, { onEntityChange });
-
-    fireEvent.change(screen.getByLabelText("Character goals"), {
-      target: { value: "Find the ledger\nProtect Orin" }
-    });
-    fireEvent.change(screen.getByLabelText("Communication style"), {
-      target: { value: "Answers carefully and avoids royal names." }
-    });
-    fireEvent.change(screen.getByLabelText("Character attitude"), { target: { value: "42" } });
-
-    expect(onEntityChange).toHaveBeenCalledWith(
-      character.id,
-      expect.objectContaining({
-        runtimeCharacter: expect.objectContaining({
-          goals: ["Find the ledger", "Protect Orin"]
-        })
-      })
-    );
-    expect(onEntityChange).toHaveBeenCalledWith(
-      character.id,
-      expect.objectContaining({
-        runtimeCharacter: expect.objectContaining({
-          communicationStyle: "Answers carefully and avoids royal names."
-        })
-      })
-    );
-    expect(onEntityChange).toHaveBeenLastCalledWith(
-      character.id,
-      expect.objectContaining({
-        runtimeCharacter: expect.objectContaining({
-          attitude: 42
-        })
-      })
-    );
-  });
-
-  it("adds, edits, and removes character knowledge rows", () => {
-    const project = createBlankProject("Inspector Test");
-    const character = createStoryEntity("character", project.itemTypes, "Mara Vale");
-    const onProjectChange = vi.fn();
-    const projectWithRuntime = {
-      ...project,
-      runtime: {
-        ...project.runtime,
-        facts: [
-          {
-            id: "fact-ledger-forged",
-            statement: "The ledger was forged.",
-            truth: "true" as const,
-            sourceEntityIds: [],
-            tags: [],
-            notes: ""
-          }
-        ],
-        evidence: [
-          {
-            id: "evidence-ink",
-            label: "Moonlit ink",
-            description: "",
-            factIds: ["fact-ledger-forged"],
-            reliability: "confirmed" as const,
-            playerVisibility: "discoverable" as const,
-            discoveredByCharacterIds: [],
-            notes: ""
-          }
-        ],
-        characterKnowledge: [
-          {
-            id: "knowledge-ledger",
-            characterId: character.id,
-            factId: "fact-ledger-forged",
-            knowledge: "suspects" as const,
-            belief: "uncertain" as const,
-            evidenceIds: [],
-            notes: ""
-          }
-        ]
-      },
-      entities: {
-        [character.id]: character
-      }
-    };
-
-    renderInspector(projectWithRuntime, character.id, { onProjectChange });
-
-    fireEvent.click(screen.getByRole("button", { name: "Knowledge" }));
-    expect(onProjectChange).toHaveBeenLastCalledWith(
-      expect.objectContaining({
-        runtime: expect.objectContaining({
-          characterKnowledge: expect.arrayContaining([
-            expect.objectContaining({ characterId: character.id, factId: "fact-ledger-forged" })
-          ])
-        })
-      })
-    );
-
-    fireEvent.change(screen.getByLabelText("Knowledge state"), { target: { value: "knows" } });
-    expect(onProjectChange).toHaveBeenLastCalledWith(
-      expect.objectContaining({
-        runtime: expect.objectContaining({
-          characterKnowledge: expect.arrayContaining([
-            expect.objectContaining({ id: "knowledge-ledger", knowledge: "knows" })
-          ])
-        })
-      })
-    );
-
-    fireEvent.click(screen.getByLabelText("Delete knowledge row"));
-    expect(onProjectChange).toHaveBeenLastCalledWith(
-      expect.objectContaining({
-        runtime: expect.objectContaining({
-          characterKnowledge: []
-        })
-      })
-    );
   });
 });

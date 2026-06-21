@@ -372,6 +372,7 @@ export interface StoryRuntimeFact {
   subjectEntityId?: string;
   objectEntityId?: string;
   sourceEntityIds: string[];
+  sourceNotes: string;
   tags: string[];
   notes: string;
 }
@@ -385,6 +386,8 @@ export interface StoryRuntimeEvidence {
   reliability: StoryRuntimeEvidenceReliability;
   playerVisibility: StoryRuntimePlayerVisibility;
   discoveredByCharacterIds: string[];
+  sourceEntityIds: string[];
+  sourceNotes: string;
   notes: string;
 }
 
@@ -432,6 +435,7 @@ export interface StoryProject {
   title: string;
   updatedAt: string;
   projectMode: ProjectMode;
+  runtimeToolsEnabled?: boolean;
   gameStory?: GameStoryProjectMetadata;
   itemTypes: ItemTypeDefinition[];
   linkTypes: LinkTypeDefinition[];

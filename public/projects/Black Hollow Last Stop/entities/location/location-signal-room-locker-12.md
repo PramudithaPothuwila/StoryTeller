@@ -15,6 +15,7 @@
   "updatedAt": "2026-06-07T00:00:00.000Z",
   "graphPresence": "world"
 }
+
 ---
 ## Planning Notes
 - The locker should not feel like a magic answer box. It needs a key, a reason, and pressure.

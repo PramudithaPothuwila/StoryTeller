@@ -15,6 +15,7 @@
   "updatedAt": "2026-06-07T00:00:00.000Z",
   "graphPresence": "world"
 }
+
 ---
 ## Planning Notes
 - Do not make the key random loot. It should be earned through the Silas trust branch.

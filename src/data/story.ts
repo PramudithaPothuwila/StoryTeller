@@ -369,6 +369,29 @@ export function normalizeStoryRuntimeMetadata(metadata: Partial<StoryRuntimeMeta
   };
 }
 
+export function hasRuntimeAuthoringData(project: Pick<StoryProject, "entities" | "runtime">): boolean {
+  const runtime = normalizeStoryRuntimeMetadata(project.runtime);
+
+  return (
+    runtime.facts.length > 0 ||
+    runtime.evidence.length > 0 ||
+    runtime.characterKnowledge.length > 0 ||
+    runtime.contradictionRules.length > 0 ||
+    runtime.theoryRules.length > 0 ||
+    Object.values(project.entities).some((entity) => entity.type === "character" && Boolean(entity.runtimeCharacter))
+  );
+}
+
+export function defaultRuntimeToolsEnabled(
+  project: Pick<StoryProject, "entities" | "projectMode" | "runtime" | "runtimeToolsEnabled">
+): boolean {
+  if (typeof project.runtimeToolsEnabled === "boolean") {
+    return project.runtimeToolsEnabled;
+  }
+
+  return project.projectMode === "game_story" || hasRuntimeAuthoringData(project);
+}
+
 export function defaultGameStoryEntityMetadata(type: ItemTypeId = "scene"): GameStoryEntityMetadata {
   const role = gameStoryRoleForType(type);
 
@@ -579,6 +602,7 @@ export function createBlankProject(title = "Untitled Story", projectMode: Projec
     title,
     updatedAt: nowIso(),
     projectMode,
+    runtimeToolsEnabled: projectMode === "game_story" ? true : undefined,
     gameStory: projectMode === "game_story" ? defaultGameStoryProjectMetadata() : undefined,
     itemTypes: projectMode === "game_story" ? [...cloneBuiltInItemTypes(), ...cloneBuiltInGameItemTypes()] : cloneBuiltInItemTypes(),
     linkTypes: projectMode === "game_story" ? [...cloneBuiltInLinkTypes(), ...cloneBuiltInGameLinkTypes()] : cloneBuiltInLinkTypes(),
@@ -1277,6 +1301,7 @@ export function migrateProjectShape(project: unknown): StoryProject {
     title: value.title || "Untitled Story",
     updatedAt: value.updatedAt || nowIso(),
     projectMode,
+    runtimeToolsEnabled: typeof value.runtimeToolsEnabled === "boolean" ? value.runtimeToolsEnabled : undefined,
     gameStory:
       projectMode === "game_story" || value.gameStory
         ? normalizeGameStoryProjectMetadata(value.gameStory)
@@ -1313,6 +1338,7 @@ export function migrateProjectShape(project: unknown): StoryProject {
   migrated.relationships = (value.relationships ?? []).filter((relationship) => !isLegacyGameplayRelationship(relationship)).map(normalizeRelationship);
   migrated.gameplayTransitions = [...existingTransitions, ...migratedTransitions];
   migrated.timelineLaneNames = normalizeTimelineLaneNames(value.timelineLaneNames, migrated.entities);
+  migrated.runtimeToolsEnabled = defaultRuntimeToolsEnabled(migrated);
 
   if (!hasStoryFlowLayout && migrated.projectMode === "game_story") {
     migrated.storyFlowLayout = Object.fromEntries(
@@ -1434,9 +1460,17 @@ export function normalizeStoryRuntimeFact(fact: Partial<StoryRuntimeFact>): Stor
     subjectEntityId: normalizeOptionalId(fact.subjectEntityId),
     objectEntityId: normalizeOptionalId(fact.objectEntityId),
     sourceEntityIds: normalizeStringArray(fact.sourceEntityIds),
+    sourceNotes: normalizeRuleText(fact.sourceNotes, ""),
     tags: normalizeStringArray(fact.tags),
     notes: normalizeRuleText(fact.notes, "")
   };
+}
+
+export function createStoryRuntimeFact(): StoryRuntimeFact {
+  return normalizeStoryRuntimeFact({
+    id: makeId("fact"),
+    truth: "unknown"
+  });
 }
 
 export function normalizeStoryRuntimeEvidence(evidence: Partial<StoryRuntimeEvidence>): StoryRuntimeEvidence {
@@ -1449,8 +1483,18 @@ export function normalizeStoryRuntimeEvidence(evidence: Partial<StoryRuntimeEvid
     reliability: isStoryRuntimeEvidenceReliability(evidence.reliability) ? evidence.reliability : "unverified",
     playerVisibility: isStoryRuntimePlayerVisibility(evidence.playerVisibility) ? evidence.playerVisibility : "hidden",
     discoveredByCharacterIds: normalizeStringArray(evidence.discoveredByCharacterIds),
+    sourceEntityIds: normalizeStringArray(evidence.sourceEntityIds),
+    sourceNotes: normalizeRuleText(evidence.sourceNotes, ""),
     notes: normalizeRuleText(evidence.notes, "")
   };
+}
+
+export function createStoryRuntimeEvidence(): StoryRuntimeEvidence {
+  return normalizeStoryRuntimeEvidence({
+    id: makeId("evidence"),
+    reliability: "unverified",
+    playerVisibility: "hidden"
+  });
 }
 
 export function normalizeStoryRuntimeCharacterKnowledge(
@@ -1481,6 +1525,13 @@ export function normalizeStoryRuntimeContradictionRule(
   };
 }
 
+export function createStoryRuntimeContradictionRule(): StoryRuntimeContradictionRule {
+  return normalizeStoryRuntimeContradictionRule({
+    id: makeId("contradiction"),
+    severity: "warning"
+  });
+}
+
 export function normalizeStoryRuntimeTheoryRule(rule: Partial<StoryRuntimeTheoryRule>): StoryRuntimeTheoryRule {
   return {
     id: normalizeOptionalId(rule.id) ?? makeId("theory"),
@@ -1492,6 +1543,112 @@ export function normalizeStoryRuntimeTheoryRule(rule: Partial<StoryRuntimeTheory
     playerVisibility: isStoryRuntimePlayerVisibility(rule.playerVisibility) ? rule.playerVisibility : "hidden",
     notes: normalizeRuleText(rule.notes, "")
   };
+}
+
+export function createStoryRuntimeTheoryRule(): StoryRuntimeTheoryRule {
+  return normalizeStoryRuntimeTheoryRule({
+    id: makeId("theory"),
+    playerVisibility: "hidden"
+  });
+}
+
+export function deleteRuntimeFactFromProject(project: StoryProject, factId: string): StoryProject {
+  const normalizedRuntime = normalizeStoryRuntimeMetadata(project.runtime);
+
+  return touchProject({
+    ...project,
+    runtime: {
+      ...normalizedRuntime,
+      facts: normalizedRuntime.facts.filter((fact) => fact.id !== factId),
+      evidence: normalizedRuntime.evidence.map((evidence) => ({
+        ...evidence,
+        factIds: evidence.factIds.filter((id) => id !== factId)
+      })),
+      characterKnowledge: normalizedRuntime.characterKnowledge.filter((knowledge) => knowledge.factId !== factId),
+      contradictionRules: normalizedRuntime.contradictionRules.map((rule) => ({
+        ...rule,
+        factIds: rule.factIds.filter((id) => id !== factId)
+      })),
+      theoryRules: normalizedRuntime.theoryRules.map((rule) => ({
+        ...rule,
+        supportingFactIds: rule.supportingFactIds.filter((id) => id !== factId),
+        contradictingFactIds: rule.contradictingFactIds.filter((id) => id !== factId)
+      }))
+    },
+    entities: Object.fromEntries(
+      Object.entries(project.entities).map(([entityId, entity]) => {
+        if (entity.type !== "character" || !entity.runtimeCharacter) {
+          return [entityId, entity];
+        }
+
+        return [
+          entityId,
+          {
+            ...entity,
+            runtimeCharacter: normalizeCharacterRuntimeMetadata({
+              ...entity.runtimeCharacter,
+              knownFactIds: entity.runtimeCharacter.knownFactIds.filter((id) => id !== factId),
+              believedFactIds: entity.runtimeCharacter.believedFactIds.filter((id) => id !== factId),
+              hiddenFactIds: entity.runtimeCharacter.hiddenFactIds.filter((id) => id !== factId),
+              deceptionRules: entity.runtimeCharacter.deceptionRules.map((rule) => ({
+                ...rule,
+                forbiddenFactIds: rule.forbiddenFactIds.filter((id) => id !== factId)
+              })),
+              disclosureRules: entity.runtimeCharacter.disclosureRules.map((rule) => ({
+                ...rule,
+                revealFactIds: rule.revealFactIds.filter((id) => id !== factId)
+              }))
+            })
+          }
+        ];
+      })
+    )
+  });
+}
+
+export function deleteRuntimeEvidenceFromProject(project: StoryProject, evidenceId: string): StoryProject {
+  const normalizedRuntime = normalizeStoryRuntimeMetadata(project.runtime);
+
+  return touchProject({
+    ...project,
+    runtime: {
+      ...normalizedRuntime,
+      evidence: normalizedRuntime.evidence.filter((evidence) => evidence.id !== evidenceId),
+      characterKnowledge: normalizedRuntime.characterKnowledge.map((knowledge) => ({
+        ...knowledge,
+        evidenceIds: knowledge.evidenceIds.filter((id) => id !== evidenceId)
+      })),
+      theoryRules: normalizedRuntime.theoryRules.map((rule) => ({
+        ...rule,
+        requiredEvidenceIds: rule.requiredEvidenceIds.filter((id) => id !== evidenceId)
+      }))
+    },
+    entities: Object.fromEntries(
+      Object.entries(project.entities).map(([entityId, entity]) => {
+        if (entity.type !== "character" || !entity.runtimeCharacter) {
+          return [entityId, entity];
+        }
+
+        return [
+          entityId,
+          {
+            ...entity,
+            runtimeCharacter: normalizeCharacterRuntimeMetadata({
+              ...entity.runtimeCharacter,
+              deceptionRules: entity.runtimeCharacter.deceptionRules.map((rule) => ({
+                ...rule,
+                revealWhenEvidenceIds: rule.revealWhenEvidenceIds.filter((id) => id !== evidenceId)
+              })),
+              disclosureRules: entity.runtimeCharacter.disclosureRules.map((rule) => ({
+                ...rule,
+                requiredEvidenceIds: rule.requiredEvidenceIds.filter((id) => id !== evidenceId)
+              }))
+            })
+          }
+        ];
+      })
+    )
+  });
 }
 
 export function gameplayTransitionToRelationship(transition: GameplayTransition): StoryRelationship {

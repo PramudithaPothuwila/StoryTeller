@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 7,
+  "contradictionRules": [
+    {
+      "id": "contradiction-silas-frame-vs-evelyn-truth",
+      "label": "Silas frame conflicts with Evelyn truth route",
+      "factIds": [
+        "fact-silas-killed-rowan",
+        "fact-evelyn-killed-rowan",
+        "fact-silas-innocent"
+      ],
+      "severity": "error",
+      "resolution": "The false-frame ending may believe Silas killed Rowan, but canonical truth keeps Evelyn as the killer.",
+      "notes": "Used to prevent dialogue context from treating the playable bad ending as true."
+    },
+    {
+      "id": "contradiction-station-body-placement",
+      "label": "Station discovery is not the murder location",
+      "factIds": [
+        "fact-rowan-body-staged"
+      ],
+      "severity": "warning",
+      "resolution": "Characters may say Rowan was found at the station, but should not infer he died there without proof.",
+      "notes": "Protects the central spatial contradiction."
+    }
+  ]
+}

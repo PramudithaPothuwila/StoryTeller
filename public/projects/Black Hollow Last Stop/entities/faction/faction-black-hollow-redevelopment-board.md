@@ -15,6 +15,7 @@
   "updatedAt": "2026-06-07T00:00:00.000Z",
   "graphPresence": "world"
 }
+
 ---
 ## Planning Notes
 - The board creates time pressure without needing every member to be guilty.

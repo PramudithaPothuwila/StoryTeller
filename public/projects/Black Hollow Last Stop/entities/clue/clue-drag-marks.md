@@ -15,6 +15,7 @@
   "updatedAt": "2026-06-07T00:00:00.000Z",
   "graphPresence": "world"
 }
+
 ---
 ## Planning Notes
 - This is the first major contradiction and should be available immediately.

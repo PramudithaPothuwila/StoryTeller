@@ -171,6 +171,7 @@ describe("runtime export", () => {
             statement: "The ledger was forged.",
             truth: "true",
             sourceEntityIds: [],
+            sourceNotes: "Author-only outline note.",
             tags: [],
             notes: ""
           },
@@ -179,6 +180,7 @@ describe("runtime export", () => {
             statement: "The ledger is authentic.",
             truth: "false",
             sourceEntityIds: [],
+            sourceNotes: "",
             tags: [],
             notes: ""
           }
@@ -222,6 +224,7 @@ describe("runtime export", () => {
         belief: "believes_false"
       })
     ]);
+    expect(JSON.stringify(bundle.facts)).not.toContain("Author-only outline note.");
   });
 
   it("exports game story nodes and transitions", () => {

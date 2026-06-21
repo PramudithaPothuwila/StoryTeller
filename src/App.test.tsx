@@ -440,7 +440,8 @@ describe("App project commands", () => {
     expect(screen.getByRole("button", { name: "Select Folder" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Save Project" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Export Backup" })).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Export Runtime" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Runtime Tools" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Export Runtime" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Guide" })).toHaveAttribute("title", "Guide (?)");
     expect(screen.getByRole("button", { name: "Open Settings" })).toHaveAttribute("title", "Open Settings (Esc)");
     expect(screen.getByRole("button", { name: "Save Project" })).toHaveAttribute("title", "Save Project (Ctrl+S)");
@@ -460,6 +461,27 @@ describe("App project commands", () => {
     expect(screen.getByRole("button", { name: "New Project" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Open Folder" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Import Backup" })).toBeInTheDocument();
+  });
+
+  it("keeps runtime tools hidden until enabled for story projects", async () => {
+    render(<App />);
+
+    await waitFor(() => expect(screen.getByText("Loaded Project")).toBeInTheDocument());
+
+    expect(screen.queryByRole("button", { name: "Runtime Tools" })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Open Settings" }));
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Settings" })).toBeInTheDocument());
+    expect(screen.getByLabelText("Show Runtime Tools")).not.toBeChecked();
+
+    fireEvent.click(screen.getByLabelText("Show Runtime Tools"));
+    fireEvent.click(screen.getByRole("button", { name: "Back to Workspace" }));
+
+    await waitFor(() => expect(screen.getByRole("button", { name: "Runtime Tools" })).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "Runtime Tools" }));
+    expect(await screen.findByRole("heading", { name: "Runtime Tools" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Export Preview" }));
+    expect(screen.getByRole("button", { name: "Export Runtime" })).toBeInTheDocument();
   });
 
   it("restores a local project route from the recent browser snapshot on reload", async () => {
@@ -825,6 +847,7 @@ describe("App project commands", () => {
     expect(screen.queryByLabelText("Agent base URL")).not.toBeInTheDocument();
     expect(screen.queryByRole("group", { name: "Project mode" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Game Story" })).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Show Runtime Tools")).not.toBeChecked();
     expect(screen.getByRole("button", { name: "Export Backup" })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Export Backup" }));
@@ -1058,7 +1081,7 @@ describe("App project commands", () => {
     await waitFor(() => expect(loadStarterProject).toHaveBeenCalledWith(undefined, "black-hollow-last-stop"));
     await waitFor(() => expect(window.location.pathname).toMatch(/^\/project\/browser-/));
     expect(screen.getByText("Black Hollow: Last Stop")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Switch to Game Story" })).toHaveClass("is-active");
+    await waitFor(() => expect(screen.getByRole("button", { name: "Switch to Game Story" })).toHaveClass("is-active"));
   });
 
   it("selects a project folder and saves the current project into it", async () => {

@@ -20,6 +20,7 @@
   },
   "graphPresence": "world"
 }
+
 ---
 ## Planning Notes
 - The opening should not ask the player to solve the murder immediately.

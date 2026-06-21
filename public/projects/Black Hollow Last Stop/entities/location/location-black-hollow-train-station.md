@@ -15,6 +15,7 @@
   "updatedAt": "2026-06-07T00:00:00.000Z",
   "graphPresence": "world"
 }
+
 ---
 ## Planning Notes
 - Keep the station tactile: wet dust, old oil, sealed-up quiet, rusted signal boxes, rain in broken roof glass.

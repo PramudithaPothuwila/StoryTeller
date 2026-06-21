@@ -26,7 +26,6 @@ import {
   linkLabel,
   normalizeGameStoryRelationshipMetadata
 } from "../data/story";
-import { CharacterRuntimeFields } from "./CharacterRuntimeFields";
 import { ConditionEffectEditor, GameStoryFields } from "./GameStoryFields";
 import { WorldRuleFields } from "./WorldRuleFields";
 
@@ -35,7 +34,6 @@ interface DetailInspectorProps {
   selection: Selection | null;
   onStartTriggerPick: (mode: "game_target" | "world_source", fixedEntityId: string) => void;
   onEntityChange: (id: string, patch: Partial<StoryEntity>) => void;
-  onProjectChange: (project: StoryProject) => void;
   onRelationshipChange: (id: string, patch: Partial<StoryRelationship>) => void;
   onSelectEntityInGraph: (id: string, graphView: "world" | "story_flow") => void;
   onTimelineEffect: (eventId: string, draft: TimelineEffectDraft) => void;
@@ -48,7 +46,6 @@ export function DetailInspector({
   selection,
   onStartTriggerPick,
   onEntityChange,
-  onProjectChange,
   onRelationshipChange,
   onSelectEntityInGraph,
   onTimelineEffect,
@@ -144,15 +141,6 @@ export function DetailInspector({
             entity={selectedEntity}
             idPrefix={`inspector-${selectedEntity.id}`}
             onEntityChange={(patch) => onEntityChange(selectedEntity.id, patch)}
-          />
-        ) : null}
-
-        {selectedEntity.type === "character" ? (
-          <CharacterRuntimeFields
-            project={project}
-            entity={selectedEntity}
-            onEntityChange={(patch) => onEntityChange(selectedEntity.id, patch)}
-            onProjectChange={onProjectChange}
           />
         ) : null}
 
