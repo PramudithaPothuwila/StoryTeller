@@ -108,6 +108,22 @@ function toRuntimeEntity(entity: StoryEntity) {
 function buildRuntimeFacts(project: StoryProject): RuntimeFact[] {
   const facts: RuntimeFact[] = [];
 
+  for (const fact of project.runtime.facts.slice().sort(compareById)) {
+    facts.push({
+      id: fact.id,
+      sourceId: fact.id,
+      sourceKind: "author_fact",
+      subjectId: fact.subjectEntityId ?? fact.id,
+      predicate: "story_fact",
+      objectId: fact.objectEntityId,
+      value: fact.statement,
+      canonical: fact.truth === "true",
+      reliability: runtimeFactReliability(fact.truth),
+      visibleToPlayer: false,
+      notes: fact.notes
+    });
+  }
+
   for (const entity of Object.values(project.entities).sort(compareById)) {
     if (entity.type === BUILT_IN_WORLD_RULE_TYPE_ID && entity.worldRule) {
       facts.push({
@@ -144,6 +160,14 @@ function buildRuntimeFacts(project: StoryProject): RuntimeFact[] {
   }
 
   return facts;
+}
+
+function runtimeFactReliability(truth: StoryProject["runtime"]["facts"][number]["truth"]): number {
+  if (truth === "true" || truth === "false") {
+    return 1;
+  }
+
+  return truth === "ambiguous" ? 0.5 : 0;
 }
 
 function buildRuntimeEvidence(project: StoryProject, facts: RuntimeFact[]): RuntimeEvidence[] {
@@ -189,6 +213,10 @@ function buildRuntimeCharacterProfiles(project: StoryProject): RuntimeCharacterP
       summary: entity.summary,
       publicInfo: entity.publicInfo,
       authorHiddenText: entity.privateInfo,
+      runtimeCharacter: entity.runtimeCharacter,
+      knowledge: project.runtime.characterKnowledge
+        .filter((knowledge) => knowledge.characterId === entity.id)
+        .sort(compareById),
       relationshipIds: project.relationships
         .filter((relationship) => relationship.sourceId === entity.id || relationship.targetId === entity.id)
         .map((relationship) => relationship.id)

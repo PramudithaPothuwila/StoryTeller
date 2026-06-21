@@ -2,6 +2,10 @@ import {
   BUILT_IN_EVENT_TYPE_ID,
   BUILT_IN_TRIGGER_LINK_TYPE_ID,
   BUILT_IN_WORLD_RULE_TYPE_ID,
+  CharacterRuntimeDeceptionRule,
+  CharacterRuntimeDeceptionStrategy,
+  CharacterRuntimeDisclosureRule,
+  CharacterRuntimeMetadata,
   EventTimeline,
   ConditionGroup,
   GameContinuityIssue,
@@ -67,6 +71,12 @@ export const worldRuleDomainPresets = [
 ];
 
 export const worldRuleStatusPresets = ["Canon", "Tentative", "Deprecated"];
+export const characterRuntimeDeceptionStrategies: CharacterRuntimeDeceptionStrategy[] = [
+  "deny",
+  "deflect",
+  "minimize",
+  "partial_truth"
+];
 
 export const builtInItemTypes: ItemTypeDefinition[] = [
   { id: "character", label: "Character", color: "#0f766e", icon: "users", builtIn: true },
@@ -231,6 +241,82 @@ export function normalizeWorldRuleMetadata(metadata: Partial<WorldRuleMetadata> 
     limits: normalizeRuleText(metadata?.limits, defaults.limits),
     exceptions: normalizeRuleText(metadata?.exceptions, defaults.exceptions),
     storyPurpose: normalizeRuleText(metadata?.storyPurpose, defaults.storyPurpose)
+  };
+}
+
+export function defaultCharacterRuntimeMetadata(): CharacterRuntimeMetadata {
+  return {
+    goals: [],
+    attitude: 0,
+    emotionalState: "",
+    communicationStyle: "",
+    knownFactIds: [],
+    believedFactIds: [],
+    hiddenFactIds: [],
+    deceptionRules: [],
+    disclosureRules: []
+  };
+}
+
+export function normalizeCharacterRuntimeMetadata(
+  metadata: Partial<CharacterRuntimeMetadata> | undefined
+): CharacterRuntimeMetadata {
+  const defaults = defaultCharacterRuntimeMetadata();
+
+  return {
+    goals: normalizeStringArray(metadata?.goals),
+    attitude: clampNumber(metadata?.attitude, -100, 100, defaults.attitude),
+    emotionalState: normalizeRuleText(metadata?.emotionalState, defaults.emotionalState),
+    communicationStyle: normalizeRuleText(metadata?.communicationStyle, defaults.communicationStyle),
+    knownFactIds: normalizeStringArray(metadata?.knownFactIds),
+    believedFactIds: normalizeStringArray(metadata?.believedFactIds),
+    hiddenFactIds: normalizeStringArray(metadata?.hiddenFactIds),
+    deceptionRules: Array.isArray(metadata?.deceptionRules)
+      ? metadata.deceptionRules.map(normalizeCharacterRuntimeDeceptionRule)
+      : [],
+    disclosureRules: Array.isArray(metadata?.disclosureRules)
+      ? metadata.disclosureRules.map(normalizeCharacterRuntimeDisclosureRule)
+      : []
+  };
+}
+
+export function createCharacterRuntimeDeceptionRule(): CharacterRuntimeDeceptionRule {
+  return normalizeCharacterRuntimeDeceptionRule({
+    id: makeId("deception"),
+    allowedStrategies: ["deflect"]
+  });
+}
+
+export function createCharacterRuntimeDisclosureRule(): CharacterRuntimeDisclosureRule {
+  return normalizeCharacterRuntimeDisclosureRule({
+    id: makeId("disclosure")
+  });
+}
+
+export function normalizeCharacterRuntimeDeceptionRule(
+  rule: Partial<CharacterRuntimeDeceptionRule>
+): CharacterRuntimeDeceptionRule {
+  return {
+    id: normalizeOptionalId(rule.id) ?? makeId("deception"),
+    condition: normalizeRuleText(rule.condition, ""),
+    deceptionGoal: normalizeRuleText(rule.deceptionGoal, ""),
+    allowedStrategies: normalizeDeceptionStrategies(rule.allowedStrategies),
+    forbiddenFactIds: normalizeStringArray(rule.forbiddenFactIds),
+    revealWhenEvidenceIds: normalizeStringArray(rule.revealWhenEvidenceIds),
+    notes: normalizeRuleText(rule.notes, "")
+  };
+}
+
+export function normalizeCharacterRuntimeDisclosureRule(
+  rule: Partial<CharacterRuntimeDisclosureRule>
+): CharacterRuntimeDisclosureRule {
+  return {
+    id: normalizeOptionalId(rule.id) ?? makeId("disclosure"),
+    condition: normalizeRuleText(rule.condition, ""),
+    revealFactIds: normalizeStringArray(rule.revealFactIds),
+    requiredEvidenceIds: normalizeStringArray(rule.requiredEvidenceIds),
+    audience: normalizeRuleText(rule.audience, ""),
+    notes: normalizeRuleText(rule.notes, "")
   };
 }
 
@@ -561,10 +647,19 @@ export function deleteEntityFromProject(project: StoryProject, entityId: string)
   const { [entityId]: _removed, ...remainingEntities } = project.entities;
   const { [entityId]: _removedLayout, ...remainingLayout } = project.layout;
   const { [entityId]: _removedStoryFlowLayout, ...remainingStoryFlowLayout } = project.storyFlowLayout;
+  const runtime = normalizeStoryRuntimeMetadata(project.runtime);
 
   return touchProject({
     ...project,
     entities: remainingEntities,
+    runtime: {
+      ...runtime,
+      evidence: runtime.evidence.map((evidence) => ({
+        ...evidence,
+        discoveredByCharacterIds: evidence.discoveredByCharacterIds.filter((characterId) => characterId !== entityId)
+      })),
+      characterKnowledge: runtime.characterKnowledge.filter((knowledge) => knowledge.characterId !== entityId)
+    },
     layout: remainingLayout,
     storyFlowLayout: remainingStoryFlowLayout,
     relationships: project.relationships
@@ -1247,6 +1342,12 @@ export function ensureEntityDefaults(entity: StoryEntity, graphPresence: GraphPr
 
   if (normalized.type === BUILT_IN_WORLD_RULE_TYPE_ID) {
     normalized.worldRule = normalizeWorldRuleMetadata(normalized.worldRule);
+  }
+
+  if (normalized.type === "character") {
+    normalized.runtimeCharacter = normalizeCharacterRuntimeMetadata(normalized.runtimeCharacter);
+  } else {
+    delete normalized.runtimeCharacter;
   }
 
   if (isGameStoryItemType(normalized.type) || normalized.gameStory) {
@@ -2651,8 +2752,21 @@ function isStoryRuntimeRuleSeverity(value: unknown): value is StoryRuntimeRuleSe
   return value === "warning" || value === "error";
 }
 
+function isCharacterRuntimeDeceptionStrategy(value: unknown): value is CharacterRuntimeDeceptionStrategy {
+  return (
+    value === "deny" ||
+    value === "deflect" ||
+    value === "minimize" ||
+    value === "partial_truth"
+  );
+}
+
 function normalizeOptionalId(value: string | undefined): string | undefined {
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+function clampNumber(value: unknown, min: number, max: number, fallback: number): number {
+  return typeof value === "number" && Number.isFinite(value) ? Math.min(max, Math.max(min, value)) : fallback;
 }
 
 function normalizeStringArray(values: unknown): string[] {
@@ -2663,6 +2777,14 @@ function normalizeStringArray(values: unknown): string[] {
   return values
     .map((value) => (typeof value === "string" ? value.trim() : ""))
     .filter(Boolean);
+}
+
+function normalizeDeceptionStrategies(values: unknown): CharacterRuntimeDeceptionStrategy[] {
+  if (!Array.isArray(values)) {
+    return [];
+  }
+
+  return values.filter(isCharacterRuntimeDeceptionStrategy);
 }
 
 function mergeTypeCatalog<T extends { id: string; builtIn: boolean }>(defaults: T[], incoming: T[]): T[] {

@@ -2453,6 +2453,7 @@ function StoryWorkspace({
               selection={selection}
               onStartTriggerPick={handleStartTriggerPick}
               onEntityChange={handleEntityChange}
+              onProjectChange={markProjectChanged}
               onRelationshipChange={handleRelationshipChange}
               onSelectEntityInGraph={handleSelectEntityInGraph}
               onTimelineEffect={handleTimelineEffect}

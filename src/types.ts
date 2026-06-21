@@ -101,6 +101,39 @@ export interface WorldRuleMetadata {
   storyPurpose: string;
 }
 
+export type CharacterRuntimeDeceptionStrategy = "deny" | "deflect" | "minimize" | "partial_truth";
+
+export interface CharacterRuntimeDeceptionRule {
+  id: string;
+  condition: string;
+  deceptionGoal: string;
+  allowedStrategies: CharacterRuntimeDeceptionStrategy[];
+  forbiddenFactIds: string[];
+  revealWhenEvidenceIds: string[];
+  notes: string;
+}
+
+export interface CharacterRuntimeDisclosureRule {
+  id: string;
+  condition: string;
+  revealFactIds: string[];
+  requiredEvidenceIds: string[];
+  audience: string;
+  notes: string;
+}
+
+export interface CharacterRuntimeMetadata {
+  goals: string[];
+  attitude: number;
+  emotionalState: string;
+  communicationStyle: string;
+  knownFactIds: string[];
+  believedFactIds: string[];
+  hiddenFactIds: string[];
+  deceptionRules: CharacterRuntimeDeceptionRule[];
+  disclosureRules: CharacterRuntimeDisclosureRule[];
+}
+
 export type GameStateVariableKind =
   | "flag"
   | "number"
@@ -260,6 +293,7 @@ export interface StoryEntity {
   updatedAt: string;
   timeline?: EventTimeline;
   worldRule?: WorldRuleMetadata;
+  runtimeCharacter?: CharacterRuntimeMetadata;
   gameStory?: GameStoryEntityMetadata;
 }
 

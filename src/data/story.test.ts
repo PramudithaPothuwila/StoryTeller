@@ -318,6 +318,142 @@ describe("runtime authoring metadata", () => {
     expect(migrated.runtime.contradictionRules[0].severity).toBe("error");
     expect(migrated.runtime.theoryRules[0].playerVisibility).toBe("hidden");
   });
+
+  it("normalizes character runtime metadata only for character entities", () => {
+    const character = createStoryEntity("character", [], "Mara");
+    const item = createStoryEntity("item", [], "Moonlit Ledger") as StoryEntity;
+    character.runtimeCharacter = {
+      goals: ["Find the ledger", ""],
+      attitude: 250,
+      emotionalState: "Guarded",
+      communicationStyle: "Deflects questions about the archive.",
+      knownFactIds: ["fact-ledger"],
+      believedFactIds: ["fact-false-route"],
+      hiddenFactIds: ["fact-royal-blood"],
+      deceptionRules: [
+        {
+          id: "",
+          condition: "Asked about the ledger",
+          deceptionGoal: "Protect Orin",
+          allowedStrategies: ["deny", "invent" as never],
+          forbiddenFactIds: ["fact-royal-blood"],
+          revealWhenEvidenceIds: ["evidence-ink"],
+          notes: "Do not improvise a new culprit."
+        }
+      ],
+      disclosureRules: [
+        {
+          id: "",
+          condition: "Player shows the ink",
+          revealFactIds: ["fact-ledger"],
+          requiredEvidenceIds: ["evidence-ink"],
+          audience: "Player",
+          notes: "Admit only the forged page."
+        }
+      ]
+    };
+    item.runtimeCharacter = character.runtimeCharacter;
+
+    const migrated = migrateProjectShape({
+      schemaVersion: 7,
+      title: "Runtime Characters",
+      updatedAt: "2026-01-01T00:00:00.000Z",
+      projectMode: "story",
+      entities: {
+        [character.id]: character,
+        [item.id]: item
+      },
+      relationships: [],
+      gameplayTransitions: [],
+      layout: {},
+      storyFlowLayout: {}
+    });
+
+    expect(migrated.entities[character.id].runtimeCharacter).toEqual(
+      expect.objectContaining({
+        goals: ["Find the ledger"],
+        attitude: 100,
+        emotionalState: "Guarded",
+        communicationStyle: "Deflects questions about the archive.",
+        knownFactIds: ["fact-ledger"],
+        believedFactIds: ["fact-false-route"],
+        hiddenFactIds: ["fact-royal-blood"]
+      })
+    );
+    expect(migrated.entities[character.id].runtimeCharacter?.deceptionRules[0]).toEqual(
+      expect.objectContaining({
+        condition: "Asked about the ledger",
+        allowedStrategies: ["deny"],
+        forbiddenFactIds: ["fact-royal-blood"],
+        revealWhenEvidenceIds: ["evidence-ink"]
+      })
+    );
+    expect(migrated.entities[character.id].runtimeCharacter?.disclosureRules[0]).toEqual(
+      expect.objectContaining({
+        condition: "Player shows the ink",
+        revealFactIds: ["fact-ledger"],
+        requiredEvidenceIds: ["evidence-ink"],
+        audience: "Player"
+      })
+    );
+    expect(migrated.entities[item.id].runtimeCharacter).toBeUndefined();
+  });
+
+  it("removes deleted character references from runtime knowledge and evidence discovery", () => {
+    const project = createBlankProject("Runtime Cleanup");
+    const character = createStoryEntity("character", project.itemTypes, "Mara");
+    const otherCharacter = createStoryEntity("character", project.itemTypes, "Orin");
+    const deleted = deleteEntityFromProject(
+      {
+        ...project,
+        entities: {
+          [character.id]: character,
+          [otherCharacter.id]: otherCharacter
+        },
+        runtime: {
+          ...project.runtime,
+          evidence: [
+            {
+              id: "evidence-ink",
+              label: "Moonlit ink",
+              description: "",
+              factIds: [],
+              reliability: "confirmed",
+              playerVisibility: "hidden",
+              discoveredByCharacterIds: [character.id, otherCharacter.id],
+              notes: ""
+            }
+          ],
+          characterKnowledge: [
+            {
+              id: "knowledge-mara",
+              characterId: character.id,
+              factId: "fact-ledger",
+              knowledge: "knows",
+              belief: "believes_true",
+              evidenceIds: [],
+              notes: ""
+            },
+            {
+              id: "knowledge-orin",
+              characterId: otherCharacter.id,
+              factId: "fact-ledger",
+              knowledge: "suspects",
+              belief: "uncertain",
+              evidenceIds: [],
+              notes: ""
+            }
+          ]
+        }
+      },
+      character.id
+    );
+
+    expect(deleted.runtime.characterKnowledge).toEqual([
+      expect.objectContaining({ id: "knowledge-orin", characterId: otherCharacter.id })
+    ]);
+    expect(deleted.runtime.evidence[0].discoveredByCharacterIds).toEqual([otherCharacter.id]);
+  });
 });
 
 describe("game story mode", () => {
