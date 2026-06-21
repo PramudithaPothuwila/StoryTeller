@@ -284,28 +284,44 @@ interface AgentProjectContext {
 
 const BODY_EXCERPT_LENGTH = 700;
 const RUNTIME_CONTEXT_EXCERPT_LENGTH = 4000;
+const RUNTIME_AUTHORING_STORY_OPERATION_ERROR =
+  "Runtime records must use create_runtime_* operations, not story entities.";
 
-export const AGENT_SYSTEM_PROMPT = [
-  "You are the in-app AI story agent for StoryTeller, a local-first story planning workspace.",
-  "Preserve the user's creative intent. Suggest focused structural edits instead of rewriting the whole story.",
-  "Return only a structured change plan matching the supplied schema.",
-  "Do not include destructive operations. Do not delete entities, relationships, files, or raw project data.",
-  "Use existing item and link type IDs from the project context. Use stable kebab-case IDs for new entities and relationships.",
-  "Every create_entity operation must include entity.id, entity.type, and entity.title.",
-  "Every create_relationship operation must include relationship.id, sourceId, targetId, and type.",
-  "Use privateInfo for author-only secrets and publicInfo for audience/player-facing facts.",
-  "For game-story projects, use graphPresence to place each item in the world graph, story_flow graph, or both.",
-  "When agentMode is runtime_authoring, you may create, update, and delete runtime facts, evidence, character knowledge, contradiction rules, and theory rules.",
-  "Runtime deletes are allowed only for runtime records. Never delete story entities or relationships."
-].join("\n");
+export function buildAgentSystemPrompt(mode: AgentMode = "story"): string {
+  const shared = [
+    "You are the in-app AI story agent for StoryTeller, a local-first story planning workspace.",
+    "Preserve the user's creative intent. Suggest focused structural edits instead of rewriting the whole story.",
+    "Return only a structured change plan matching the supplied schema."
+  ];
+
+  if (mode === "runtime_authoring") {
+    return [
+      ...shared,
+      "Runtime records live in project.runtime, not project.entities.",
+      "Never use create_entity, update_entity, create_relationship, or update_relationship for facts, evidence, character knowledge, contradiction rules, or theory rules.",
+      "Use only runtime CRUD operations: create_runtime_fact, update_runtime_fact, delete_runtime_fact, create_runtime_evidence, update_runtime_evidence, delete_runtime_evidence, create_runtime_character_knowledge, update_runtime_character_knowledge, delete_runtime_character_knowledge, create_runtime_contradiction, update_runtime_contradiction, delete_runtime_contradiction, create_runtime_theory_rule, update_runtime_theory_rule, delete_runtime_theory_rule.",
+      "Runtime deletes are allowed only for runtime records. Never delete story entities or relationships.",
+      "Use stable kebab-case IDs for new runtime records."
+    ].join("\n");
+  }
+
+  return [
+    ...shared,
+    "Do not include destructive operations. Do not delete entities, relationships, files, or raw project data.",
+    "Use existing item and link type IDs from the project context. Use stable kebab-case IDs for new entities and relationships.",
+    "Every create_entity operation must include entity.id, entity.type, and entity.title.",
+    "Every create_relationship operation must include relationship.id, sourceId, targetId, and type.",
+    "Use privateInfo for author-only secrets and publicInfo for audience/player-facing facts.",
+    "For game-story projects, use graphPresence to place each item in the world graph, story_flow graph, or both."
+  ].join("\n");
+}
+
+export const AGENT_SYSTEM_PROMPT = buildAgentSystemPrompt("story");
 
 export const DEFAULT_NVIDIA_AGENT_MODEL = "meta/llama-3.2-1b-instruct";
 
-export const AGENT_RESPONSE_FORMAT = {
-  type: "json_schema",
-  name: "storyteller_agent_change_plan",
-  strict: true,
-  schema: {
+export function buildAgentResponseSchema(mode: AgentMode = "story") {
+  return {
     type: "object",
     additionalProperties: false,
     properties: {
@@ -315,47 +331,24 @@ export const AGENT_RESPONSE_FORMAT = {
       changes: {
         type: "array",
         items: {
-          anyOf: [
-            createEntitySchema(),
-            updateEntitySchema(),
-            createRelationshipSchema(),
-            updateRelationshipSchema(),
-            timelineEffectSchema(),
-            updateGameStorySchema(),
-            runtimeCreateSchema("create_runtime_fact", "fact", runtimeFactSchema(["id", "statement", "truth"])),
-            runtimeUpdateSchema("update_runtime_fact", runtimeFactSchema([])),
-            runtimeDeleteSchema("delete_runtime_fact"),
-            runtimeCreateSchema("create_runtime_evidence", "evidence", runtimeEvidenceSchema(["id", "label"])),
-            runtimeUpdateSchema("update_runtime_evidence", runtimeEvidenceSchema([])),
-            runtimeDeleteSchema("delete_runtime_evidence"),
-            runtimeCreateSchema(
-              "create_runtime_character_knowledge",
-              "knowledge",
-              runtimeCharacterKnowledgeSchema(["id", "characterId", "factId", "knowledge", "belief"])
-            ),
-            runtimeUpdateSchema("update_runtime_character_knowledge", runtimeCharacterKnowledgeSchema([])),
-            runtimeDeleteSchema("delete_runtime_character_knowledge"),
-            runtimeCreateSchema(
-              "create_runtime_contradiction",
-              "contradiction",
-              runtimeContradictionSchema(["id", "label"])
-            ),
-            runtimeUpdateSchema("update_runtime_contradiction", runtimeContradictionSchema([])),
-            runtimeDeleteSchema("delete_runtime_contradiction"),
-            runtimeCreateSchema(
-              "create_runtime_theory_rule",
-              "theoryRule",
-              runtimeTheoryRuleSchema(["id", "label", "conclusion"])
-            ),
-            runtimeUpdateSchema("update_runtime_theory_rule", runtimeTheoryRuleSchema([])),
-            runtimeDeleteSchema("delete_runtime_theory_rule")
-          ]
+          anyOf: mode === "runtime_authoring" ? runtimeChangeSchemas() : storyChangeSchemas()
         }
       }
     },
     required: ["summary", "assumptions", "changes", "followUpQuestions"]
-  }
-} as const;
+  };
+}
+
+export function buildAgentResponseFormat(mode: AgentMode = "story") {
+  return {
+    type: "json_schema",
+    name: "storyteller_agent_change_plan",
+    strict: true,
+    schema: buildAgentResponseSchema(mode)
+  } as const;
+}
+
+export const AGENT_RESPONSE_FORMAT = buildAgentResponseFormat("story");
 
 export function buildAgentProjectContext(project: StoryProject, options: AgentRequestOptions = {}): AgentProjectContext {
   const mode = options.mode ?? "story";
@@ -478,13 +471,17 @@ function parseChatCompletionPayload(parsed: Record<string, unknown>): AgentChang
   return null;
 }
 
-export function validateAgentChangePlan(project: StoryProject, plan: AgentChangePlan): AgentChangeValidation[] {
+export function validateAgentChangePlan(
+  project: StoryProject,
+  plan: AgentChangePlan,
+  options: AgentRequestOptions = {}
+): AgentChangeValidation[] {
   const entityIds = new Set(Object.keys(project.entities));
   const relationshipIds = new Set(project.relationships.map((relationship) => relationship.id));
   const runtimeIds = runtimeIdState(project);
 
   return plan.changes.map((change, index) => {
-    const errors = validateAgentChange(project, change, entityIds, relationshipIds, runtimeIds);
+    const errors = validateAgentChange(project, change, entityIds, relationshipIds, runtimeIds, options);
 
     if (change.operation === "create_entity") {
       entityIds.add(change.entity.id);
@@ -504,8 +501,12 @@ export function validateAgentChangePlan(project: StoryProject, plan: AgentChange
   });
 }
 
-export function applyAgentChangePlan(project: StoryProject, plan: AgentChangePlan): AgentApplyResult {
-  const validation = validateAgentChangePlan(project, plan);
+export function applyAgentChangePlan(
+  project: StoryProject,
+  plan: AgentChangePlan,
+  options: AgentRequestOptions = {}
+): AgentApplyResult {
+  const validation = validateAgentChangePlan(project, plan, options);
   const firstInvalid = validation.find((item) => item.errors.length);
 
   if (firstInvalid) {
@@ -730,12 +731,18 @@ function validateAgentChange(
   change: AgentChange,
   entityIds: Set<string>,
   relationshipIds: Set<string>,
-  runtimeIds: RuntimeIdState
+  runtimeIds: RuntimeIdState,
+  options: AgentRequestOptions = {}
 ): string[] {
   const errors: string[] = [];
 
   if (!change.summary.trim()) {
     errors.push("Change summary is required.");
+  }
+
+  if (options.mode === "runtime_authoring" && isStoryOperation(change)) {
+    errors.push(RUNTIME_AUTHORING_STORY_OPERATION_ERROR);
+    return errors;
   }
 
   if (change.operation === "create_entity") {
@@ -1481,13 +1488,13 @@ function optionalString(value: unknown): string | undefined {
   return typeof value === "string" && value.trim() ? value : undefined;
 }
 
-export function buildNvidiaSystemPrompt(): string {
+export function buildNvidiaSystemPrompt(mode: AgentMode = "story"): string {
   return [
     "detailed thinking off",
-    AGENT_SYSTEM_PROMPT,
+    buildAgentSystemPrompt(mode),
     "Return only valid JSON. Do not wrap it in Markdown fences.",
     "The JSON must match this schema:",
-    JSON.stringify(AGENT_RESPONSE_FORMAT.schema)
+    JSON.stringify(buildAgentResponseSchema(mode))
   ].join("\n");
 }
 
@@ -1519,6 +1526,52 @@ function validateEventReference(project: StoryProject, eventId: string, label: s
   if (!event || event.type !== BUILT_IN_EVENT_TYPE_ID) {
     errors.push(`${label} does not exist: ${eventId}`);
   }
+}
+
+function isStoryOperation(change: AgentChange): boolean {
+  return (
+    change.operation === "create_entity" ||
+    change.operation === "update_entity" ||
+    change.operation === "create_relationship" ||
+    change.operation === "update_relationship" ||
+    change.operation === "add_timeline_effect" ||
+    change.operation === "update_game_story"
+  );
+}
+
+function storyChangeSchemas() {
+  return [
+    createEntitySchema(),
+    updateEntitySchema(),
+    createRelationshipSchema(),
+    updateRelationshipSchema(),
+    timelineEffectSchema(),
+    updateGameStorySchema()
+  ];
+}
+
+function runtimeChangeSchemas() {
+  return [
+    runtimeCreateSchema("create_runtime_fact", "fact", runtimeFactSchema(["id", "statement", "truth"])),
+    runtimeUpdateSchema("update_runtime_fact", runtimeFactSchema([])),
+    runtimeDeleteSchema("delete_runtime_fact"),
+    runtimeCreateSchema("create_runtime_evidence", "evidence", runtimeEvidenceSchema(["id", "label"])),
+    runtimeUpdateSchema("update_runtime_evidence", runtimeEvidenceSchema([])),
+    runtimeDeleteSchema("delete_runtime_evidence"),
+    runtimeCreateSchema(
+      "create_runtime_character_knowledge",
+      "knowledge",
+      runtimeCharacterKnowledgeSchema(["id", "characterId", "factId", "knowledge", "belief"])
+    ),
+    runtimeUpdateSchema("update_runtime_character_knowledge", runtimeCharacterKnowledgeSchema([])),
+    runtimeDeleteSchema("delete_runtime_character_knowledge"),
+    runtimeCreateSchema("create_runtime_contradiction", "contradiction", runtimeContradictionSchema(["id", "label"])),
+    runtimeUpdateSchema("update_runtime_contradiction", runtimeContradictionSchema([])),
+    runtimeDeleteSchema("delete_runtime_contradiction"),
+    runtimeCreateSchema("create_runtime_theory_rule", "theoryRule", runtimeTheoryRuleSchema(["id", "label", "conclusion"])),
+    runtimeUpdateSchema("update_runtime_theory_rule", runtimeTheoryRuleSchema([])),
+    runtimeDeleteSchema("delete_runtime_theory_rule")
+  ];
 }
 
 function createEntitySchema() {

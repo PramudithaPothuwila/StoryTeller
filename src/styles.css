@@ -677,21 +677,6 @@ a.toolbar-button {
   gap: 10px;
 }
 
-.agent-mode-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  color: var(--ink);
-  font-size: 0.86rem;
-  font-weight: 900;
-}
-
-.agent-mode-toggle input {
-  width: 18px;
-  height: 18px;
-  accent-color: var(--teal);
-}
-
 .agent-change-list {
   display: grid;
   gap: 8px;
@@ -2349,12 +2334,36 @@ a.toolbar-button {
   font-size: 1.3rem;
 }
 
+.runtime-stage__header-actions {
+  display: flex;
+  align-items: center;
+  justify-content: end;
+  gap: 10px;
+}
+
 .runtime-panel__header h2 {
   font-size: 1rem;
 }
 
-.runtime-stage__body {
+.runtime-stage__content {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  min-height: 0;
+}
+
+.runtime-stage__content.has-agent {
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 360px);
+}
+
+.runtime-stage__content > .agent-panel {
+  height: calc(100vh - 128px);
+  position: sticky;
+  top: 0;
+}
+
+.runtime-stage__body {
+  display: flex;
+  flex-direction: column;
   gap: 16px;
   width: min(1180px, 100%);
   margin: 0 auto;
@@ -2363,6 +2372,7 @@ a.toolbar-button {
 
 .runtime-stage__tabs {
   border: 1px solid var(--line);
+  height: 70px;
   border-radius: 8px;
   background: #ffffff;
 }

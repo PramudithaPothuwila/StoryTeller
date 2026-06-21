@@ -801,6 +801,16 @@ describe("App project commands", () => {
   it("requests and applies runtime authoring plans from the AI agent", async () => {
     window.history.pushState({}, "", "/project/cloud-opened");
     vi.mocked(getCurrentCloudUser).mockResolvedValue({ id: "user-a", email: "ada@example.com" });
+    vi.mocked(openCloudProject).mockResolvedValue({
+      id: "cloud-opened",
+      title: "Cloud Project",
+      schemaVersion: 7,
+      projectMode: "game_story",
+      project: createBlankProject("Cloud Project", "game_story"),
+      version: 3,
+      createdAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-01T00:00:00.000Z"
+    });
     vi.mocked(requestAgentPlan).mockResolvedValue({
       output_text: JSON.stringify({
         summary: "Add runtime fact.",
@@ -827,8 +837,11 @@ describe("App project commands", () => {
 
     await waitFor(() => expect(screen.getByText("Cloud Project")).toBeInTheDocument());
 
-    fireEvent.click(screen.getByRole("button", { name: "AI Agent" }));
-    fireEvent.click(screen.getByLabelText("Runtime authoring"));
+    fireEvent.click(screen.getByRole("button", { name: "Runtime Tools" }));
+    expect(await screen.findByRole("heading", { name: "Runtime Tools" })).toBeInTheDocument();
+    expect(screen.queryByLabelText("Runtime authoring")).not.toBeInTheDocument();
+    const runtimeAgentButtons = screen.getAllByRole("button", { name: "AI Agent" });
+    fireEvent.click(runtimeAgentButtons[runtimeAgentButtons.length - 1]);
     fireEvent.change(screen.getByPlaceholderText(/create, update, or delete runtime facts/i), {
       target: { value: "Add facts from the story." }
     });
@@ -848,6 +861,107 @@ describe("App project commands", () => {
 
     expect(screen.getByText("Unsaved")).toBeInTheDocument();
     expect(screen.queryByTestId("flow-node-fact-ledger-forged")).not.toBeInTheDocument();
+  });
+
+  it("auto-populates runtime data from the Runtime Tools agent", async () => {
+    window.history.pushState({}, "", "/project/cloud-opened");
+    vi.mocked(getCurrentCloudUser).mockResolvedValue({ id: "user-a", email: "ada@example.com" });
+    vi.mocked(openCloudProject).mockResolvedValue({
+      id: "cloud-opened",
+      title: "Cloud Project",
+      schemaVersion: 7,
+      projectMode: "game_story",
+      project: createBlankProject("Cloud Project", "game_story"),
+      version: 3,
+      createdAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-01T00:00:00.000Z"
+    });
+    vi.mocked(requestAgentPlan).mockResolvedValue({
+      output_text: JSON.stringify({
+        summary: "Populate runtime.",
+        assumptions: [],
+        followUpQuestions: [],
+        changes: [
+          {
+            operation: "create_runtime_fact",
+            summary: "Create forged ledger fact",
+            fact: {
+              id: "fact-ledger-forged",
+              statement: "The ledger was forged.",
+              truth: "true",
+              sourceEntityIds: [],
+              sourceNotes: "",
+              tags: [],
+              notes: ""
+            }
+          }
+        ]
+      })
+    });
+    render(<App />);
+
+    await waitFor(() => expect(screen.getByText("Cloud Project")).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("button", { name: "Runtime Tools" }));
+    const runtimeAgentButtons = screen.getAllByRole("button", { name: "AI Agent" });
+    fireEvent.click(runtimeAgentButtons[runtimeAgentButtons.length - 1]);
+    fireEvent.click(await screen.findByRole("button", { name: "Auto-populate Runtime" }));
+
+    await waitFor(() =>
+      expect(requestAgentPlan).toHaveBeenCalledWith(
+        expect.objectContaining({ title: "Cloud Project" }),
+        expect.stringContaining("populate runtime facts"),
+        { mode: "runtime_authoring" }
+      )
+    );
+    expect(await screen.findByDisplayValue("The ledger was forged.")).toBeInTheDocument();
+    expect(screen.getByText("Unsaved")).toBeInTheDocument();
+  });
+
+  it("shows invalid auto-populate runtime plans for review instead of applying them", async () => {
+    window.history.pushState({}, "", "/project/cloud-opened");
+    vi.mocked(getCurrentCloudUser).mockResolvedValue({ id: "user-a", email: "ada@example.com" });
+    vi.mocked(openCloudProject).mockResolvedValue({
+      id: "cloud-opened",
+      title: "Cloud Project",
+      schemaVersion: 7,
+      projectMode: "game_story",
+      project: createBlankProject("Cloud Project", "game_story"),
+      version: 3,
+      createdAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-01T00:00:00.000Z"
+    });
+    vi.mocked(requestAgentPlan).mockResolvedValue({
+      output_text: JSON.stringify({
+        summary: "Bad runtime.",
+        assumptions: [],
+        followUpQuestions: [],
+        changes: [
+          {
+            operation: "create_entity",
+            summary: "Create fact as entity",
+            entity: {
+              id: "fact-drag-marks",
+              type: "fact",
+              title: "Drag marks contradict murder site"
+            }
+          }
+        ]
+      })
+    });
+    render(<App />);
+
+    await waitFor(() => expect(screen.getByText("Cloud Project")).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("button", { name: "Runtime Tools" }));
+    const runtimeAgentButtons = screen.getAllByRole("button", { name: "AI Agent" });
+    fireEvent.click(runtimeAgentButtons[runtimeAgentButtons.length - 1]);
+    fireEvent.click(await screen.findByRole("button", { name: "Auto-populate Runtime" }));
+
+    expect(await screen.findByText("Create fact as entity")).toBeInTheDocument();
+    expect(screen.getByText("Runtime records must use create_runtime_* operations, not story entities.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Apply 1 Change" })).toBeDisabled();
+    expect(screen.queryByText("Unsaved")).not.toBeInTheDocument();
   });
 
   it("disables applying invalid AI agent plans", async () => {

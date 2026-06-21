@@ -5,6 +5,7 @@ import {
   AgentChangePlan,
   applyAgentChangePlan,
   buildAgentProjectContext,
+  buildAgentResponseSchema,
   buildAgentInput,
   buildNvidiaSystemPrompt,
   parseAgentResponsePayload,
@@ -457,14 +458,52 @@ describe("agent project helpers", () => {
     expect(invalidErrors).toContain("Fact does not exist: fact-missing");
   });
 
-  it("builds NVIDIA system instructions for JSON-only change plans", () => {
-    const prompt = buildNvidiaSystemPrompt();
+  it("builds mode-specific NVIDIA system instructions for JSON-only change plans", () => {
+    const storyPrompt = buildNvidiaSystemPrompt();
+    const storySchema = JSON.stringify(buildAgentResponseSchema("story"));
+    const runtimePrompt = buildNvidiaSystemPrompt("runtime_authoring");
+    const runtimeSchema = JSON.stringify(buildAgentResponseSchema("runtime_authoring"));
 
-    expect(prompt).toContain("detailed thinking off");
-    expect(prompt).toContain("Return only valid JSON");
-    expect(prompt).toContain("structured change plan");
-    expect(prompt).toContain("create_entity");
-    expect(prompt).toContain("create_runtime_fact");
+    expect(storyPrompt).toContain("detailed thinking off");
+    expect(storyPrompt).toContain("Return only valid JSON");
+    expect(storyPrompt).toContain("structured change plan");
+    expect(storySchema).toContain("create_entity");
+    expect(storySchema).toContain("create_relationship");
+    expect(storySchema).not.toContain("create_runtime_fact");
+
+    expect(runtimePrompt).toContain("Runtime records live in project.runtime");
+    expect(runtimePrompt).toContain("Never use create_entity");
+    expect(runtimeSchema).toContain("create_runtime_fact");
+    expect(runtimeSchema).toContain("update_runtime_evidence");
+    expect(runtimeSchema).toContain("create_runtime_character_knowledge");
+    expect(runtimeSchema).toContain("update_runtime_contradiction");
+    expect(runtimeSchema).toContain("update_runtime_theory_rule");
+    expect(runtimeSchema).not.toContain("create_entity");
+    expect(runtimeSchema).not.toContain("create_relationship");
+  });
+
+  it("rejects story entity operations in runtime authoring mode with a clear error", () => {
+    const project = createBlankProject("Runtime Guard", "game_story");
+    const plan: AgentChangePlan = {
+      summary: "Bad runtime plan.",
+      assumptions: [],
+      followUpQuestions: [],
+      changes: [
+        {
+          operation: "create_entity",
+          summary: "Create a fact as an entity",
+          entity: {
+            id: "fact-drag-marks",
+            type: "fact",
+            title: "Drag marks contradict murder site"
+          }
+        }
+      ]
+    };
+
+    const errors = validateAgentChangePlan(project, plan, { mode: "runtime_authoring" }).flatMap((item) => item.errors);
+
+    expect(errors).toEqual(["Runtime records must use create_runtime_* operations, not story entities."]);
   });
 
   it("parses NVIDIA Chat Completions JSON output into an agent change plan", () => {

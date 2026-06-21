@@ -3,6 +3,7 @@ import OpenAI from "npm:openai@4";
 
 const DEFAULT_NVIDIA_BASE_URL = "https://integrate.api.nvidia.com/v1";
 const DEFAULT_NVIDIA_MODEL = "meta/llama-3.2-1b-instruct";
+type AgentMode = "story" | "runtime_authoring";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -58,6 +59,7 @@ Deno.serve(async (request) => {
 
   const baseUrl = (Deno.env.get("NVIDIA_BASE_URL") || DEFAULT_NVIDIA_BASE_URL).replace(/\/+$/, "");
   const model = Deno.env.get("NVIDIA_MODEL") || DEFAULT_NVIDIA_MODEL;
+  const agentMode = readAgentMode(body);
 
   try {
     const openai = new OpenAI({
@@ -69,13 +71,14 @@ Deno.serve(async (request) => {
       messages: [
         {
           role: "system",
-          content: buildNvidiaSystemPrompt()
+          content: buildNvidiaSystemPrompt(agentMode)
         },
         {
           role: "user",
           content: JSON.stringify(
             {
               task: body.prompt.trim(),
+              agentMode,
               project: body.project
             },
             null,
@@ -127,6 +130,14 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+function readAgentMode(body: Record<string, unknown>): AgentMode {
+  const options = isRecord(body.options) ? body.options : {};
+  const project = isRecord(body.project) ? body.project : {};
+  const mode = options.mode ?? project.agentMode;
+
+  return mode === "runtime_authoring" ? "runtime_authoring" : "story";
+}
+
 function agentErrorMessage(error: unknown): string {
   if (error instanceof Error && error.message) {
     return error.message;
@@ -135,20 +146,14 @@ function agentErrorMessage(error: unknown): string {
   return "NVIDIA request failed.";
 }
 
-function buildNvidiaSystemPrompt(): string {
-  return [
+function buildNvidiaSystemPrompt(mode: AgentMode): string {
+  const sharedInstructions = [
     "detailed thinking off",
     "You must return a single valid JSON object and nothing else.",
     "Do not explain, summarize in Markdown, use headings, or include prose before or after the JSON.",
     "You are the in-app AI story agent for StoryTeller, a local-first story planning workspace.",
     "Preserve the user's creative intent. Suggest focused structural edits instead of rewriting the whole story.",
     "Return only a structured change plan matching the supplied schema.",
-    "Do not include destructive operations. Do not delete entities, relationships, files, or raw project data.",
-    "Use existing item and link type IDs from the project context. Use stable kebab-case IDs for new entities and relationships.",
-    "Every create_entity operation must include entity.id, entity.type, and entity.title.",
-    "Every create_relationship operation must include relationship.id, sourceId, targetId, and type.",
-    "Use privateInfo for author-only secrets and publicInfo for audience/player-facing facts.",
-    "For game-story projects, use graphPresence to place each item in the world graph, story_flow graph, or both.",
     "The top-level JSON object must include exactly these fields: summary, assumptions, changes, followUpQuestions.",
     "Use this top-level shape:",
     JSON.stringify({
@@ -157,7 +162,96 @@ function buildNvidiaSystemPrompt(): string {
       changes: [],
       followUpQuestions: ["Short follow-up question strings."]
     }),
-    "Each changes item must use one of these operation shapes:",
+    "Each changes item must use one of these operation shapes:"
+  ];
+
+  if (mode === "runtime_authoring") {
+    return [
+      ...sharedInstructions,
+      "Runtime records live in project.runtime, not project.entities.",
+      "Never use create_entity, update_entity, create_relationship, or update_relationship for facts, evidence, character knowledge, contradiction rules, or theory rules.",
+      "Use runtime CRUD operations only. Story entity and relationship operations are not allowed in runtime_authoring mode.",
+      "Runtime deletes are allowed only for runtime records. Never delete story entities or relationships.",
+      "Use stable kebab-case IDs for new runtime records.",
+      JSON.stringify([
+        {
+          operation: "create_runtime_fact",
+          summary: "Create a runtime fact.",
+          fact: {
+            id: "fact-ledger-forged",
+            statement: "The ledger was forged.",
+            truth: "true",
+            subjectEntityId: "optional-existing-entity-id",
+            objectEntityId: "optional-existing-entity-id",
+            sourceEntityIds: ["optional-existing-entity-id"],
+            sourceNotes: "Author-only provenance.",
+            tags: ["optional-tag"],
+            notes: "Author-only runtime notes."
+          }
+        },
+        {
+          operation: "update_runtime_evidence",
+          summary: "Link evidence to facts.",
+          id: "existing-evidence-id",
+          patch: {
+            factIds: ["existing-or-new-fact-id"],
+            sourceEntityIds: ["optional-existing-entity-id"],
+            sourceNotes: "Author-only provenance."
+          }
+        },
+        {
+          operation: "create_runtime_character_knowledge",
+          summary: "Create character knowledge.",
+          knowledge: {
+            id: "knowledge-arden-drag-marks",
+            characterId: "existing-character-id",
+            factId: "existing-or-new-fact-id",
+            knowledge: "knows",
+            belief: "believes_true",
+            evidenceIds: ["optional-existing-evidence-id"],
+            notes: "Author-only notes."
+          }
+        },
+        {
+          operation: "update_runtime_contradiction",
+          summary: "Update a contradiction rule.",
+          id: "existing-contradiction-id",
+          patch: {
+            factIds: ["existing-or-new-fact-id"],
+            severity: "warning",
+            resolution: "How authors should resolve the contradiction."
+          }
+        },
+        {
+          operation: "update_runtime_theory_rule",
+          summary: "Update a theory rule.",
+          id: "existing-theory-rule-id",
+          patch: {
+            requiredEvidenceIds: ["existing-or-new-evidence-id"],
+            supportingFactIds: ["existing-or-new-fact-id"],
+            contradictingFactIds: ["existing-or-new-fact-id"],
+            conclusion: "Player-facing theory conclusion.",
+            playerVisibility: "discoverable"
+          }
+        },
+        {
+          operation: "delete_runtime_fact",
+          summary: "Delete a runtime fact.",
+          id: "existing-fact-id"
+        }
+      ]),
+      "If no valid runtime change is needed, return an empty changes array."
+    ].join("\n");
+  }
+
+  return [
+    ...sharedInstructions,
+    "Do not include destructive operations. Do not delete entities, relationships, files, or raw project data.",
+    "Use existing item and link type IDs from the project context. Use stable kebab-case IDs for new entities and relationships.",
+    "Every create_entity operation must include entity.id, entity.type, and entity.title.",
+    "Every create_relationship operation must include relationship.id, sourceId, targetId, and type.",
+    "Use privateInfo for author-only secrets and publicInfo for audience/player-facing facts.",
+    "For game-story projects, use graphPresence to place each item in the world graph, story_flow graph, or both.",
     JSON.stringify([
       {
         operation: "create_entity",

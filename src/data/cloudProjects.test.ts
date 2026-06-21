@@ -108,6 +108,29 @@ describe("cloud project storage", () => {
     });
   });
 
+  it("passes runtime authoring mode to the cloud agent function", async () => {
+    const project = createBlankProject("Runtime Agent", "game_story");
+    supabaseClientMock.functions.invoke.mockResolvedValue({
+      data: {
+        output_text: "{\"summary\":\"Done\",\"assumptions\":[],\"changes\":[],\"followUpQuestions\":[]}"
+      },
+      error: null
+    });
+
+    await requestAgentPlan(project, "Populate runtime.", { mode: "runtime_authoring" });
+
+    expect(supabaseClientMock.functions.invoke).toHaveBeenCalledWith("agent", {
+      body: {
+        project: expect.objectContaining({
+          agentMode: "runtime_authoring",
+          title: "Runtime Agent"
+        }),
+        prompt: "Populate runtime.",
+        options: { mode: "runtime_authoring" }
+      }
+    });
+  });
+
   it("surfaces cloud agent function errors", async () => {
     supabaseClientMock.functions.invoke.mockResolvedValue({
       data: null,

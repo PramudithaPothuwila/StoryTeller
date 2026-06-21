@@ -1,4 +1,4 @@
-import { ArrowLeft, Download, Plus, Trash2 } from "lucide-react";
+import { ArrowLeft, Bot, Download, Plus, Trash2 } from "lucide-react";
 import { ReactNode, useEffect, useMemo, useState } from "react";
 import {
   createStoryRuntimeContradictionRule,
@@ -32,12 +32,16 @@ import { CharacterRuntimeFields } from "./CharacterRuntimeFields";
 export type RuntimeToolTab = "facts" | "evidence" | "character_knowledge" | "contradictions" | "theory_rules" | "export";
 
 interface RuntimeStageProps {
+  agentAvailable?: boolean;
+  agentOpen?: boolean;
+  agentPanel?: ReactNode;
   project: StoryProject;
   selection: Selection | null;
   onBackToWorkspace: () => void;
   onEntityChange: (id: string, patch: Partial<StoryEntity>) => void;
   onExportRuntime: () => void;
   onProjectChange: (project: StoryProject) => void;
+  onToggleAgent?: () => void;
 }
 
 const runtimeTabs: Array<{ id: RuntimeToolTab; label: string }> = [
@@ -54,12 +58,16 @@ const playerVisibilityStates: StoryRuntimePlayerVisibility[] = ["hidden", "disco
 const ruleSeverityStates: StoryRuntimeRuleSeverity[] = ["warning", "error"];
 
 export function RuntimeStage({
+  agentAvailable = false,
+  agentOpen = false,
+  agentPanel,
   project,
   selection,
   onBackToWorkspace,
   onEntityChange,
   onExportRuntime,
-  onProjectChange
+  onProjectChange,
+  onToggleAgent
 }: RuntimeStageProps) {
   const [activeTab, setActiveTab] = useState<RuntimeToolTab>("facts");
   const selectedCharacterId =
@@ -86,46 +94,57 @@ export function RuntimeStage({
           <p>Runtime Stage</p>
           <h1>Runtime Tools</h1>
         </div>
-        <button type="button" className="text-tool-button" onClick={onBackToWorkspace}>
-          <ArrowLeft aria-hidden="true" />
-          Workspace
-        </button>
+        <div className="runtime-stage__header-actions">
+          {agentAvailable ? (
+            <button type="button" className="text-tool-button" aria-pressed={agentOpen} onClick={onToggleAgent}>
+              <Bot aria-hidden="true" />
+              AI Agent
+            </button>
+          ) : null}
+          <button type="button" className="text-tool-button" onClick={onBackToWorkspace}>
+            <ArrowLeft aria-hidden="true" />
+            Workspace
+          </button>
+        </div>
       </header>
 
-      <div className="runtime-stage__body">
-        <nav className="runtime-stage__tabs segmented-tabs" aria-label="Runtime tabs">
-          {runtimeTabs.map((tab) => (
-            <button
-              key={tab.id}
-              type="button"
-              className={activeTab === tab.id ? "is-active" : ""}
-              onClick={() => setActiveTab(tab.id)}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </nav>
+      <div className={agentOpen && agentPanel ? "runtime-stage__content has-agent" : "runtime-stage__content"}>
+        <div className="runtime-stage__body">
+          <nav className="runtime-stage__tabs segmented-tabs" aria-label="Runtime tabs">
+            {runtimeTabs.map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                className={activeTab === tab.id ? "is-active" : ""}
+                onClick={() => setActiveTab(tab.id)}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </nav>
 
-        {activeTab === "facts" ? <FactsTab project={project} onProjectChange={onProjectChange} /> : null}
-        {activeTab === "evidence" ? <EvidenceTab project={project} onProjectChange={onProjectChange} /> : null}
-        {activeTab === "character_knowledge" ? (
-          <CharacterKnowledgeTab
-            activeCharacter={activeCharacter}
-            characters={characters}
-            focusedCharacterId={activeCharacter?.id ?? ""}
-            project={project}
-            onCharacterFocusChange={setFocusedCharacterId}
-            onEntityChange={onEntityChange}
-            onProjectChange={onProjectChange}
-          />
-        ) : null}
-        {activeTab === "contradictions" ? (
-          <ContradictionsTab project={project} onProjectChange={onProjectChange} />
-        ) : null}
-        {activeTab === "theory_rules" ? <TheoryRulesTab project={project} onProjectChange={onProjectChange} /> : null}
-        {activeTab === "export" ? (
-          <ExportPreviewTab runtimeJson={JSON.stringify(runtimeBundle, null, 2)} onExportRuntime={onExportRuntime} />
-        ) : null}
+          {activeTab === "facts" ? <FactsTab project={project} onProjectChange={onProjectChange} /> : null}
+          {activeTab === "evidence" ? <EvidenceTab project={project} onProjectChange={onProjectChange} /> : null}
+          {activeTab === "character_knowledge" ? (
+            <CharacterKnowledgeTab
+              activeCharacter={activeCharacter}
+              characters={characters}
+              focusedCharacterId={activeCharacter?.id ?? ""}
+              project={project}
+              onCharacterFocusChange={setFocusedCharacterId}
+              onEntityChange={onEntityChange}
+              onProjectChange={onProjectChange}
+            />
+          ) : null}
+          {activeTab === "contradictions" ? (
+            <ContradictionsTab project={project} onProjectChange={onProjectChange} />
+          ) : null}
+          {activeTab === "theory_rules" ? <TheoryRulesTab project={project} onProjectChange={onProjectChange} /> : null}
+          {activeTab === "export" ? (
+            <ExportPreviewTab runtimeJson={JSON.stringify(runtimeBundle, null, 2)} onExportRuntime={onExportRuntime} />
+          ) : null}
+        </div>
+        {agentOpen ? agentPanel : null}
       </div>
     </main>
   );
@@ -138,7 +157,7 @@ function FactsTab({ project, onProjectChange }: { project: StoryProject; onProje
         ...project,
         runtime: {
           ...project.runtime,
-          facts: [...project.runtime.facts, createStoryRuntimeFact()]
+          facts: [createStoryRuntimeFact(), ...project.runtime.facts]
         }
       })
     );
@@ -196,7 +215,7 @@ function EvidenceTab({
         ...project,
         runtime: {
           ...project.runtime,
-          evidence: [...project.runtime.evidence, createStoryRuntimeEvidence()]
+          evidence: [createStoryRuntimeEvidence(), ...project.runtime.evidence]
         }
       })
     );

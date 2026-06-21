@@ -144,13 +144,11 @@ describe("RuntimeStage", () => {
     renderRuntimeStage(project, { onProjectChange });
 
     fireEvent.click(screen.getByRole("button", { name: "Add Fact" }));
-    expect(onProjectChange).toHaveBeenLastCalledWith(
-      expect.objectContaining({
-        runtime: expect.objectContaining({
-          facts: expect.arrayContaining([expect.objectContaining({ id: expect.stringMatching(/^fact-/), truth: "unknown" })])
-        })
-      })
+    const projectWithAddedFact = onProjectChange.mock.lastCall?.[0] as StoryProject;
+    expect(projectWithAddedFact.runtime.facts[0]).toEqual(
+      expect.objectContaining({ id: expect.stringMatching(/^fact-/), truth: "unknown" })
     );
+    expect(projectWithAddedFact.runtime.facts[1]).toEqual(expect.objectContaining({ id: "fact-ledger-forged" }));
 
     const card = screen.getByDisplayValue("The ledger was forged.").closest(".runtime-list-card") as HTMLElement;
     fireEvent.change(within(card).getByLabelText("Fact statement"), { target: { value: "The ledger was altered." } });
@@ -196,13 +194,11 @@ describe("RuntimeStage", () => {
 
     expect(screen.getByDisplayValue("Photo board note.")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Add Evidence" }));
-    expect(onProjectChange).toHaveBeenLastCalledWith(
-      expect.objectContaining({
-        runtime: expect.objectContaining({
-          evidence: expect.arrayContaining([expect.objectContaining({ id: expect.stringMatching(/^evidence-/) })])
-        })
-      })
+    const projectWithAddedEvidence = onProjectChange.mock.lastCall?.[0] as StoryProject;
+    expect(projectWithAddedEvidence.runtime.evidence[0]).toEqual(
+      expect.objectContaining({ id: expect.stringMatching(/^evidence-/) })
     );
+    expect(projectWithAddedEvidence.runtime.evidence[1]).toEqual(expect.objectContaining({ id: "evidence-ink" }));
 
     const card = screen.getByDisplayValue("Moonlit ink").closest(".runtime-list-card") as HTMLElement;
     fireEvent.change(within(card).getByLabelText("Evidence label"), { target: { value: "Cold-light ink" } });

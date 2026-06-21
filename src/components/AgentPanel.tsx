@@ -11,6 +11,7 @@ import { requestAgentPlan } from "../data/cloudProjects";
 import { Selection, StoryProject } from "../types";
 
 interface AgentPanelProps {
+  mode: AgentMode;
   project: StoryProject;
   onClose: () => void;
   onProjectChange: (project: StoryProject) => void;
@@ -19,7 +20,11 @@ interface AgentPanelProps {
   onStatusChange: (status: string) => void;
 }
 
+const AUTO_POPULATE_RUNTIME_PROMPT =
+  "Read the full story project and populate runtime facts, evidence, character knowledge, contradictions, and theory rules. Preserve existing story text and avoid duplicate runtime records.";
+
 export function AgentPanel({
+  mode,
   project,
   onClose,
   onProjectChange,
@@ -29,11 +34,12 @@ export function AgentPanel({
 }: AgentPanelProps) {
   const [prompt, setPrompt] = useState("");
   const [plan, setPlan] = useState<AgentChangePlan | null>(null);
-  const [runtimeAuthoring, setRuntimeAuthoring] = useState(false);
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const validation = useMemo(() => (plan ? validateAgentChangePlan(project, plan) : []), [plan, project]);
+  const [isAutoPopulating, setIsAutoPopulating] = useState(false);
+  const validation = useMemo(() => (plan ? validateAgentChangePlan(project, plan, { mode }) : []), [mode, plan, project]);
   const invalidChangeCount = validation.filter((item) => item.errors.length).length;
+  const isRuntimeAuthoring = mode === "runtime_authoring";
 
   async function requestPlan() {
     const cleanPrompt = prompt.trim();
@@ -49,7 +55,6 @@ export function AgentPanel({
     onStatusChange("Agent thinking...");
 
     try {
-      const mode: AgentMode = runtimeAuthoring ? "runtime_authoring" : "story";
       const nextPlan = parseAgentResponsePayload(await requestAgentPlan(project, cleanPrompt, { mode }));
       setPlan(nextPlan);
       onStatusChange("Agent plan ready");
@@ -62,13 +67,46 @@ export function AgentPanel({
     }
   }
 
+  async function autoPopulateRuntime() {
+    setIsAutoPopulating(true);
+    setError("");
+    setPlan(null);
+    onStatusChange("Agent populating runtime...");
+
+    try {
+      const nextPlan = parseAgentResponsePayload(
+        await requestAgentPlan(project, AUTO_POPULATE_RUNTIME_PROMPT, { mode: "runtime_authoring" })
+      );
+      const nextValidation = validateAgentChangePlan(project, nextPlan, { mode: "runtime_authoring" });
+      const invalidRuntimeChangeCount = nextValidation.filter((item) => item.errors.length).length;
+
+      if (invalidRuntimeChangeCount) {
+        setPlan(nextPlan);
+        onStatusChange("Agent runtime plan needs review");
+        return;
+      }
+
+      const result = applyAgentChangePlan(project, nextPlan, { mode: "runtime_authoring" });
+      onProjectChange(result.project);
+      setPrompt("");
+      setPlan(null);
+      onStatusChange("Runtime populated");
+    } catch (requestError) {
+      const message = requestError instanceof Error ? requestError.message : "Agent request failed";
+      setError(message);
+      onStatusChange("Agent request failed");
+    } finally {
+      setIsAutoPopulating(false);
+    }
+  }
+
   function applyPlan() {
     if (!plan || invalidChangeCount) {
       return;
     }
 
     try {
-      const result = applyAgentChangePlan(project, plan);
+      const result = applyAgentChangePlan(project, plan, { mode });
       onProjectChange(result.project);
       selectFirstChangedItem(result.changedEntityIds, result.changedRelationshipIds, onSelectEntity, onSelectRelationship);
       setPlan(null);
@@ -102,26 +140,34 @@ export function AgentPanel({
             rows={6}
             value={prompt}
             placeholder={
-              runtimeAuthoring
+              isRuntimeAuthoring
                 ? "Ask the agent to create, update, or delete runtime facts, evidence, knowledge rows, contradictions, or theory rules."
                 : "Ask for focused story structure changes, new entities, timeline effects, or game-story updates."
             }
             onChange={(event) => setPrompt(event.target.value)}
           />
-          <label className="agent-mode-toggle">
-            <input
-              type="checkbox"
-              checked={runtimeAuthoring}
-              onChange={(event) => setRuntimeAuthoring(event.target.checked)}
-            />
-            <span>Runtime authoring</span>
-          </label>
-          {runtimeAuthoring ? (
+          {isRuntimeAuthoring ? (
             <p className="agent-compat-note">
-              Runtime authoring sends expanded story context and lets the agent propose CRUD changes for runtime data only.
+              Runtime Tools sends expanded story context and lets the agent propose CRUD changes for runtime data only.
             </p>
           ) : null}
-          <button type="button" className="primary-action" disabled={isLoading} onClick={() => void requestPlan()}>
+          {isRuntimeAuthoring ? (
+            <button
+              type="button"
+              className="text-tool-button"
+              disabled={isLoading || isAutoPopulating}
+              onClick={() => void autoPopulateRuntime()}
+            >
+              <Bot aria-hidden="true" />
+              {isAutoPopulating ? "Populating..." : "Auto-populate Runtime"}
+            </button>
+          ) : null}
+          <button
+            type="button"
+            className="primary-action"
+            disabled={isLoading || isAutoPopulating}
+            onClick={() => void requestPlan()}
+          >
             <Send aria-hidden="true" />
             {isLoading ? "Thinking..." : "Ask Agent"}
           </button>

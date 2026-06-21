@@ -2339,7 +2339,9 @@ function StoryWorkspace({
               shortcut="A"
               ariaKeyShortcuts="A"
               onClick={() => {
-                setActivePage("workspace");
+                if (activePage !== "runtime") {
+                  setActivePage("workspace");
+                }
                 setAgentOpen((open) => !open);
               }}
             >
@@ -2404,12 +2406,28 @@ function StoryWorkspace({
         />
       ) : activePage === "runtime" && showRuntimeTools ? (
         <RuntimeStage
+          agentAvailable={agentAvailable}
+          agentOpen={agentAvailable && agentOpen}
+          agentPanel={
+            agentAvailable && agentOpen ? (
+              <AgentPanel
+                mode="runtime_authoring"
+                project={project}
+                onClose={() => setAgentOpen(false)}
+                onProjectChange={markProjectChanged}
+                onSelectEntity={(id) => setSelection({ kind: "entity", id })}
+                onSelectRelationship={(id) => setSelection({ kind: "relationship", id })}
+                onStatusChange={setStatus}
+              />
+            ) : null
+          }
           project={project}
           selection={selection}
           onBackToWorkspace={() => setActivePage("workspace")}
           onEntityChange={handleEntityChange}
           onExportRuntime={handleExportRuntime}
           onProjectChange={markProjectChanged}
+          onToggleAgent={() => setAgentOpen((open) => !open)}
         />
       ) : (
         <main className={workspaceClassName}>
@@ -2511,6 +2529,7 @@ function StoryWorkspace({
 
           {agentAvailable && agentOpen ? (
             <AgentPanel
+              mode="story"
               project={project}
               onClose={() => setAgentOpen(false)}
               onProjectChange={markProjectChanged}
