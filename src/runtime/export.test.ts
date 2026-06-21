@@ -136,6 +136,97 @@ describe("runtime export", () => {
     expect(bundle.evidence.find((evidence) => evidence.entityId === item.id)?.authorHiddenText).toContain("stolen from Silas");
   });
 
+  it("exports character runtime metadata and knowledge separately from canonical facts", () => {
+    const project = createBlankProject("Runtime Knowledge");
+    const character = createStoryEntity("character", project.itemTypes, "Mara Vale");
+    character.runtimeCharacter = {
+      goals: ["Protect Orin"],
+      attitude: -20,
+      emotionalState: "Guarded",
+      communicationStyle: "Answers indirectly.",
+      knownFactIds: ["fact-ledger-forged"],
+      believedFactIds: ["fact-ledger-authentic"],
+      hiddenFactIds: ["fact-royal-blood"],
+      deceptionRules: [
+        {
+          id: "deception-ledger",
+          condition: "Asked about the ledger",
+          deceptionGoal: "Keep the forged page hidden",
+          allowedStrategies: ["deflect"],
+          forbiddenFactIds: ["fact-royal-blood"],
+          revealWhenEvidenceIds: ["evidence-ink"],
+          notes: ""
+        }
+      ],
+      disclosureRules: []
+    };
+
+    const bundle = createRuntimeBundle({
+      ...project,
+      runtime: {
+        ...project.runtime,
+        facts: [
+          {
+            id: "fact-ledger-forged",
+            statement: "The ledger was forged.",
+            truth: "true",
+            sourceEntityIds: [],
+            sourceNotes: "Author-only outline note.",
+            tags: [],
+            notes: ""
+          },
+          {
+            id: "fact-ledger-authentic",
+            statement: "The ledger is authentic.",
+            truth: "false",
+            sourceEntityIds: [],
+            sourceNotes: "",
+            tags: [],
+            notes: ""
+          }
+        ],
+        characterKnowledge: [
+          {
+            id: "knowledge-mara-ledger",
+            characterId: character.id,
+            factId: "fact-ledger-forged",
+            knowledge: "knows",
+            belief: "believes_false",
+            evidenceIds: ["evidence-ink"],
+            notes: "Mara knows the truth but says the opposite."
+          }
+        ]
+      },
+      entities: {
+        [character.id]: character
+      }
+    });
+    const profile = bundle.characterProfiles[0];
+
+    expect(bundle.facts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: "fact-ledger-forged", value: "The ledger was forged." }),
+        expect.objectContaining({ id: "fact-ledger-authentic", value: "The ledger is authentic." })
+      ])
+    );
+    expect(profile.runtimeCharacter).toEqual(
+      expect.objectContaining({
+        knownFactIds: ["fact-ledger-forged"],
+        believedFactIds: ["fact-ledger-authentic"],
+        hiddenFactIds: ["fact-royal-blood"]
+      })
+    );
+    expect(profile.knowledge).toEqual([
+      expect.objectContaining({
+        id: "knowledge-mara-ledger",
+        factId: "fact-ledger-forged",
+        knowledge: "knows",
+        belief: "believes_false"
+      })
+    ]);
+    expect(JSON.stringify(bundle.facts)).not.toContain("Author-only outline note.");
+  });
+
   it("exports game story nodes and transitions", () => {
     let project = setProjectModeInProject(createBlankProject("Game Runtime"), "game_story");
     const start = createStoryEntity("scene", project.itemTypes, "Gate Scene", "both");

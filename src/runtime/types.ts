@@ -4,6 +4,8 @@ import {
   GameplayTransition,
   GraphPresence,
   ProjectMode,
+  CharacterRuntimeMetadata,
+  StoryRuntimeCharacterKnowledge,
   StoryProject,
   TimelineEffect
 } from "../types";
@@ -12,7 +14,7 @@ export const STORY_RUNTIME_SCHEMA_VERSION = 1;
 export const STORY_RUNTIME_BUNDLE_KIND = "storyteller.runtime.bundle";
 
 export type RuntimeValidationSeverity = "warning" | "error";
-export type RuntimeFactSourceKind = "world_rule" | "relationship" | "entity";
+export type RuntimeFactSourceKind = "author_fact" | "world_rule" | "relationship" | "entity";
 
 export interface StoryRuntimeBundle {
   kind: typeof STORY_RUNTIME_BUNDLE_KIND;
@@ -173,6 +175,8 @@ export interface RuntimeCharacterProfile {
   summary: string;
   publicInfo: string;
   authorHiddenText: string;
+  runtimeCharacter?: CharacterRuntimeMetadata;
+  knowledge: StoryRuntimeCharacterKnowledge[];
   relationshipIds: string[];
 }
 

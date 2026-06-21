@@ -20,8 +20,8 @@ import {
   Bot,
   CircleHelp,
   CloudUpload,
+  Cpu,
   Database,
-  Download,
   FilePlus2,
   FolderOpen,
   FolderPlus,
@@ -48,6 +48,7 @@ import { GraphToolbar } from "./components/GraphToolbar";
 import { InAppGuide } from "./components/InAppGuide";
 import { RelationshipEdge, type RelationshipEdgeType } from "./components/RelationshipEdge";
 import { RulebookSidebar } from "./components/RulebookSidebar";
+import { RuntimeStage } from "./components/RuntimeStage";
 import { SettingsPage } from "./components/SettingsPage";
 import { Sidebar } from "./components/Sidebar";
 import { TimelinePanel } from "./components/TimelinePanel";
@@ -66,6 +67,7 @@ import {
   deleteItemTypeFromProject,
   deleteLinkTypeFromProject,
   deleteRelationshipFromProject,
+  defaultRuntimeToolsEnabled,
   entityVisibleInGraph,
   findItemType,
   findLinkType,
@@ -156,7 +158,7 @@ interface EntityGraphFocus {
 type GraphFocusDepth = 1 | 2 | 3 | 4 | "all";
 type GraphView = "world" | "story_flow";
 type TriggerPickMode = "game_target" | "world_source";
-type ActivePage = "workspace" | "settings";
+type ActivePage = "workspace" | "runtime" | "settings";
 type RecentProjectSource = "folder" | "backup" | "browser";
 type NewProjectContents = "empty" | "sample";
 
@@ -1107,6 +1109,7 @@ function StoryWorkspace({
     () => createEntityGraphFocus(project, selection, graphFocusDepth, graphView),
     [graphFocusDepth, graphView, project, selection]
   );
+  const showRuntimeTools = defaultRuntimeToolsEnabled(project);
   const graphRelationships = useMemo(() => graphViewRelationships(project, graphView), [graphView, project]);
   const continuityIssueCount = useMemo(
     () => (project.projectMode === "game_story" ? getGameContinuityIssues(project).length : 0),
@@ -1308,6 +1311,12 @@ function StoryWorkspace({
       setTriggerPick(null);
     }
   }, [project.projectMode]);
+
+  useEffect(() => {
+    if (!showRuntimeTools && activePage === "runtime") {
+      setActivePage("workspace");
+    }
+  }, [activePage, showRuntimeTools]);
 
   const edges = useMemo<RelationshipEdgeType[]>(
     () => {
@@ -1688,6 +1697,13 @@ function StoryWorkspace({
   const handleProjectTitleChange = useCallback(
     (title: string) => {
       markProjectChanged(touchProject({ ...project, title }));
+    },
+    [markProjectChanged, project]
+  );
+
+  const handleShowRuntimeToolsChange = useCallback(
+    (runtimeToolsEnabled: boolean) => {
+      markProjectChanged(touchProject({ ...project, runtimeToolsEnabled }));
     },
     [markProjectChanged, project]
   );
@@ -2120,6 +2136,11 @@ function StoryWorkspace({
           return;
         }
 
+        if (activePage === "runtime") {
+          setActivePage("workspace");
+          return;
+        }
+
         if (rulebookOpen) {
           setRulebookOpen(false);
           return;
@@ -2238,7 +2259,6 @@ function StoryWorkspace({
     handleDeleteEntity,
     handleDeleteRelationship,
     handleExportBackup,
-    handleExportRuntime,
     handleGraphFocusDepthChange,
     handleGraphViewChange,
     handleSaveProject,
@@ -2300,9 +2320,15 @@ function StoryWorkspace({
           >
             <Save aria-hidden="true" />
           </HeaderIconButton>
-          <HeaderIconButton label="Export Runtime" onClick={handleExportRuntime}>
-            <Download aria-hidden="true" />
-          </HeaderIconButton>
+          {showRuntimeTools ? (
+            <HeaderIconButton
+              label={activePage === "runtime" ? "Back to Workspace" : "Runtime Tools"}
+              active={activePage === "runtime"}
+              onClick={() => setActivePage((page) => (page === "runtime" ? "workspace" : "runtime"))}
+            >
+              {activePage === "runtime" ? <ArrowLeft aria-hidden="true" /> : <Cpu aria-hidden="true" />}
+            </HeaderIconButton>
+          ) : null}
           <HeaderIconButton label="Rulebook" shortcut="R" ariaKeyShortcuts="R" onClick={handleOpenRulebook}>
             <ScrollText aria-hidden="true" />
           </HeaderIconButton>
@@ -2313,7 +2339,9 @@ function StoryWorkspace({
               shortcut="A"
               ariaKeyShortcuts="A"
               onClick={() => {
-                setActivePage("workspace");
+                if (activePage !== "runtime") {
+                  setActivePage("workspace");
+                }
                 setAgentOpen((open) => !open);
               }}
             >
@@ -2363,6 +2391,7 @@ function StoryWorkspace({
         <SettingsPage
           project={project}
           defaultRelationshipType={defaultRelationshipType}
+          showRuntimeTools={showRuntimeTools}
           onAddItemType={handleAddItemType}
           onAddLinkType={handleAddLinkType}
           onBackToWorkspace={() => setActivePage("workspace")}
@@ -2371,8 +2400,34 @@ function StoryWorkspace({
           onDeleteLinkType={handleDeleteLinkType}
           onExportBackup={handleExportBackup}
           onProjectTitleChange={handleProjectTitleChange}
+          onShowRuntimeToolsChange={handleShowRuntimeToolsChange}
           onUpdateItemType={handleUpdateItemType}
           onUpdateLinkType={handleUpdateLinkType}
+        />
+      ) : activePage === "runtime" && showRuntimeTools ? (
+        <RuntimeStage
+          agentAvailable={agentAvailable}
+          agentOpen={agentAvailable && agentOpen}
+          agentPanel={
+            agentAvailable && agentOpen ? (
+              <AgentPanel
+                mode="runtime_authoring"
+                project={project}
+                onClose={() => setAgentOpen(false)}
+                onProjectChange={markProjectChanged}
+                onSelectEntity={(id) => setSelection({ kind: "entity", id })}
+                onSelectRelationship={(id) => setSelection({ kind: "relationship", id })}
+                onStatusChange={setStatus}
+              />
+            ) : null
+          }
+          project={project}
+          selection={selection}
+          onBackToWorkspace={() => setActivePage("workspace")}
+          onEntityChange={handleEntityChange}
+          onExportRuntime={handleExportRuntime}
+          onProjectChange={markProjectChanged}
+          onToggleAgent={() => setAgentOpen((open) => !open)}
         />
       ) : (
         <main className={workspaceClassName}>
@@ -2474,6 +2529,7 @@ function StoryWorkspace({
 
           {agentAvailable && agentOpen ? (
             <AgentPanel
+              mode="story"
               project={project}
               onClose={() => setAgentOpen(false)}
               onProjectChange={markProjectChanged}

@@ -147,6 +147,7 @@ describe("starter project loader", () => {
     const project = projectFromFiles(files);
 
     expect(project.title).toBe("Black Hollow: Last Stop");
+    expect(project.schemaVersion).toBe(7);
     expect(project.projectMode).toBe("game_story");
     expect(project.gameStory?.startNodeId).toBe("scene-murder-victim-found");
     expect(project.gameStory?.stateVariables.map((variable) => variable.id)).toEqual(
@@ -207,6 +208,31 @@ describe("starter project loader", () => {
     expect(project.entities["item-locker-12-key"].graphPresence).toBe("world");
     expect(project.storyFlowLayout["scene-murder-victim-found"]).toEqual({ x: -720, y: 0 });
     expect(project.storyFlowLayout["item-locker-12-key"]).toBeUndefined();
+    expect(project.runtime.facts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: "fact-evelyn-killed-rowan", truth: "true" }),
+        expect.objectContaining({ id: "fact-silas-killed-rowan", truth: "false" })
+      ])
+    );
+    expect(project.runtime.characterKnowledge).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "knowledge-evelyn-frame",
+          characterId: "character-evelyn-park",
+          factId: "fact-silas-killed-rowan",
+          belief: "believes_false"
+        })
+      ])
+    );
+    expect(project.entities["character-evelyn-park"].runtimeCharacter).toEqual(
+      expect.objectContaining({
+        hiddenFactIds: expect.arrayContaining([
+          "fact-evelyn-killed-rowan",
+          "fact-rowan-body-staged",
+          "fact-ledger-implicates-evelyn"
+        ])
+      })
+    );
     expect(getGameContinuityIssues(project)).toEqual([]);
   });
 });
@@ -219,6 +245,22 @@ function readBundledStarterProjectFiles(starterFolder = "The Crown Beneath Glass
     "storyteller.project.json": readBundledStarterFile(starterFolder, "storyteller.project.json"),
     "graph/relationships.json": readBundledStarterFile(starterFolder, "graph/relationships.json")
   };
+  const optionalPaths = [
+    "graph/gameplay-transitions.json",
+    "runtime/facts.json",
+    "runtime/evidence.json",
+    "runtime/character-knowledge.json",
+    "runtime/contradictions.json",
+    "runtime/theory-rules.json"
+  ];
+
+  for (const optionalPath of optionalPaths) {
+    const optionalFile = readOptionalBundledStarterFile(starterFolder, optionalPath);
+
+    if (optionalFile !== null) {
+      files[optionalPath] = optionalFile;
+    }
+  }
 
   for (const indexedEntity of manifest.entityIndex) {
     files[indexedEntity.path] = readBundledStarterFile(starterFolder, indexedEntity.path);
@@ -229,4 +271,12 @@ function readBundledStarterProjectFiles(starterFolder = "The Crown Beneath Glass
 
 function readBundledStarterFile(starterFolder: string, path: string): string {
   return readFileSync(join(process.cwd(), "public", "projects", starterFolder, path), "utf8");
+}
+
+function readOptionalBundledStarterFile(starterFolder: string, path: string): string | null {
+  try {
+    return readBundledStarterFile(starterFolder, path);
+  } catch {
+    return null;
+  }
 }

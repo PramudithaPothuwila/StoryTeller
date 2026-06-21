@@ -1,8 +1,29 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { BUILT_IN_WORLD_RULE_TYPE_ID } from "../types";
+import { BUILT_IN_WORLD_RULE_TYPE_ID, StoryProject } from "../types";
 import { createBlankProject, createStoryEntity } from "../data/story";
 import { DetailInspector } from "./DetailInspector";
+
+function renderInspector(
+  project: StoryProject,
+  entityId: string,
+  overrides: Partial<Parameters<typeof DetailInspector>[0]> = {}
+) {
+  return render(
+    <DetailInspector
+      project={project}
+      selection={{ kind: "entity", id: entityId }}
+      onStartTriggerPick={vi.fn()}
+      onEntityChange={vi.fn()}
+      onRelationshipChange={vi.fn()}
+      onSelectEntityInGraph={vi.fn()}
+      onTimelineEffect={vi.fn()}
+      onDeleteEntity={vi.fn()}
+      onDeleteRelationship={vi.fn()}
+      {...overrides}
+    />
+  );
+}
 
 describe("DetailInspector", () => {
   afterEach(() => {
@@ -20,19 +41,7 @@ describe("DetailInspector", () => {
       }
     };
 
-    render(
-      <DetailInspector
-        project={projectWithCharacter}
-        selection={{ kind: "entity", id: character.id }}
-        onStartTriggerPick={vi.fn()}
-        onEntityChange={vi.fn()}
-        onRelationshipChange={vi.fn()}
-        onSelectEntityInGraph={vi.fn()}
-        onTimelineEffect={vi.fn()}
-        onDeleteEntity={vi.fn()}
-        onDeleteRelationship={vi.fn()}
-      />
-    );
+    renderInspector(projectWithCharacter, character.id);
 
     expect(screen.getByText("Hidden")).toBeInTheDocument();
     expect(screen.queryByLabelText("Private information")).not.toBeInTheDocument();
@@ -53,19 +62,7 @@ describe("DetailInspector", () => {
       }
     };
 
-    render(
-      <DetailInspector
-        project={projectWithEvent}
-        selection={{ kind: "entity", id: event.id }}
-        onStartTriggerPick={vi.fn()}
-        onEntityChange={vi.fn()}
-        onRelationshipChange={vi.fn()}
-        onSelectEntityInGraph={vi.fn()}
-        onTimelineEffect={vi.fn()}
-        onDeleteEntity={vi.fn()}
-        onDeleteRelationship={vi.fn()}
-      />
-    );
+    renderInspector(projectWithEvent, event.id);
 
     expect(screen.queryByText("Timeline Order")).not.toBeInTheDocument();
     expect(screen.getByText("Relationship Change")).toBeInTheDocument();
@@ -91,19 +88,7 @@ describe("DetailInspector", () => {
       }
     };
 
-    render(
-      <DetailInspector
-        project={projectWithRule}
-        selection={{ kind: "entity", id: rule.id }}
-        onStartTriggerPick={vi.fn()}
-        onEntityChange={onEntityChange}
-        onRelationshipChange={vi.fn()}
-        onSelectEntityInGraph={vi.fn()}
-        onTimelineEffect={vi.fn()}
-        onDeleteEntity={vi.fn()}
-        onDeleteRelationship={vi.fn()}
-      />
-    );
+    renderInspector(projectWithRule, rule.id, { onEntityChange });
 
     expect(screen.getByLabelText("Rule domain")).toHaveValue("Magic");
     expect(screen.getByLabelText("Rule status")).toHaveValue("Canon");
@@ -129,20 +114,36 @@ describe("DetailInspector", () => {
       }
     };
 
-    render(
-      <DetailInspector
-        project={projectWithCharacter}
-        selection={{ kind: "entity", id: character.id }}
-        onStartTriggerPick={vi.fn()}
-        onEntityChange={vi.fn()}
-        onRelationshipChange={vi.fn()}
-        onSelectEntityInGraph={vi.fn()}
-        onTimelineEffect={vi.fn()}
-        onDeleteEntity={vi.fn()}
-        onDeleteRelationship={vi.fn()}
-      />
-    );
+    renderInspector(projectWithCharacter, character.id);
 
     expect(screen.queryByText("Rule Fields")).not.toBeInTheDocument();
+  });
+
+  it("does not render character runtime fields in the normal inspector", () => {
+    const project = createBlankProject("Inspector Test");
+    const character = createStoryEntity("character", project.itemTypes, "Mara Vale");
+    const projectWithEntities = {
+      ...project,
+      entities: {
+        [character.id]: {
+          ...character,
+          runtimeCharacter: {
+            goals: ["Find the ledger"],
+            attitude: 10,
+            emotionalState: "Focused",
+            communicationStyle: "Precise",
+            knownFactIds: [],
+            believedFactIds: [],
+            hiddenFactIds: [],
+            deceptionRules: [],
+            disclosureRules: []
+          }
+        }
+      }
+    };
+
+    renderInspector(projectWithEntities, character.id);
+
+    expect(screen.queryByText("Character Knowledge & Belief")).not.toBeInTheDocument();
   });
 });

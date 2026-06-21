@@ -440,7 +440,8 @@ describe("App project commands", () => {
     expect(screen.getByRole("button", { name: "Select Folder" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Save Project" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Export Backup" })).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Export Runtime" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Runtime Tools" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Export Runtime" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Guide" })).toHaveAttribute("title", "Guide (?)");
     expect(screen.getByRole("button", { name: "Open Settings" })).toHaveAttribute("title", "Open Settings (Esc)");
     expect(screen.getByRole("button", { name: "Save Project" })).toHaveAttribute("title", "Save Project (Ctrl+S)");
@@ -460,6 +461,27 @@ describe("App project commands", () => {
     expect(screen.getByRole("button", { name: "New Project" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Open Folder" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Import Backup" })).toBeInTheDocument();
+  });
+
+  it("keeps runtime tools hidden until enabled for story projects", async () => {
+    render(<App />);
+
+    await waitFor(() => expect(screen.getByText("Loaded Project")).toBeInTheDocument());
+
+    expect(screen.queryByRole("button", { name: "Runtime Tools" })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Open Settings" }));
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Settings" })).toBeInTheDocument());
+    expect(screen.getByLabelText("Show Runtime Tools")).not.toBeChecked();
+
+    fireEvent.click(screen.getByLabelText("Show Runtime Tools"));
+    fireEvent.click(screen.getByRole("button", { name: "Back to Workspace" }));
+
+    await waitFor(() => expect(screen.getByRole("button", { name: "Runtime Tools" })).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "Runtime Tools" }));
+    expect(await screen.findByRole("heading", { name: "Runtime Tools" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Export Preview" }));
+    expect(screen.getByRole("button", { name: "Export Runtime" })).toBeInTheDocument();
   });
 
   it("restores a local project route from the recent browser snapshot on reload", async () => {
@@ -727,7 +749,11 @@ describe("App project commands", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "Ask Agent" }));
 
-    await waitFor(() => expect(requestAgentPlan).toHaveBeenCalledWith(expect.objectContaining({ title: "Cloud Project" }), "Add a rival."));
+    await waitFor(() =>
+      expect(requestAgentPlan).toHaveBeenCalledWith(expect.objectContaining({ title: "Cloud Project" }), "Add a rival.", {
+        mode: "story"
+      })
+    );
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
@@ -770,6 +796,172 @@ describe("App project commands", () => {
 
     expect(await screen.findByTestId("flow-node-character-rival")).toHaveTextContent("Rival");
     expect(screen.getByText("Unsaved")).toBeInTheDocument();
+  });
+
+  it("requests and applies runtime authoring plans from the AI agent", async () => {
+    window.history.pushState({}, "", "/project/cloud-opened");
+    vi.mocked(getCurrentCloudUser).mockResolvedValue({ id: "user-a", email: "ada@example.com" });
+    vi.mocked(openCloudProject).mockResolvedValue({
+      id: "cloud-opened",
+      title: "Cloud Project",
+      schemaVersion: 7,
+      projectMode: "game_story",
+      project: createBlankProject("Cloud Project", "game_story"),
+      version: 3,
+      createdAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-01T00:00:00.000Z"
+    });
+    vi.mocked(requestAgentPlan).mockResolvedValue({
+      output_text: JSON.stringify({
+        summary: "Add runtime fact.",
+        assumptions: [],
+        followUpQuestions: [],
+        changes: [
+          {
+            operation: "create_runtime_fact",
+            summary: "Create forged ledger fact",
+            fact: {
+              id: "fact-ledger-forged",
+              statement: "The ledger was forged.",
+              truth: "true",
+              sourceEntityIds: [],
+              sourceNotes: "",
+              tags: [],
+              notes: ""
+            }
+          }
+        ]
+      })
+    });
+    render(<App />);
+
+    await waitFor(() => expect(screen.getByText("Cloud Project")).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("button", { name: "Runtime Tools" }));
+    expect(await screen.findByRole("heading", { name: "Runtime Tools" })).toBeInTheDocument();
+    expect(screen.queryByLabelText("Runtime authoring")).not.toBeInTheDocument();
+    const runtimeAgentButtons = screen.getAllByRole("button", { name: "AI Agent" });
+    fireEvent.click(runtimeAgentButtons[runtimeAgentButtons.length - 1]);
+    fireEvent.change(screen.getByPlaceholderText(/create, update, or delete runtime facts/i), {
+      target: { value: "Add facts from the story." }
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Ask Agent" }));
+
+    await waitFor(() =>
+      expect(requestAgentPlan).toHaveBeenCalledWith(
+        expect.objectContaining({ title: "Cloud Project" }),
+        "Add facts from the story.",
+        { mode: "runtime_authoring" }
+      )
+    );
+    expect(await screen.findByText("Create forged ledger fact")).toBeInTheDocument();
+    expect(screen.getByText("Fact: fact-ledger-forged")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Apply 1 Change" }));
+
+    expect(screen.getByText("Unsaved")).toBeInTheDocument();
+    expect(screen.queryByTestId("flow-node-fact-ledger-forged")).not.toBeInTheDocument();
+  });
+
+  it("auto-populates runtime data from the Runtime Tools agent", async () => {
+    window.history.pushState({}, "", "/project/cloud-opened");
+    vi.mocked(getCurrentCloudUser).mockResolvedValue({ id: "user-a", email: "ada@example.com" });
+    vi.mocked(openCloudProject).mockResolvedValue({
+      id: "cloud-opened",
+      title: "Cloud Project",
+      schemaVersion: 7,
+      projectMode: "game_story",
+      project: createBlankProject("Cloud Project", "game_story"),
+      version: 3,
+      createdAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-01T00:00:00.000Z"
+    });
+    vi.mocked(requestAgentPlan).mockResolvedValue({
+      output_text: JSON.stringify({
+        summary: "Populate runtime.",
+        assumptions: [],
+        followUpQuestions: [],
+        changes: [
+          {
+            operation: "create_runtime_fact",
+            summary: "Create forged ledger fact",
+            fact: {
+              id: "fact-ledger-forged",
+              statement: "The ledger was forged.",
+              truth: "true",
+              sourceEntityIds: [],
+              sourceNotes: "",
+              tags: [],
+              notes: ""
+            }
+          }
+        ]
+      })
+    });
+    render(<App />);
+
+    await waitFor(() => expect(screen.getByText("Cloud Project")).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("button", { name: "Runtime Tools" }));
+    const runtimeAgentButtons = screen.getAllByRole("button", { name: "AI Agent" });
+    fireEvent.click(runtimeAgentButtons[runtimeAgentButtons.length - 1]);
+    fireEvent.click(await screen.findByRole("button", { name: "Auto-populate Runtime" }));
+
+    await waitFor(() =>
+      expect(requestAgentPlan).toHaveBeenCalledWith(
+        expect.objectContaining({ title: "Cloud Project" }),
+        expect.stringContaining("populate runtime facts"),
+        { mode: "runtime_authoring" }
+      )
+    );
+    expect(await screen.findByDisplayValue("The ledger was forged.")).toBeInTheDocument();
+    expect(screen.getByText("Unsaved")).toBeInTheDocument();
+  });
+
+  it("shows invalid auto-populate runtime plans for review instead of applying them", async () => {
+    window.history.pushState({}, "", "/project/cloud-opened");
+    vi.mocked(getCurrentCloudUser).mockResolvedValue({ id: "user-a", email: "ada@example.com" });
+    vi.mocked(openCloudProject).mockResolvedValue({
+      id: "cloud-opened",
+      title: "Cloud Project",
+      schemaVersion: 7,
+      projectMode: "game_story",
+      project: createBlankProject("Cloud Project", "game_story"),
+      version: 3,
+      createdAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-01T00:00:00.000Z"
+    });
+    vi.mocked(requestAgentPlan).mockResolvedValue({
+      output_text: JSON.stringify({
+        summary: "Bad runtime.",
+        assumptions: [],
+        followUpQuestions: [],
+        changes: [
+          {
+            operation: "create_entity",
+            summary: "Create fact as entity",
+            entity: {
+              id: "fact-drag-marks",
+              type: "fact",
+              title: "Drag marks contradict murder site"
+            }
+          }
+        ]
+      })
+    });
+    render(<App />);
+
+    await waitFor(() => expect(screen.getByText("Cloud Project")).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("button", { name: "Runtime Tools" }));
+    const runtimeAgentButtons = screen.getAllByRole("button", { name: "AI Agent" });
+    fireEvent.click(runtimeAgentButtons[runtimeAgentButtons.length - 1]);
+    fireEvent.click(await screen.findByRole("button", { name: "Auto-populate Runtime" }));
+
+    expect(await screen.findByText("Create fact as entity")).toBeInTheDocument();
+    expect(screen.getByText("Runtime records must use create_runtime_* operations, not story entities.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Apply 1 Change" })).toBeDisabled();
+    expect(screen.queryByText("Unsaved")).not.toBeInTheDocument();
   });
 
   it("disables applying invalid AI agent plans", async () => {
@@ -825,6 +1017,7 @@ describe("App project commands", () => {
     expect(screen.queryByLabelText("Agent base URL")).not.toBeInTheDocument();
     expect(screen.queryByRole("group", { name: "Project mode" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Game Story" })).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Show Runtime Tools")).not.toBeChecked();
     expect(screen.getByRole("button", { name: "Export Backup" })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Export Backup" }));
@@ -1058,7 +1251,7 @@ describe("App project commands", () => {
     await waitFor(() => expect(loadStarterProject).toHaveBeenCalledWith(undefined, "black-hollow-last-stop"));
     await waitFor(() => expect(window.location.pathname).toMatch(/^\/project\/browser-/));
     expect(screen.getByText("Black Hollow: Last Stop")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Switch to Game Story" })).toHaveClass("is-active");
+    await waitFor(() => expect(screen.getByRole("button", { name: "Switch to Game Story" })).toHaveClass("is-active"));
   });
 
   it("selects a project folder and saves the current project into it", async () => {

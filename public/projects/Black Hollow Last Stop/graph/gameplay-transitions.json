@@ -1,0 +1,395 @@
+{
+  "schemaVersion": 7,
+  "gameplayTransitions": [
+    {
+      "id": "branch-found-to-staged-quest",
+      "sourceNodeId": "scene-murder-victim-found",
+      "targetNodeId": "quest-prove-station-staged",
+      "choice": {
+        "text": "Treat the station as a staged body dump"
+      },
+      "requirements": {
+        "all": []
+      },
+      "effects": [
+        {
+          "id": "effect-found-recognize-dump",
+          "variableId": "recognized-body-dump",
+          "operation": "set",
+          "value": true
+        },
+        {
+          "id": "effect-found-pressure",
+          "variableId": "evidence-pressure",
+          "operation": "increment",
+          "value": 1
+        }
+      ],
+      "presentation": {
+        "priority": 1
+      },
+      "authorNotes": {
+        "purpose": "Opens the clean investigation route and makes Silas more useful later.",
+        "legacyNotes": "The player reads the drag marks as the first real break: Rowan may have been killed or disabled somewhere else."
+      },
+      "metadata": {
+        "legacyRelationship": {
+          "type": "branches_to",
+          "label": "Treat the station as staged",
+          "id": "branch-found-to-staged-quest",
+          "timelineVersions": []
+        }
+      }
+    },
+    {
+      "id": "branch-found-to-silas-first",
+      "sourceNodeId": "scene-murder-victim-found",
+      "targetNodeId": "dialogue-interview-silas-crowe",
+      "choice": {
+        "text": "Question the former signalman first"
+      },
+      "requirements": {
+        "all": []
+      },
+      "effects": [],
+      "presentation": {
+        "priority": 2
+      },
+      "authorNotes": {
+        "purpose": "This keeps the case moving, but makes the frame route tempting.",
+        "legacyNotes": "The player starts with the obvious old-station suspect before fully proving the body was moved."
+      },
+      "metadata": {
+        "legacyRelationship": {
+          "type": "branches_to",
+          "label": "Follow the station history",
+          "id": "branch-found-to-silas-first",
+          "timelineVersions": []
+        }
+      }
+    },
+    {
+      "id": "branch-staged-quest-to-silas",
+      "sourceNodeId": "quest-prove-station-staged",
+      "targetNodeId": "dialogue-interview-silas-crowe",
+      "choice": {
+        "text": "Ask Silas why Platform 7 matters"
+      },
+      "requirements": {
+        "all": []
+      },
+      "effects": [
+        {
+          "id": "effect-quest-pressure-silas",
+          "variableId": "evidence-pressure",
+          "operation": "increment",
+          "value": 1
+        }
+      ],
+      "presentation": {
+        "priority": 1
+      },
+      "authorNotes": {
+        "purpose": "Frames Silas as a knowledge gate rather than just a suspect.",
+        "legacyNotes": "The staging theory points toward someone who understands the station's symbolic geography."
+      },
+      "metadata": {
+        "legacyRelationship": {
+          "type": "branches_to",
+          "label": "Ask who knows the old station",
+          "id": "branch-staged-quest-to-silas",
+          "timelineVersions": []
+        }
+      }
+    },
+    {
+      "id": "branch-staged-quest-to-signal",
+      "sourceNodeId": "quest-prove-station-staged",
+      "targetNodeId": "scene-search-signal-room",
+      "choice": {
+        "text": "Follow the drag marks toward the signal room"
+      },
+      "requirements": {
+        "all": []
+      },
+      "effects": [
+        {
+          "id": "effect-quest-pressure-signal",
+          "variableId": "evidence-pressure",
+          "operation": "increment",
+          "value": 1
+        }
+      ],
+      "presentation": {
+        "priority": 2
+      },
+      "authorNotes": {
+        "purpose": "Reaches the right room without the key, which still leaves the ledger route gated.",
+        "legacyNotes": "The player follows the drag marks back toward the service road and then into the signal room."
+      },
+      "metadata": {
+        "legacyRelationship": {
+          "type": "branches_to",
+          "label": "Follow the drag route",
+          "id": "branch-staged-quest-to-signal",
+          "timelineVersions": []
+        }
+      }
+    },
+    {
+      "id": "branch-silas-trust-to-signal",
+      "sourceNodeId": "dialogue-interview-silas-crowe",
+      "targetNodeId": "scene-search-signal-room",
+      "choice": {
+        "text": "Show Silas the drag-mark contradiction"
+      },
+      "requirements": {
+        "all": [
+          {
+            "id": "cond-silas-trust-needs-dump",
+            "variableId": "recognized-body-dump",
+            "operator": "equals",
+            "value": true
+          }
+        ]
+      },
+      "effects": [
+        {
+          "id": "effect-silas-trusted",
+          "variableId": "trust-silas",
+          "operation": "set",
+          "value": "Trusted"
+        },
+        {
+          "id": "effect-silas-key",
+          "variableId": "found-locker-key",
+          "operation": "set",
+          "value": true
+        },
+        {
+          "id": "effect-silas-pressure",
+          "variableId": "evidence-pressure",
+          "operation": "increment",
+          "value": 1
+        }
+      ],
+      "presentation": {
+        "priority": 1
+      },
+      "authorNotes": {
+        "purpose": "Silas reveals that Rowan asked him about Locker 12 two days before the murder.",
+        "legacyNotes": "Silas helps when the player can name the staging evidence before accusing him."
+      },
+      "metadata": {
+        "legacyRelationship": {
+          "type": "branches_to",
+          "label": "Earn the Locker 12 key",
+          "id": "branch-silas-trust-to-signal",
+          "timelineVersions": []
+        }
+      }
+    },
+    {
+      "id": "branch-silas-accuse-to-signal",
+      "sourceNodeId": "dialogue-interview-silas-crowe",
+      "targetNodeId": "scene-search-signal-room",
+      "choice": {
+        "text": "Accuse Silas and search without his help"
+      },
+      "requirements": {
+        "all": []
+      },
+      "effects": [
+        {
+          "id": "effect-silas-alienated",
+          "variableId": "trust-silas",
+          "operation": "set",
+          "value": "Alienated"
+        },
+        {
+          "id": "effect-accuse-pressure",
+          "variableId": "evidence-pressure",
+          "operation": "increment",
+          "value": 1
+        }
+      ],
+      "presentation": {
+        "priority": 2
+      },
+      "authorNotes": {
+        "purpose": "Keeps momentum but blocks the easiest path to the ledger.",
+        "legacyNotes": "The player can still advance, but Silas withholds the key and the case tilts toward a false frame."
+      },
+      "metadata": {
+        "legacyRelationship": {
+          "type": "branches_to",
+          "label": "Pressure the obvious suspect",
+          "id": "branch-silas-accuse-to-signal",
+          "timelineVersions": []
+        }
+      }
+    },
+    {
+      "id": "branch-signal-ledger-to-confront",
+      "sourceNodeId": "scene-search-signal-room",
+      "targetNodeId": "dialogue-confront-evelyn-park",
+      "choice": {
+        "text": "Use the key and read the signal ledger"
+      },
+      "requirements": {
+        "all": [
+          {
+            "id": "cond-signal-needs-key",
+            "variableId": "found-locker-key",
+            "operator": "equals",
+            "value": true
+          }
+        ]
+      },
+      "effects": [
+        {
+          "id": "effect-read-ledger",
+          "variableId": "read-signal-ledger",
+          "operation": "set",
+          "value": true
+        },
+        {
+          "id": "effect-ledger-pressure",
+          "variableId": "evidence-pressure",
+          "operation": "increment",
+          "value": 2
+        }
+      ],
+      "presentation": {
+        "priority": 1
+      },
+      "authorNotes": {
+        "purpose": "The ledger proves the body was placed near Platform 7 to frame a station insider and recover missing evidence.",
+        "legacyNotes": "The key route reveals Rowan's actual secret and points the confrontation at Evelyn."
+      },
+      "metadata": {
+        "legacyRelationship": {
+          "type": "branches_to",
+          "label": "Open Locker 12",
+          "id": "branch-signal-ledger-to-confront",
+          "timelineVersions": []
+        }
+      }
+    },
+    {
+      "id": "branch-signal-no-ledger-to-confront",
+      "sourceNodeId": "scene-search-signal-room",
+      "targetNodeId": "dialogue-confront-evelyn-park",
+      "choice": {
+        "text": "Confront Evelyn with the station clues alone"
+      },
+      "requirements": {
+        "all": []
+      },
+      "effects": [],
+      "presentation": {
+        "priority": 2
+      },
+      "authorNotes": {
+        "purpose": "Useful for a pressure scene, but it leaves the true motive deniable.",
+        "legacyNotes": "The player challenges Evelyn with incomplete proof and risks accepting the frame."
+      },
+      "metadata": {
+        "legacyRelationship": {
+          "type": "branches_to",
+          "label": "Confront without the ledger",
+          "id": "branch-signal-no-ledger-to-confront",
+          "timelineVersions": []
+        }
+      }
+    },
+    {
+      "id": "branch-confront-to-true-route",
+      "sourceNodeId": "dialogue-confront-evelyn-park",
+      "targetNodeId": "ending-true-route",
+      "choice": {
+        "text": "Present the ledger and the drag-route proof"
+      },
+      "requirements": {
+        "all": [
+          {
+            "id": "cond-true-route-ledger",
+            "variableId": "read-signal-ledger",
+            "operator": "equals",
+            "value": true
+          },
+          {
+            "id": "cond-true-route-pressure",
+            "variableId": "evidence-pressure",
+            "operator": "greater_than",
+            "value": 2
+          }
+        ]
+      },
+      "effects": [
+        {
+          "id": "effect-accuse-evelyn",
+          "variableId": "accused-suspect",
+          "operation": "set",
+          "value": "Evelyn Park"
+        }
+      ],
+      "presentation": {
+        "priority": 1
+      },
+      "authorNotes": {
+        "purpose": "Truth route: Evelyn killed Rowan after he found the ledger and moved the body to retrieve it and frame Silas.",
+        "legacyNotes": "The player connects drag marks, locker evidence, and Rowan's argument into the true accusation."
+      },
+      "metadata": {
+        "legacyRelationship": {
+          "type": "branches_to",
+          "label": "Prove Evelyn staged the body",
+          "id": "branch-confront-to-true-route",
+          "timelineVersions": []
+        }
+      }
+    },
+    {
+      "id": "branch-confront-to-false-frame",
+      "sourceNodeId": "dialogue-confront-evelyn-park",
+      "targetNodeId": "ending-false-frame",
+      "choice": {
+        "text": "Name Silas as the killer"
+      },
+      "requirements": {
+        "all": [
+          {
+            "id": "cond-false-route-no-ledger",
+            "variableId": "read-signal-ledger",
+            "operator": "equals",
+            "value": false
+          }
+        ]
+      },
+      "effects": [
+        {
+          "id": "effect-accuse-silas",
+          "variableId": "accused-suspect",
+          "operation": "set",
+          "value": "Silas Crowe"
+        }
+      ],
+      "presentation": {
+        "priority": 2
+      },
+      "authorNotes": {
+        "purpose": "Bad but playable ending: the station keeps its false legend and the true murder location stays hidden.",
+        "legacyNotes": "The player closes the case around the station myth instead of the redevelopment motive."
+      },
+      "metadata": {
+        "legacyRelationship": {
+          "type": "branches_to",
+          "label": "Accept the Silas frame",
+          "id": "branch-confront-to-false-frame",
+          "timelineVersions": []
+        }
+      }
+    }
+  ]
+}

@@ -35,6 +35,7 @@
   },
   "graphPresence": "story_flow"
 }
+
 ---
 ## Outcome
 - Evelyn is named as the killer.

@@ -16,6 +16,7 @@
   "updatedAt": "2026-06-07T00:00:00.000Z",
   "graphPresence": "world"
 }
+
 ---
 ## Creative Basics
 - Genre: grounded detective mystery built for a branching RPG investigation.

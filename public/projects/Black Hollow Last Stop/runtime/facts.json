@@ -1,0 +1,138 @@
+{
+  "schemaVersion": 7,
+  "facts": [
+    {
+      "id": "fact-rowan-body-staged",
+      "statement": "Rowan Ellis was moved into Black Hollow Station after the attack or incapacitation.",
+      "truth": "true",
+      "subjectEntityId": "event-murder-victim-found",
+      "objectEntityId": "location-black-hollow-train-station",
+      "sourceEntityIds": [
+        "clue-drag-marks",
+        "location-service-road-culvert",
+        "event-murder-victim-found"
+      ],
+      "tags": [
+        "staging",
+        "body-dump",
+        "core-mystery"
+      ],
+      "notes": "This preserves the opening contradiction without changing the visible body discovery."
+    },
+    {
+      "id": "fact-evelyn-killed-rowan",
+      "statement": "Evelyn Park killed Rowan after he confronted her with the Platform 7 ledger.",
+      "truth": "true",
+      "subjectEntityId": "character-evelyn-park",
+      "objectEntityId": "character-rowan-ellis",
+      "sourceEntityIds": [
+        "event-victim-was-arguing",
+        "clue-signal-room-ledger",
+        "ending-true-route"
+      ],
+      "tags": [
+        "killer",
+        "truth-route"
+      ],
+      "notes": "Author-only truth for dialogue guardrails and the true ending."
+    },
+    {
+      "id": "fact-silas-innocent",
+      "statement": "Silas Crowe did not kill Rowan Ellis.",
+      "truth": "true",
+      "subjectEntityId": "character-silas-crowe",
+      "objectEntityId": "character-rowan-ellis",
+      "sourceEntityIds": [
+        "character-silas-crowe",
+        "ending-false-frame"
+      ],
+      "tags": [
+        "false-frame",
+        "red-herring"
+      ],
+      "notes": "Silas can look guilty without becoming the canonical killer."
+    },
+    {
+      "id": "fact-silas-killed-rowan",
+      "statement": "Silas Crowe killed Rowan Ellis.",
+      "truth": "false",
+      "subjectEntityId": "character-silas-crowe",
+      "objectEntityId": "character-rowan-ellis",
+      "sourceEntityIds": [
+        "ending-false-frame",
+        "clue-platform-marker-seven"
+      ],
+      "tags": [
+        "false-frame",
+        "misleading"
+      ],
+      "notes": "This false fact captures the playable bad ending and Evelyn's preferred story."
+    },
+    {
+      "id": "fact-rowan-found-ledger",
+      "statement": "Rowan found the Signal Room Ledger before he died.",
+      "truth": "true",
+      "subjectEntityId": "character-rowan-ellis",
+      "objectEntityId": "clue-signal-room-ledger",
+      "sourceEntityIds": [
+        "clue-signal-room-ledger",
+        "item-locker-12-key"
+      ],
+      "tags": [
+        "motive",
+        "ledger"
+      ],
+      "notes": "This is the motive bridge from station history to the murder."
+    },
+    {
+      "id": "fact-ledger-implicates-evelyn",
+      "statement": "The Signal Room Ledger links Platform 7 falsified safety reports to Evelyn's redevelopment authority.",
+      "truth": "true",
+      "subjectEntityId": "clue-signal-room-ledger",
+      "objectEntityId": "character-evelyn-park",
+      "sourceEntityIds": [
+        "clue-signal-room-ledger",
+        "faction-black-hollow-redevelopment-board"
+      ],
+      "tags": [
+        "motive",
+        "cover-up",
+        "truth-route"
+      ],
+      "notes": "The ledger makes Evelyn's civic explanations too specific to survive."
+    },
+    {
+      "id": "fact-rowan-asked-locker-12",
+      "statement": "Rowan asked Silas about Locker 12 before the murder.",
+      "truth": "true",
+      "subjectEntityId": "character-rowan-ellis",
+      "objectEntityId": "location-signal-room-locker-12",
+      "sourceEntityIds": [
+        "character-silas-crowe",
+        "dialogue-interview-silas-crowe",
+        "item-locker-12-key"
+      ],
+      "tags": [
+        "witness",
+        "key-route"
+      ],
+      "notes": "Silas can reveal this only after Arden treats him as a witness, not the culprit."
+    },
+    {
+      "id": "fact-jessa-arrived-after-dump",
+      "statement": "Jessa entered the station after Rowan's body had already been dumped there.",
+      "truth": "true",
+      "subjectEntityId": "character-jessa-holt",
+      "objectEntityId": "location-black-hollow-train-station",
+      "sourceEntityIds": [
+        "clue-fresh-footprints",
+        "location-service-road-culvert"
+      ],
+      "tags": [
+        "red-herring",
+        "witness"
+      ],
+      "notes": "Her footprints are true evidence but misleading murder evidence."
+    }
+  ]
+}

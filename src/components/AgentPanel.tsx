@@ -6,10 +6,12 @@ import {
   parseAgentResponsePayload,
   validateAgentChangePlan
 } from "../data/agent";
+import type { AgentMode } from "../data/agent";
 import { requestAgentPlan } from "../data/cloudProjects";
 import { Selection, StoryProject } from "../types";
 
 interface AgentPanelProps {
+  mode: AgentMode;
   project: StoryProject;
   onClose: () => void;
   onProjectChange: (project: StoryProject) => void;
@@ -18,7 +20,11 @@ interface AgentPanelProps {
   onStatusChange: (status: string) => void;
 }
 
+const AUTO_POPULATE_RUNTIME_PROMPT =
+  "Read the full story project and populate runtime facts, evidence, character knowledge, contradictions, and theory rules. Preserve existing story text and avoid duplicate runtime records.";
+
 export function AgentPanel({
+  mode,
   project,
   onClose,
   onProjectChange,
@@ -30,8 +36,10 @@ export function AgentPanel({
   const [plan, setPlan] = useState<AgentChangePlan | null>(null);
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const validation = useMemo(() => (plan ? validateAgentChangePlan(project, plan) : []), [plan, project]);
+  const [isAutoPopulating, setIsAutoPopulating] = useState(false);
+  const validation = useMemo(() => (plan ? validateAgentChangePlan(project, plan, { mode }) : []), [mode, plan, project]);
   const invalidChangeCount = validation.filter((item) => item.errors.length).length;
+  const isRuntimeAuthoring = mode === "runtime_authoring";
 
   async function requestPlan() {
     const cleanPrompt = prompt.trim();
@@ -47,7 +55,7 @@ export function AgentPanel({
     onStatusChange("Agent thinking...");
 
     try {
-      const nextPlan = parseAgentResponsePayload(await requestAgentPlan(project, cleanPrompt));
+      const nextPlan = parseAgentResponsePayload(await requestAgentPlan(project, cleanPrompt, { mode }));
       setPlan(nextPlan);
       onStatusChange("Agent plan ready");
     } catch (requestError) {
@@ -59,13 +67,46 @@ export function AgentPanel({
     }
   }
 
+  async function autoPopulateRuntime() {
+    setIsAutoPopulating(true);
+    setError("");
+    setPlan(null);
+    onStatusChange("Agent populating runtime...");
+
+    try {
+      const nextPlan = parseAgentResponsePayload(
+        await requestAgentPlan(project, AUTO_POPULATE_RUNTIME_PROMPT, { mode: "runtime_authoring" })
+      );
+      const nextValidation = validateAgentChangePlan(project, nextPlan, { mode: "runtime_authoring" });
+      const invalidRuntimeChangeCount = nextValidation.filter((item) => item.errors.length).length;
+
+      if (invalidRuntimeChangeCount) {
+        setPlan(nextPlan);
+        onStatusChange("Agent runtime plan needs review");
+        return;
+      }
+
+      const result = applyAgentChangePlan(project, nextPlan, { mode: "runtime_authoring" });
+      onProjectChange(result.project);
+      setPrompt("");
+      setPlan(null);
+      onStatusChange("Runtime populated");
+    } catch (requestError) {
+      const message = requestError instanceof Error ? requestError.message : "Agent request failed";
+      setError(message);
+      onStatusChange("Agent request failed");
+    } finally {
+      setIsAutoPopulating(false);
+    }
+  }
+
   function applyPlan() {
     if (!plan || invalidChangeCount) {
       return;
     }
 
     try {
-      const result = applyAgentChangePlan(project, plan);
+      const result = applyAgentChangePlan(project, plan, { mode });
       onProjectChange(result.project);
       selectFirstChangedItem(result.changedEntityIds, result.changedRelationshipIds, onSelectEntity, onSelectRelationship);
       setPlan(null);
@@ -98,10 +139,35 @@ export function AgentPanel({
           <textarea
             rows={6}
             value={prompt}
-            placeholder="Ask for focused story structure changes, new entities, timeline effects, or game-story updates."
+            placeholder={
+              isRuntimeAuthoring
+                ? "Ask the agent to create, update, or delete runtime facts, evidence, knowledge rows, contradictions, or theory rules."
+                : "Ask for focused story structure changes, new entities, timeline effects, or game-story updates."
+            }
             onChange={(event) => setPrompt(event.target.value)}
           />
-          <button type="button" className="primary-action" disabled={isLoading} onClick={() => void requestPlan()}>
+          {isRuntimeAuthoring ? (
+            <p className="agent-compat-note">
+              Runtime Tools sends expanded story context and lets the agent propose CRUD changes for runtime data only.
+            </p>
+          ) : null}
+          {isRuntimeAuthoring ? (
+            <button
+              type="button"
+              className="text-tool-button"
+              disabled={isLoading || isAutoPopulating}
+              onClick={() => void autoPopulateRuntime()}
+            >
+              <Bot aria-hidden="true" />
+              {isAutoPopulating ? "Populating..." : "Auto-populate Runtime"}
+            </button>
+          ) : null}
+          <button
+            type="button"
+            className="primary-action"
+            disabled={isLoading || isAutoPopulating}
+            onClick={() => void requestPlan()}
+          >
             <Send aria-hidden="true" />
             {isLoading ? "Thinking..." : "Ask Agent"}
           </button>
@@ -202,6 +268,36 @@ function changeTargetLabel(change: AgentChangePlan["changes"][number]): string {
 
   if (change.operation === "add_timeline_effect") {
     return change.eventId;
+  }
+
+  if (change.operation === "update_game_story") {
+    return "Game story settings";
+  }
+
+  if (change.operation === "create_runtime_fact") return `Fact: ${change.fact.id}`;
+  if (change.operation === "update_runtime_fact" || change.operation === "delete_runtime_fact") return `Fact: ${change.id}`;
+
+  if (change.operation === "create_runtime_evidence") return `Evidence: ${change.evidence.id}`;
+  if (change.operation === "update_runtime_evidence" || change.operation === "delete_runtime_evidence") {
+    return `Evidence: ${change.id}`;
+  }
+
+  if (change.operation === "create_runtime_character_knowledge") return `Knowledge: ${change.knowledge.id}`;
+  if (
+    change.operation === "update_runtime_character_knowledge" ||
+    change.operation === "delete_runtime_character_knowledge"
+  ) {
+    return `Knowledge: ${change.id}`;
+  }
+
+  if (change.operation === "create_runtime_contradiction") return `Contradiction: ${change.contradiction.id}`;
+  if (change.operation === "update_runtime_contradiction" || change.operation === "delete_runtime_contradiction") {
+    return `Contradiction: ${change.id}`;
+  }
+
+  if (change.operation === "create_runtime_theory_rule") return `Theory Rule: ${change.theoryRule.id}`;
+  if (change.operation === "update_runtime_theory_rule" || change.operation === "delete_runtime_theory_rule") {
+    return `Theory Rule: ${change.id}`;
   }
 
   return "Game story settings";

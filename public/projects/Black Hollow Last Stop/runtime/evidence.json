@@ -1,0 +1,100 @@
+{
+  "schemaVersion": 7,
+  "evidence": [
+    {
+      "id": "evidence-drag-marks",
+      "label": "Drag marks point away from the platform story",
+      "description": "The drag route suggests Rowan was moved into the station rather than killed where the body is found.",
+      "entityId": "clue-drag-marks",
+      "factIds": [
+        "fact-rowan-body-staged",
+        "fact-silas-innocent"
+      ],
+      "reliability": "confirmed",
+      "playerVisibility": "discoverable",
+      "discoveredByCharacterIds": [
+        "character-detective-arden-pike"
+      ],
+      "notes": "Primary physical contradiction for the clean investigation route."
+    },
+    {
+      "id": "evidence-signal-room-ledger",
+      "label": "Signal Room Ledger",
+      "description": "The hidden ledger explains Rowan's discovery and ties Platform 7 records to Evelyn's motive.",
+      "entityId": "clue-signal-room-ledger",
+      "factIds": [
+        "fact-rowan-found-ledger",
+        "fact-ledger-implicates-evelyn",
+        "fact-evelyn-killed-rowan"
+      ],
+      "reliability": "confirmed",
+      "playerVisibility": "hidden",
+      "discoveredByCharacterIds": [
+        "character-rowan-ellis",
+        "character-evelyn-park"
+      ],
+      "notes": "Becomes player-facing only on the key route."
+    },
+    {
+      "id": "evidence-platform-marker-seven",
+      "label": "Platform Marker 7 placement",
+      "description": "The body placement looks symbolic and points toward old Platform 7 history.",
+      "entityId": "clue-platform-marker-seven",
+      "factIds": [
+        "fact-silas-killed-rowan",
+        "fact-ledger-implicates-evelyn"
+      ],
+      "reliability": "misleading",
+      "playerVisibility": "discoverable",
+      "discoveredByCharacterIds": [
+        "character-detective-arden-pike"
+      ],
+      "notes": "Useful because it can mislead toward Silas before the ledger reframes it."
+    },
+    {
+      "id": "evidence-fresh-footprints",
+      "label": "Fresh footprints",
+      "description": "Jessa's footprints explain part of the station disturbance without proving she moved the body.",
+      "entityId": "clue-fresh-footprints",
+      "factIds": [
+        "fact-jessa-arrived-after-dump"
+      ],
+      "reliability": "unverified",
+      "playerVisibility": "discoverable",
+      "discoveredByCharacterIds": [
+        "character-jessa-holt"
+      ],
+      "notes": "Red herring evidence that can become timing support later."
+    },
+    {
+      "id": "evidence-locker-12-key",
+      "label": "Locker 12 key",
+      "description": "The key connects Rowan, Silas's station knowledge, and the hidden ledger route.",
+      "entityId": "item-locker-12-key",
+      "factIds": [
+        "fact-rowan-found-ledger",
+        "fact-rowan-asked-locker-12"
+      ],
+      "reliability": "confirmed",
+      "playerVisibility": "hidden",
+      "discoveredByCharacterIds": [
+        "character-rowan-ellis",
+        "character-silas-crowe"
+      ],
+      "notes": "Earned through the Silas trust branch."
+    },
+    {
+      "id": "evidence-victim-argument",
+      "label": "Witness heard Rowan arguing",
+      "description": "The last known argument points toward Evelyn once paired with the ledger and meeting schedule.",
+      "entityId": "event-victim-was-arguing",
+      "factIds": [
+        "fact-evelyn-killed-rowan"
+      ],
+      "reliability": "unverified",
+      "playerVisibility": "discoverable",
+      "discoveredByCharacterIds": [],
+      "notes": "Keep imprecise until stronger evidence narrows the voice."
+    }
+  ]
+}

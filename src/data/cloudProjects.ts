@@ -1,5 +1,5 @@
 import { createClient, Session, SupabaseClient, User } from "@supabase/supabase-js";
-import { buildAgentProjectContext } from "./agent";
+import { buildAgentProjectContext, type AgentRequestOptions } from "./agent";
 import { migrateProjectShape } from "./story";
 import { StoryProject } from "../types";
 
@@ -271,12 +271,17 @@ export async function writeCloudUserSettings(settings: unknown): Promise<void> {
   }
 }
 
-export async function requestAgentPlan(project: StoryProject, prompt: string): Promise<unknown> {
+export async function requestAgentPlan(
+  project: StoryProject,
+  prompt: string,
+  options: AgentRequestOptions = {}
+): Promise<unknown> {
   const client = requireSupabaseClient();
   const { data, error } = await client.functions.invoke("agent", {
     body: {
-      project: buildAgentProjectContext(project),
-      prompt
+      project: buildAgentProjectContext(project, options),
+      prompt,
+      options
     }
   });
 

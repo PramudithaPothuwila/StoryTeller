@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 7,
+  "theoryRules": [
+    {
+      "id": "theory-evelyn-truth-route",
+      "label": "Evelyn staged the body to recover the ledger",
+      "requiredEvidenceIds": [
+        "evidence-drag-marks",
+        "evidence-signal-room-ledger"
+      ],
+      "supportingFactIds": [
+        "fact-rowan-body-staged",
+        "fact-ledger-implicates-evelyn",
+        "fact-evelyn-killed-rowan"
+      ],
+      "contradictingFactIds": [
+        "fact-silas-killed-rowan"
+      ],
+      "conclusion": "Evelyn killed Rowan and used Black Hollow Station to hide motive and frame Silas.",
+      "playerVisibility": "hidden",
+      "notes": "Unlocks only when physical staging and ledger motive are both available."
+    },
+    {
+      "id": "theory-silas-false-frame",
+      "label": "Silas as convenient station culprit",
+      "requiredEvidenceIds": [
+        "evidence-platform-marker-seven"
+      ],
+      "supportingFactIds": [
+        "fact-silas-killed-rowan"
+      ],
+      "contradictingFactIds": [
+        "fact-silas-innocent",
+        "fact-evelyn-killed-rowan"
+      ],
+      "conclusion": "Silas can be accused if the ledger is missed, but the runtime should treat this as a false frame.",
+      "playerVisibility": "discoverable",
+      "notes": "Supports the playable bad ending without rewriting canon."
+    }
+  ]
+}

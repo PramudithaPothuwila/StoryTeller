@@ -7,6 +7,7 @@ import { ItemTypeDefinition, LinkTypeDefinition, LinkTypeId, StoryProject } from
 interface SettingsPageProps {
   project: StoryProject;
   defaultRelationshipType: LinkTypeId;
+  showRuntimeTools: boolean;
   onAddItemType: () => void;
   onAddLinkType: () => void;
   onBackToWorkspace: () => void;
@@ -15,6 +16,7 @@ interface SettingsPageProps {
   onDeleteLinkType: (typeId: string) => void;
   onExportBackup: () => void;
   onProjectTitleChange: (title: string) => void;
+  onShowRuntimeToolsChange: (showRuntimeTools: boolean) => void;
   onUpdateItemType: (typeId: string, patch: Partial<ItemTypeDefinition>) => void;
   onUpdateLinkType: (typeId: string, patch: Partial<LinkTypeDefinition>) => void;
 }
@@ -22,6 +24,7 @@ interface SettingsPageProps {
 export function SettingsPage({
   project,
   defaultRelationshipType,
+  showRuntimeTools,
   onAddItemType,
   onAddLinkType,
   onBackToWorkspace,
@@ -30,6 +33,7 @@ export function SettingsPage({
   onDeleteLinkType,
   onExportBackup,
   onProjectTitleChange,
+  onShowRuntimeToolsChange,
   onUpdateItemType,
   onUpdateLinkType
 }: SettingsPageProps) {
@@ -78,6 +82,19 @@ export function SettingsPage({
               </option>
             ))}
           </select>
+        </section>
+
+        <section className="settings-panel" aria-labelledby="runtime-settings-title">
+          <h2 id="runtime-settings-title">Runtime Tools</h2>
+          <label className="settings-checkbox-row">
+            <input
+              type="checkbox"
+              checked={showRuntimeTools}
+              onChange={(event) => onShowRuntimeToolsChange(event.target.checked)}
+            />
+            <span>Show Runtime Tools</span>
+          </label>
+          <p className="settings-help-text">Keep this off for book-style story planning, and turn it on for game or AI runtime authoring.</p>
         </section>
 
         <section className="settings-panel" aria-labelledby="backup-settings-title">

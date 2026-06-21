@@ -260,6 +260,7 @@ describe("project file model", () => {
               truth: "true",
               subjectEntityId: start.id,
               sourceEntityIds: [start.id],
+              sourceNotes: "",
               tags: ["route"],
               notes: ""
             }
@@ -274,6 +275,8 @@ describe("project file model", () => {
               reliability: "confirmed",
               playerVisibility: "discoverable",
               discoveredByCharacterIds: [],
+              sourceEntityIds: [start.id],
+              sourceNotes: "",
               notes: ""
             }
           ],

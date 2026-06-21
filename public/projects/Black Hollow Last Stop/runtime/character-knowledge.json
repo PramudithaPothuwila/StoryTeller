@@ -1,0 +1,88 @@
+{
+  "schemaVersion": 7,
+  "characterKnowledge": [
+    {
+      "id": "knowledge-arden-body-staged",
+      "characterId": "character-detective-arden-pike",
+      "factId": "fact-rowan-body-staged",
+      "knowledge": "suspects",
+      "belief": "believes_true",
+      "evidenceIds": [
+        "evidence-drag-marks"
+      ],
+      "updatedAt": "2026-06-21T00:00:00.000Z",
+      "notes": "Arden can reach this through evidence-first play."
+    },
+    {
+      "id": "knowledge-rowan-ledger",
+      "characterId": "character-rowan-ellis",
+      "factId": "fact-ledger-implicates-evelyn",
+      "knowledge": "knows",
+      "belief": "believes_true",
+      "evidenceIds": [
+        "evidence-signal-room-ledger"
+      ],
+      "updatedAt": "2026-06-21T00:00:00.000Z",
+      "notes": "This knowledge is why Rowan becomes dangerous."
+    },
+    {
+      "id": "knowledge-evelyn-killer",
+      "characterId": "character-evelyn-park",
+      "factId": "fact-evelyn-killed-rowan",
+      "knowledge": "knows",
+      "belief": "believes_true",
+      "evidenceIds": [
+        "evidence-victim-argument",
+        "evidence-signal-room-ledger"
+      ],
+      "updatedAt": "2026-06-21T00:00:00.000Z",
+      "notes": "Evelyn must not accidentally confess before the proof route."
+    },
+    {
+      "id": "knowledge-evelyn-frame",
+      "characterId": "character-evelyn-park",
+      "factId": "fact-silas-killed-rowan",
+      "knowledge": "knows",
+      "belief": "believes_false",
+      "evidenceIds": [
+        "evidence-platform-marker-seven"
+      ],
+      "updatedAt": "2026-06-21T00:00:00.000Z",
+      "notes": "She knows the Silas story is false but useful."
+    },
+    {
+      "id": "knowledge-silas-locker",
+      "characterId": "character-silas-crowe",
+      "factId": "fact-rowan-asked-locker-12",
+      "knowledge": "knows",
+      "belief": "believes_true",
+      "evidenceIds": [
+        "evidence-locker-12-key"
+      ],
+      "updatedAt": "2026-06-21T00:00:00.000Z",
+      "notes": "Silas reveals this only if Arden earns trust."
+    },
+    {
+      "id": "knowledge-silas-innocent",
+      "characterId": "character-silas-crowe",
+      "factId": "fact-silas-innocent",
+      "knowledge": "knows",
+      "belief": "believes_true",
+      "evidenceIds": [],
+      "updatedAt": "2026-06-21T00:00:00.000Z",
+      "notes": "His defensiveness should not be mistaken for guilt by the AI context."
+    },
+    {
+      "id": "knowledge-jessa-footprints",
+      "characterId": "character-jessa-holt",
+      "factId": "fact-jessa-arrived-after-dump",
+      "knowledge": "knows",
+      "belief": "believes_true",
+      "evidenceIds": [
+        "evidence-fresh-footprints"
+      ],
+      "updatedAt": "2026-06-21T00:00:00.000Z",
+      "notes": "Jessa hides trespassing, not murder."
+    }
+  ]
+}

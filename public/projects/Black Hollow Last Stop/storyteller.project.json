@@ -1,7 +1,7 @@
 {
-  "schemaVersion": 5,
+  "schemaVersion": 7,
   "title": "Black Hollow: Last Stop",
-  "updatedAt": "2026-06-18T00:00:00.000Z",
+  "updatedAt": "2026-06-21T07:40:25.519Z",
   "projectMode": "game_story",
   "gameStory": {
     "startNodeId": "scene-murder-victim-found",
@@ -314,64 +314,64 @@
       "y": -180
     },
     "character-rowan-ellis": {
-      "x": -160,
-      "y": -180
+      "x": 624,
+      "y": -176
     },
     "character-evelyn-park": {
-      "x": 200,
-      "y": -180
+      "x": 188,
+      "y": -424
     },
     "character-silas-crowe": {
-      "x": 520,
-      "y": -180
+      "x": 166,
+      "y": -664
     },
     "character-jessa-holt": {
-      "x": 820,
-      "y": -180
+      "x": 1156,
+      "y": -346
     },
     "faction-black-hollow-redevelopment-board": {
-      "x": 200,
-      "y": -420
+      "x": 1088,
+      "y": -718
     },
     "location-black-hollow-train-station": {
-      "x": 449.612654777077,
-      "y": 68.33181014145055
+      "x": 1653.612654777077,
+      "y": -57.668189858549454
     },
     "location-signal-room-locker-12": {
-      "x": 769.1978921002639,
-      "y": 107.21968356908422
+      "x": 1075.1978921002637,
+      "y": 227.21968356908422
     },
     "location-service-road-culvert": {
-      "x": -2742.6991422223846,
-      "y": -99.43366022387096
+      "x": -1899.7130311112733,
+      "y": -348.18366022387096
     },
     "item-locker-12-key": {
       "x": 662,
       "y": 448
     },
     "clue-fresh-footprints": {
-      "x": -2827.253728406972,
-      "y": 286.60522163375407
+      "x": -2189.5850776133216,
+      "y": 207.6369676655001
     },
     "clue-drag-marks": {
-      "x": -2326.115209436711,
-      "y": 55.555141805890116
+      "x": -1469.3096538811556,
+      "y": 53.58093545668376
     },
     "clue-signal-room-ledger": {
-      "x": 142,
-      "y": 344
+      "x": -236,
+      "y": 312
     },
     "clue-platform-marker-seven": {
-      "x": -356.1257325320832,
-      "y": 248.7682475555235
+      "x": -824.1257325320832,
+      "y": 214.7682475555235
     },
     "event-victim-was-arguing": {
-      "x": -1202,
-      "y": 544
+      "x": -967.0694444444443,
+      "y": 366.3214285714286
     },
     "event-murder-victim-found": {
-      "x": -1835.1718826358215,
-      "y": 737.7229620594783
+      "x": -893.4754540643928,
+      "y": 639.0126445991608
     },
     "scene-murder-victim-found": {
       "x": -1059.6013834773876,
@@ -402,6 +402,36 @@
       "y": 853.2780316430919
     }
   },
+  "storyFlowLayout": {
+    "scene-murder-victim-found": {
+      "x": -720,
+      "y": 0
+    },
+    "quest-prove-station-staged": {
+      "x": -360,
+      "y": 0
+    },
+    "dialogue-interview-silas-crowe": {
+      "x": 0,
+      "y": -160
+    },
+    "scene-search-signal-room": {
+      "x": 320,
+      "y": 0
+    },
+    "dialogue-confront-evelyn-park": {
+      "x": 680,
+      "y": 0
+    },
+    "ending-true-route": {
+      "x": 1040,
+      "y": -120
+    },
+    "ending-false-frame": {
+      "x": 1040,
+      "y": 160
+    }
+  },
   "entityIndex": [
     {
       "id": "note-premise-investigation-map",
@@ -414,35 +444,35 @@
       "id": "character-detective-arden-pike",
       "type": "character",
       "title": "Detective Arden Pike",
-      "updatedAt": "2026-06-07T00:00:00.000Z",
+      "updatedAt": "2026-06-21T00:00:00.000Z",
       "path": "entities/character/character-detective-arden-pike.md"
     },
     {
       "id": "character-rowan-ellis",
       "type": "character",
       "title": "Rowan Ellis",
-      "updatedAt": "2026-06-07T00:00:00.000Z",
+      "updatedAt": "2026-06-21T00:00:00.000Z",
       "path": "entities/character/character-rowan-ellis.md"
     },
     {
       "id": "character-evelyn-park",
       "type": "character",
       "title": "Evelyn Park",
-      "updatedAt": "2026-06-07T00:00:00.000Z",
+      "updatedAt": "2026-06-21T00:00:00.000Z",
       "path": "entities/character/character-evelyn-park.md"
     },
     {
       "id": "character-silas-crowe",
       "type": "character",
       "title": "Silas Crowe",
-      "updatedAt": "2026-06-07T00:00:00.000Z",
+      "updatedAt": "2026-06-21T00:00:00.000Z",
       "path": "entities/character/character-silas-crowe.md"
     },
     {
       "id": "character-jessa-holt",
       "type": "character",
       "title": "Jessa Holt",
-      "updatedAt": "2026-06-07T00:00:00.000Z",
+      "updatedAt": "2026-06-21T00:00:00.000Z",
       "path": "entities/character/character-jessa-holt.md"
     },
     {
@@ -571,35 +601,5 @@
       "updatedAt": "2026-06-07T00:00:00.000Z",
       "path": "entities/ending/ending-false-frame.md"
     }
-  ],
-  "storyFlowLayout": {
-    "scene-murder-victim-found": {
-      "x": -720,
-      "y": 0
-    },
-    "quest-prove-station-staged": {
-      "x": -360,
-      "y": 0
-    },
-    "dialogue-interview-silas-crowe": {
-      "x": 0,
-      "y": -160
-    },
-    "scene-search-signal-room": {
-      "x": 320,
-      "y": 0
-    },
-    "dialogue-confront-evelyn-park": {
-      "x": 680,
-      "y": 0
-    },
-    "ending-true-route": {
-      "x": 1040,
-      "y": -120
-    },
-    "ending-false-frame": {
-      "x": 1040,
-      "y": 160
-    }
-  }
+  ]
 }
