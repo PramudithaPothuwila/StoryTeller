@@ -677,6 +677,21 @@ a.toolbar-button {
   gap: 10px;
 }
 
+.agent-mode-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ink);
+  font-size: 0.86rem;
+  font-weight: 900;
+}
+
+.agent-mode-toggle input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--teal);
+}
+
 .agent-change-list {
   display: grid;
   gap: 8px;

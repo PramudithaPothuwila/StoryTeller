@@ -6,6 +6,7 @@ import {
   parseAgentResponsePayload,
   validateAgentChangePlan
 } from "../data/agent";
+import type { AgentMode } from "../data/agent";
 import { requestAgentPlan } from "../data/cloudProjects";
 import { Selection, StoryProject } from "../types";
 
@@ -28,6 +29,7 @@ export function AgentPanel({
 }: AgentPanelProps) {
   const [prompt, setPrompt] = useState("");
   const [plan, setPlan] = useState<AgentChangePlan | null>(null);
+  const [runtimeAuthoring, setRuntimeAuthoring] = useState(false);
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const validation = useMemo(() => (plan ? validateAgentChangePlan(project, plan) : []), [plan, project]);
@@ -47,7 +49,8 @@ export function AgentPanel({
     onStatusChange("Agent thinking...");
 
     try {
-      const nextPlan = parseAgentResponsePayload(await requestAgentPlan(project, cleanPrompt));
+      const mode: AgentMode = runtimeAuthoring ? "runtime_authoring" : "story";
+      const nextPlan = parseAgentResponsePayload(await requestAgentPlan(project, cleanPrompt, { mode }));
       setPlan(nextPlan);
       onStatusChange("Agent plan ready");
     } catch (requestError) {
@@ -98,9 +101,26 @@ export function AgentPanel({
           <textarea
             rows={6}
             value={prompt}
-            placeholder="Ask for focused story structure changes, new entities, timeline effects, or game-story updates."
+            placeholder={
+              runtimeAuthoring
+                ? "Ask the agent to create, update, or delete runtime facts, evidence, knowledge rows, contradictions, or theory rules."
+                : "Ask for focused story structure changes, new entities, timeline effects, or game-story updates."
+            }
             onChange={(event) => setPrompt(event.target.value)}
           />
+          <label className="agent-mode-toggle">
+            <input
+              type="checkbox"
+              checked={runtimeAuthoring}
+              onChange={(event) => setRuntimeAuthoring(event.target.checked)}
+            />
+            <span>Runtime authoring</span>
+          </label>
+          {runtimeAuthoring ? (
+            <p className="agent-compat-note">
+              Runtime authoring sends expanded story context and lets the agent propose CRUD changes for runtime data only.
+            </p>
+          ) : null}
           <button type="button" className="primary-action" disabled={isLoading} onClick={() => void requestPlan()}>
             <Send aria-hidden="true" />
             {isLoading ? "Thinking..." : "Ask Agent"}
@@ -202,6 +222,36 @@ function changeTargetLabel(change: AgentChangePlan["changes"][number]): string {
 
   if (change.operation === "add_timeline_effect") {
     return change.eventId;
+  }
+
+  if (change.operation === "update_game_story") {
+    return "Game story settings";
+  }
+
+  if (change.operation === "create_runtime_fact") return `Fact: ${change.fact.id}`;
+  if (change.operation === "update_runtime_fact" || change.operation === "delete_runtime_fact") return `Fact: ${change.id}`;
+
+  if (change.operation === "create_runtime_evidence") return `Evidence: ${change.evidence.id}`;
+  if (change.operation === "update_runtime_evidence" || change.operation === "delete_runtime_evidence") {
+    return `Evidence: ${change.id}`;
+  }
+
+  if (change.operation === "create_runtime_character_knowledge") return `Knowledge: ${change.knowledge.id}`;
+  if (
+    change.operation === "update_runtime_character_knowledge" ||
+    change.operation === "delete_runtime_character_knowledge"
+  ) {
+    return `Knowledge: ${change.id}`;
+  }
+
+  if (change.operation === "create_runtime_contradiction") return `Contradiction: ${change.contradiction.id}`;
+  if (change.operation === "update_runtime_contradiction" || change.operation === "delete_runtime_contradiction") {
+    return `Contradiction: ${change.id}`;
+  }
+
+  if (change.operation === "create_runtime_theory_rule") return `Theory Rule: ${change.theoryRule.id}`;
+  if (change.operation === "update_runtime_theory_rule" || change.operation === "delete_runtime_theory_rule") {
+    return `Theory Rule: ${change.id}`;
   }
 
   return "Game story settings";

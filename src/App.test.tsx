@@ -749,7 +749,11 @@ describe("App project commands", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "Ask Agent" }));
 
-    await waitFor(() => expect(requestAgentPlan).toHaveBeenCalledWith(expect.objectContaining({ title: "Cloud Project" }), "Add a rival."));
+    await waitFor(() =>
+      expect(requestAgentPlan).toHaveBeenCalledWith(expect.objectContaining({ title: "Cloud Project" }), "Add a rival.", {
+        mode: "story"
+      })
+    );
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
@@ -792,6 +796,58 @@ describe("App project commands", () => {
 
     expect(await screen.findByTestId("flow-node-character-rival")).toHaveTextContent("Rival");
     expect(screen.getByText("Unsaved")).toBeInTheDocument();
+  });
+
+  it("requests and applies runtime authoring plans from the AI agent", async () => {
+    window.history.pushState({}, "", "/project/cloud-opened");
+    vi.mocked(getCurrentCloudUser).mockResolvedValue({ id: "user-a", email: "ada@example.com" });
+    vi.mocked(requestAgentPlan).mockResolvedValue({
+      output_text: JSON.stringify({
+        summary: "Add runtime fact.",
+        assumptions: [],
+        followUpQuestions: [],
+        changes: [
+          {
+            operation: "create_runtime_fact",
+            summary: "Create forged ledger fact",
+            fact: {
+              id: "fact-ledger-forged",
+              statement: "The ledger was forged.",
+              truth: "true",
+              sourceEntityIds: [],
+              sourceNotes: "",
+              tags: [],
+              notes: ""
+            }
+          }
+        ]
+      })
+    });
+    render(<App />);
+
+    await waitFor(() => expect(screen.getByText("Cloud Project")).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("button", { name: "AI Agent" }));
+    fireEvent.click(screen.getByLabelText("Runtime authoring"));
+    fireEvent.change(screen.getByPlaceholderText(/create, update, or delete runtime facts/i), {
+      target: { value: "Add facts from the story." }
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Ask Agent" }));
+
+    await waitFor(() =>
+      expect(requestAgentPlan).toHaveBeenCalledWith(
+        expect.objectContaining({ title: "Cloud Project" }),
+        "Add facts from the story.",
+        { mode: "runtime_authoring" }
+      )
+    );
+    expect(await screen.findByText("Create forged ledger fact")).toBeInTheDocument();
+    expect(screen.getByText("Fact: fact-ledger-forged")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Apply 1 Change" }));
+
+    expect(screen.getByText("Unsaved")).toBeInTheDocument();
+    expect(screen.queryByTestId("flow-node-fact-ledger-forged")).not.toBeInTheDocument();
   });
 
   it("disables applying invalid AI agent plans", async () => {

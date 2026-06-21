@@ -5,6 +5,7 @@ import {
   AgentChangePlan,
   applyAgentChangePlan,
   buildAgentProjectContext,
+  buildAgentInput,
   buildNvidiaSystemPrompt,
   parseAgentResponsePayload,
   validateAgentChangePlan
@@ -58,6 +59,44 @@ describe("agent project helpers", () => {
     expect(context.entities.find((entity) => entity.id === character.id)?.bodyMarkdown.length).toBeLessThan(800);
     expect(context.relationships[0].sourceId).toBe(character.id);
     expect(context).not.toHaveProperty("layout");
+  });
+
+  it("builds expanded runtime authoring context when requested", () => {
+    const project = createBlankProject("Runtime Context");
+    const character = createStoryEntity("character", project.itemTypes, "Mara Vale");
+    character.summary = "S".repeat(1200);
+    character.publicInfo = "P".repeat(1200);
+    character.privateInfo = "H".repeat(1200);
+    character.bodyMarkdown = "B".repeat(1200);
+    const projectWithRuntime = {
+      ...project,
+      entities: {
+        [character.id]: character
+      },
+      runtime: {
+        ...project.runtime,
+        facts: [
+          {
+            id: "fact-ledger-forged",
+            statement: "The ledger was forged.",
+            truth: "true" as const,
+            sourceEntityIds: [character.id],
+            sourceNotes: "Author source note.",
+            tags: [],
+            notes: ""
+          }
+        ]
+      }
+    };
+
+    const context = buildAgentProjectContext(projectWithRuntime, { mode: "runtime_authoring" });
+    const input = JSON.parse(buildAgentInput(projectWithRuntime, "Create facts.", { mode: "runtime_authoring" }));
+
+    expect(context.agentMode).toBe("runtime_authoring");
+    expect(context.entities[0].bodyMarkdown.length).toBe(1200);
+    expect(context.entities[0].summary.length).toBe(1200);
+    expect(context.runtime.facts[0].sourceNotes).toBe("Author source note.");
+    expect(input.agentMode).toBe("runtime_authoring");
   });
 
   it("validates missing references and invalid type IDs", () => {
@@ -165,6 +204,259 @@ describe("agent project helpers", () => {
     expect(result.changedRelationshipIds).toContain("link-hero-rival");
   });
 
+  it("parses, validates, and applies runtime CRUD changes", () => {
+    const project = createBlankProject("Runtime Agent");
+    const character = createStoryEntity("character", project.itemTypes, "Mara Vale");
+    const projectWithCharacter = {
+      ...project,
+      entities: {
+        [character.id]: character
+      }
+    };
+    const plan = parseAgentResponsePayload({
+      output_text: JSON.stringify({
+        summary: "Author runtime data.",
+        assumptions: [],
+        followUpQuestions: [],
+        changes: [
+          {
+            operation: "create_runtime_fact",
+            summary: "Create fact",
+            fact: {
+              id: "fact-ledger-forged",
+              statement: "The ledger was forged.",
+              truth: "true",
+              sourceEntityIds: [character.id],
+              sourceNotes: "From chapter 2.",
+              tags: ["mystery"],
+              notes: ""
+            }
+          },
+          {
+            operation: "create_runtime_evidence",
+            summary: "Create evidence",
+            evidence: {
+              id: "evidence-ink",
+              label: "Moonlit ink",
+              description: "The ink appears under cold light.",
+              factIds: ["fact-ledger-forged"],
+              reliability: "confirmed",
+              playerVisibility: "discoverable",
+              discoveredByCharacterIds: [character.id],
+              sourceEntityIds: [character.id],
+              sourceNotes: "",
+              notes: ""
+            }
+          },
+          {
+            operation: "create_runtime_character_knowledge",
+            summary: "Create knowledge",
+            knowledge: {
+              id: "knowledge-mara-ledger",
+              characterId: character.id,
+              factId: "fact-ledger-forged",
+              knowledge: "knows",
+              belief: "believes_true",
+              evidenceIds: ["evidence-ink"],
+              notes: ""
+            }
+          },
+          {
+            operation: "create_runtime_contradiction",
+            summary: "Create contradiction",
+            contradiction: {
+              id: "contradiction-ledger",
+              label: "Ledger conflict",
+              factIds: ["fact-ledger-forged"],
+              severity: "warning",
+              resolution: "",
+              notes: ""
+            }
+          },
+          {
+            operation: "create_runtime_theory_rule",
+            summary: "Create theory",
+            theoryRule: {
+              id: "theory-ledger",
+              label: "Accuse forger",
+              requiredEvidenceIds: ["evidence-ink"],
+              supportingFactIds: ["fact-ledger-forged"],
+              contradictingFactIds: [],
+              conclusion: "The player can accuse the forger.",
+              playerVisibility: "hidden",
+              notes: ""
+            }
+          },
+          {
+            operation: "update_runtime_fact",
+            summary: "Update fact",
+            id: "fact-ledger-forged",
+            patch: {
+              statement: "The signal room ledger was forged."
+            }
+          },
+          {
+            operation: "update_runtime_evidence",
+            summary: "Update evidence",
+            id: "evidence-ink",
+            patch: {
+              reliability: "unverified"
+            }
+          },
+          {
+            operation: "update_runtime_character_knowledge",
+            summary: "Update knowledge",
+            id: "knowledge-mara-ledger",
+            patch: {
+              notes: "Mara saw the page."
+            }
+          },
+          {
+            operation: "update_runtime_contradiction",
+            summary: "Update contradiction",
+            id: "contradiction-ledger",
+            patch: {
+              severity: "error"
+            }
+          },
+          {
+            operation: "update_runtime_theory_rule",
+            summary: "Update theory",
+            id: "theory-ledger",
+            patch: {
+              conclusion: "The player can confront the forger."
+            }
+          }
+        ]
+      })
+    });
+
+    expect(plan.changes[0].operation).toBe("create_runtime_fact");
+    expect(validateAgentChangePlan(projectWithCharacter, plan).flatMap((item) => item.errors)).toEqual([]);
+
+    const result = applyAgentChangePlan(projectWithCharacter, plan);
+
+    expect(result.changedEntityIds).toEqual([]);
+    expect(result.changedRelationshipIds).toEqual([]);
+    expect(result.project.runtime.facts[0]).toEqual(
+      expect.objectContaining({ id: "fact-ledger-forged", statement: "The signal room ledger was forged." })
+    );
+    expect(result.project.runtime.evidence[0]).toEqual(
+      expect.objectContaining({ id: "evidence-ink", reliability: "unverified", factIds: ["fact-ledger-forged"] })
+    );
+    expect(result.project.runtime.characterKnowledge[0]).toEqual(
+      expect.objectContaining({ id: "knowledge-mara-ledger", evidenceIds: ["evidence-ink"], notes: "Mara saw the page." })
+    );
+    expect(result.project.runtime.contradictionRules[0]).toEqual(
+      expect.objectContaining({ id: "contradiction-ledger", severity: "error" })
+    );
+    expect(result.project.runtime.theoryRules[0]).toEqual(
+      expect.objectContaining({ id: "theory-ledger", conclusion: "The player can confront the forger." })
+    );
+  });
+
+  it("allows runtime deletes but rejects missing runtime references", () => {
+    const project = createBlankProject("Runtime Delete Agent");
+    const character = createStoryEntity("character", project.itemTypes, "Mara Vale");
+    const projectWithRuntime = applyAgentChangePlan(
+      {
+        ...project,
+        entities: {
+          [character.id]: character
+        }
+      },
+      {
+        summary: "Seed runtime.",
+        assumptions: [],
+        followUpQuestions: [],
+        changes: [
+          {
+            operation: "create_runtime_fact",
+            summary: "Create fact",
+            fact: {
+              id: "fact-ledger",
+              statement: "The ledger was forged.",
+              truth: "true",
+              sourceEntityIds: [],
+              sourceNotes: "",
+              tags: [],
+              notes: ""
+            }
+          },
+          {
+            operation: "create_runtime_evidence",
+            summary: "Create evidence",
+            evidence: {
+              id: "evidence-ink",
+              label: "Ink",
+              description: "",
+              factIds: ["fact-ledger"],
+              reliability: "confirmed",
+              playerVisibility: "hidden",
+              discoveredByCharacterIds: [],
+              sourceEntityIds: [],
+              sourceNotes: "",
+              notes: ""
+            }
+          }
+        ]
+      }
+    ).project;
+    const deletePlan: AgentChangePlan = {
+      summary: "Delete runtime records.",
+      assumptions: [],
+      followUpQuestions: [],
+      changes: [
+        {
+          operation: "delete_runtime_fact",
+          summary: "Delete fact",
+          id: "fact-ledger"
+        },
+        {
+          operation: "delete_runtime_evidence",
+          summary: "Delete evidence",
+          id: "evidence-ink"
+        }
+      ]
+    };
+    const invalidPlan: AgentChangePlan = {
+      summary: "Bad runtime reference.",
+      assumptions: [],
+      followUpQuestions: [],
+      changes: [
+        {
+          operation: "create_runtime_evidence",
+          summary: "Bad evidence",
+          evidence: {
+            id: "evidence-missing",
+            label: "Missing",
+            description: "",
+            factIds: ["fact-missing"],
+            reliability: "confirmed",
+            playerVisibility: "hidden",
+            discoveredByCharacterIds: [],
+            sourceEntityIds: [],
+            sourceNotes: "",
+            notes: ""
+          }
+        },
+        {
+          operation: "delete_runtime_fact",
+          summary: "Delete missing fact",
+          id: "fact-missing"
+        }
+      ]
+    };
+
+    const deleted = applyAgentChangePlan(projectWithRuntime, deletePlan).project;
+    const invalidErrors = validateAgentChangePlan(projectWithRuntime, invalidPlan).flatMap((item) => item.errors);
+
+    expect(deleted.runtime.facts).toEqual([]);
+    expect(deleted.runtime.evidence).toEqual([]);
+    expect(invalidErrors).toContain("Runtime fact does not exist: fact-missing");
+    expect(invalidErrors).toContain("Fact does not exist: fact-missing");
+  });
+
   it("builds NVIDIA system instructions for JSON-only change plans", () => {
     const prompt = buildNvidiaSystemPrompt();
 
@@ -172,6 +464,7 @@ describe("agent project helpers", () => {
     expect(prompt).toContain("Return only valid JSON");
     expect(prompt).toContain("structured change plan");
     expect(prompt).toContain("create_entity");
+    expect(prompt).toContain("create_runtime_fact");
   });
 
   it("parses NVIDIA Chat Completions JSON output into an agent change plan", () => {

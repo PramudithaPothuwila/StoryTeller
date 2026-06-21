@@ -94,11 +94,13 @@ describe("cloud project storage", () => {
     expect(supabaseClientMock.functions.invoke).toHaveBeenCalledWith("agent", {
       body: {
         project: expect.objectContaining({
+          agentMode: "story",
           title: "Agent Cloud",
           entities: [expect.objectContaining({ id: hero.id, title: "Cloud Hero" })],
           relationships: []
         }),
-        prompt: "Add a rival."
+        prompt: "Add a rival.",
+        options: {}
       }
     });
     expect(result).toEqual({
